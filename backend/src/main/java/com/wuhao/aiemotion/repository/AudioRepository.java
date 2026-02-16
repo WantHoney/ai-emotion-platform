@@ -71,6 +71,15 @@ public class AudioRepository {
         return list.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(list.get(0));
     }
 
+    public java.util.Optional<Long> findUserIdByAudioId(long audioId) {
+        List<Long> rows = jdbcTemplate.query(
+                "SELECT user_id FROM audio_file WHERE id=? LIMIT 1",
+                (rs, rowNum) -> rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+                audioId
+        );
+        return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(rows.get(0));
+    }
+
     public int softDelete(long id) {
         return jdbcTemplate.update("UPDATE audio_file SET status='DELETED', updated_at=NOW() WHERE id=?", id);
     }

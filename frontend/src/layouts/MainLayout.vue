@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Setting, Moon, Sunny, User, Fold, Expand, Promotion } from '@element-plus/icons-vue'
+import { Expand, Fold, Moon, Promotion, Setting, Sunny, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -14,17 +14,27 @@ const authStore = useAuthStore()
 const sidebarOpen = ref(true)
 const isDark = ref(false)
 
-const navItems = computed(() => {
-  const items = [
-    { label: '首页', path: '/home', requiresAuth: false },
-    { label: '上传', path: '/upload', requiresAuth: true },
-    { label: '任务', path: '/tasks', requiresAuth: true },
-    { label: '报告', path: '/reports', requiresAuth: true },
-    { label: '心理中心', path: '/psy-centers', requiresAuth: true },
-    { label: '系统', path: '/system', requiresAuth: true, role: 'ADMIN' },
-    { label: '关于', path: '/about', requiresAuth: false },
-  ]
+type NavItem = {
+  label: string
+  path: string
+  requiresAuth: boolean
+  role?: 'ADMIN'
+}
 
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { label: 'Home', path: '/home', requiresAuth: false },
+    { label: 'Upload', path: '/upload', requiresAuth: true },
+    { label: 'Tasks', path: '/tasks', requiresAuth: true },
+    { label: 'Reports', path: '/reports', requiresAuth: true },
+    { label: 'Psy Centers', path: '/psy-centers', requiresAuth: true },
+    { label: 'System', path: '/system', requiresAuth: true, role: 'ADMIN' },
+    { label: 'Models', path: '/admin/models', requiresAuth: true, role: 'ADMIN' },
+    { label: 'Rules', path: '/admin/rules', requiresAuth: true, role: 'ADMIN' },
+    { label: 'Warnings', path: '/admin/warnings', requiresAuth: true, role: 'ADMIN' },
+    { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
+    { label: 'About', path: '/about', requiresAuth: false },
+  ]
   return items.filter((item) => !item.role || authStore.userRole === item.role)
 })
 
@@ -34,11 +44,13 @@ const activeMenu = computed(() => {
   return found?.path ?? '/home'
 })
 
-const pageTitle = computed(() => String(route.meta.title ?? 'AI Emotion 控制台'))
-const pageDescription = computed(() => String(route.meta.description ?? '统一资源管理工作台'))
+const pageTitle = computed(() => String(route.meta.title ?? 'AI Emotion Console'))
+const pageDescription = computed(() =>
+  String(route.meta.description ?? 'Emotion analysis and warning management workspace'),
+)
 const breadcrumbs = computed(() => {
   const items = route.meta.breadcrumb
-  return Array.isArray(items) ? items.map(String) : ['工作台']
+  return Array.isArray(items) ? items.map(String) : ['Workspace']
 })
 
 const logout = async () => {
@@ -52,16 +64,13 @@ const goLogin = async () => {
 
 const handleSelect = async (index: string) => {
   const target = navItems.value.find((item) => item.path === index)
-  if (!target) {
-    return
-  }
+  if (!target) return
 
   if (target.requiresAuth && !authStore.isAuthenticated) {
-    ElMessage.warning('请先登录后再访问该功能。')
+    ElMessage.warning('Please login first.')
     await goLogin()
     return
   }
-
   await router.push(index)
 }
 
@@ -98,25 +107,29 @@ const toggleTheme = () => {
         </div>
 
         <div class="header-actions">
-          <el-button circle text @click="toggleTheme"><el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon></el-button>
+          <el-button circle text @click="toggleTheme">
+            <el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon>
+          </el-button>
           <el-button circle text><el-icon><Setting /></el-icon></el-button>
 
           <template v-if="authStore.isAuthenticated">
             <el-dropdown>
               <el-button text>
                 <el-icon><User /></el-icon>
-                <span style="margin-left: 6px">{{ authStore.currentUser?.username }}（{{ authStore.userRole }}）</span>
+                <span style="margin-left: 6px">
+                  {{ authStore.currentUser?.username }} ({{ authStore.userRole }})
+                </span>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
+                  <el-dropdown-item @click="logout">Logout</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
           </template>
           <el-button v-else type="primary" @click="goLogin">
             <el-icon><Promotion /></el-icon>
-            登录 / 注册
+            Login / Register
           </el-button>
         </div>
       </el-header>

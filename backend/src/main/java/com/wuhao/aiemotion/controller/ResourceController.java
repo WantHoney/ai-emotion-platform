@@ -1,14 +1,17 @@
 package com.wuhao.aiemotion.controller;
 
+import com.wuhao.aiemotion.config.AuthInterceptor;
 import com.wuhao.aiemotion.dto.response.AdminMetricsResponse;
 import com.wuhao.aiemotion.dto.response.AudioListResponse;
 import com.wuhao.aiemotion.dto.response.ReportListResponse;
 import com.wuhao.aiemotion.dto.response.TaskListResponse;
+import com.wuhao.aiemotion.service.AuthService;
 import com.wuhao.aiemotion.service.ResourceManagementService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,11 +35,22 @@ public class ResourceController {
                                   @RequestParam(required = false) String q,
                                   @RequestParam(required = false) String sortBy,
                                   @RequestParam(required = false) String sortOrder,
-                                  @RequestParam(required = false) String sort) {
+                                  @RequestParam(required = false) String sort,
+                                  @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
         int resolvedPageSize = pageSize != null ? pageSize : (size != null ? size : 10);
         String resolvedKeyword = firstNonBlank(keyword, q);
         String[] sortValues = resolveSort(sortBy, sortOrder, sort);
-        return resourceManagementService.tasks(page, resolvedPageSize, status, resolvedKeyword, sortValues[0], sortValues[1]);
+        boolean adminView = AuthService.ROLE_ADMIN.equals(user.role());
+        return resourceManagementService.tasks(
+                page,
+                resolvedPageSize,
+                status,
+                resolvedKeyword,
+                sortValues[0],
+                sortValues[1],
+                adminView,
+                user.userId()
+        );
     }
 
     @GetMapping("/reports")
@@ -48,17 +62,31 @@ public class ResourceController {
                                       @RequestParam(required = false) String keyword,
                                       @RequestParam(required = false) String q,
                                       @RequestParam(required = false) String sortBy,
-                                      @RequestParam(required = false) String sortOrder) {
+                                      @RequestParam(required = false) String sortOrder,
+                                      @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
         int resolvedPageSize = pageSize != null ? pageSize : (size != null ? size : 10);
         String resolvedKeyword = firstNonBlank(keyword, q);
         String resolvedSortBy = sortBy == null || sortBy.isBlank() ? "createdAt" : sortBy.trim();
         String resolvedSortOrder = sortOrder == null || sortOrder.isBlank() ? "desc" : sortOrder.trim();
-        return resourceManagementService.reports(page, resolvedPageSize, riskLevel, emotion, resolvedKeyword, resolvedSortBy, resolvedSortOrder);
+        boolean adminView = AuthService.ROLE_ADMIN.equals(user.role());
+        return resourceManagementService.reports(
+                page,
+                resolvedPageSize,
+                riskLevel,
+                emotion,
+                resolvedKeyword,
+                resolvedSortBy,
+                resolvedSortOrder,
+                adminView,
+                user.userId()
+        );
     }
 
     @GetMapping("/reports/{reportId}")
-    public ReportListResponse.ReportDTO report(@PathVariable long reportId) {
-        return resourceManagementService.report(reportId);
+    public ReportListResponse.ReportDTO report(@PathVariable long reportId,
+                                               @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        boolean adminView = AuthService.ROLE_ADMIN.equals(user.role());
+        return resourceManagementService.report(reportId, adminView, user.userId());
     }
 
     @DeleteMapping("/reports/{reportId}")

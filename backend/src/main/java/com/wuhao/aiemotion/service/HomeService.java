@@ -1,4 +1,4 @@
-package com.wuhao.aiemotion.service;
+﻿package com.wuhao.aiemotion.service;
 
 import com.wuhao.aiemotion.domain.Quote;
 import com.wuhao.aiemotion.repository.HomeContentRepository;
@@ -45,8 +45,9 @@ public class HomeService {
 
     private List<Map<String, Object>> defaultSelfHelpEntries() {
         return List.of(
-                Map.of("key", "breathing", "title", "呼吸放松练习", "path", "/practice/breathing"),
-                Map.of("key", "journaling", "title", "情绪日记", "path", "/practice/journaling")
+                Map.of("key", "audio_upload", "title", "Audio Upload", "path", "/upload"),
+                Map.of("key", "report_center", "title", "Report Center", "path", "/reports"),
+                Map.of("key", "psy_centers", "title", "Psy Centers", "path", "/psy-centers")
         );
     }
 }

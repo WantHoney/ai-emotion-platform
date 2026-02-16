@@ -50,6 +50,21 @@ public class ReportRepository {
         return total == null ? 0 : total;
     }
 
+    public long countByUser(long userId, String riskLevel, String emotion, String keyword) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT COUNT(*)
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.deleted_at IS NULL
+                  AND af.user_id=?
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(userId);
+        appendFilters(riskLevel, emotion, keyword, sql, args);
+        Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
     public List<ReportResource> page(String riskLevel,
                                      String emotion,
                                      String keyword,
@@ -59,6 +74,30 @@ public class ReportRepository {
                                      String sortOrder) {
         StringBuilder sql = new StringBuilder("SELECT rr.* FROM report_resource rr JOIN audio_file af ON af.id=rr.audio_id WHERE rr.deleted_at IS NULL");
         List<Object> args = new ArrayList<>();
+        appendFilters(riskLevel, emotion, keyword, sql, args);
+        sql.append(" ORDER BY ").append(resolveReportOrderBy(sortBy, sortOrder)).append(" LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add(offset);
+        return jdbcTemplate.query(sql.toString(), ROW_MAPPER, args.toArray());
+    }
+
+    public List<ReportResource> pageByUser(long userId,
+                                           String riskLevel,
+                                           String emotion,
+                                           String keyword,
+                                           int offset,
+                                           int size,
+                                           String sortBy,
+                                           String sortOrder) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT rr.*
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.deleted_at IS NULL
+                  AND af.user_id=?
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(userId);
         appendFilters(riskLevel, emotion, keyword, sql, args);
         sql.append(" ORDER BY ").append(resolveReportOrderBy(sortBy, sortOrder)).append(" LIMIT ? OFFSET ?");
         args.add(size);
@@ -116,6 +155,31 @@ public class ReportRepository {
     public Optional<ReportResource> findById(long reportId) {
         List<ReportResource> list = jdbcTemplate.query("SELECT * FROM report_resource WHERE id=? AND deleted_at IS NULL", ROW_MAPPER, reportId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
+    public Optional<ReportResource> findByIdForUser(long reportId, long userId) {
+        List<ReportResource> list = jdbcTemplate.query(
+                """
+                SELECT rr.*
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.id=? AND rr.deleted_at IS NULL AND af.user_id=?
+                LIMIT 1
+                """,
+                ROW_MAPPER,
+                reportId,
+                userId
+        );
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
+    public Optional<Long> findIdByTaskId(long taskId) {
+        List<Long> rows = jdbcTemplate.query(
+                "SELECT id FROM report_resource WHERE task_id=? AND deleted_at IS NULL LIMIT 1",
+                (rs, rowNum) -> rs.getLong("id"),
+                taskId
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
     public int softDelete(long reportId) {

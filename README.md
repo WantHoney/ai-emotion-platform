@@ -1,35 +1,54 @@
-# AI Emotion Monorepo
+﻿# AI Emotion Monorepo
 
-本仓库为前后端一体 monorepo：
+This repository is a monorepo with:
+- `backend/`: Spring Boot + MySQL (API server)
+- `frontend/`: Vue 3 + Vite + Element Plus (web client)
 
-- `backend/`: Spring Boot 3 + Maven + MySQL
-- `frontend/`: Vue 3 + Vite + Element Plus
-
-## 1. 环境要求
+## 1. Prerequisites
 
 - JDK 17+
 - Maven 3.9+
 - Node.js `^20.19.0 || >=22.12.0`
 - MySQL 8+
 
-## 2. 端口约定
+## 2. Required Environment Variables
+
+Backend runs in real AI mode by default. You must provide API key and DB connection.
+
+- `OPENROUTER_API_KEY` (required)
+- `OPENROUTER_BASE_URL` (optional, default `https://openrouter.ai/api`)
+- `OPENROUTER_MODEL` (optional)
+- `SPRING_DATASOURCE_URL` (optional override)
+- `SPRING_DATASOURCE_USERNAME` (optional override)
+- `SPRING_DATASOURCE_PASSWORD` (optional override)
+
+Windows PowerShell example:
+
+```powershell
+$env:OPENROUTER_API_KEY="your_key"
+$env:SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
+$env:SPRING_DATASOURCE_USERNAME="root"
+$env:SPRING_DATASOURCE_PASSWORD="your_password"
+```
+
+## 3. Ports
 
 - Backend: `http://127.0.0.1:8080`
-- Frontend (Vite): `http://127.0.0.1:5173`
-- Vite 代理: `http://127.0.0.1:5173/api/* -> http://127.0.0.1:8080/api/*`
+- Frontend dev: `http://127.0.0.1:5173`
+- Vite proxy: `http://127.0.0.1:5173/api/*` -> `http://127.0.0.1:8080/api/*`
 
-## 3. 快速启动
+## 4. Start
 
-### 3.1 分别启动
+### 4.1 Start separately
 
-1. 启动后端
+Backend:
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-2. 启动前端
+Frontend:
 
 ```bash
 cd frontend
@@ -37,35 +56,31 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-### 3.2 一键启动（根目录）
+### 4.2 One command start
 
-- Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 ./scripts/dev-all.ps1
 ```
 
-- macOS / Linux:
+macOS/Linux:
 
 ```bash
 bash ./scripts/dev-all.sh
 ```
 
-## 4. 启动后自检
+## 5. Runtime Check
 
-### 4.1 健康检查
+Backend direct checks:
 
 ```bash
 curl http://127.0.0.1:8080/api/health
+curl http://127.0.0.1:8080/api/home
+curl "http://127.0.0.1:8080/api/psy-centers?cityCode=310100"
 ```
 
-预期返回 200，示例：
-
-```json
-{"status":"DEGRADED","db":"UP","ser":"DOWN"}
-```
-
-### 4.2 代理联调检查
+Frontend proxy checks:
 
 ```bash
 curl http://127.0.0.1:5173/api/health
@@ -73,17 +88,32 @@ curl http://127.0.0.1:5173/api/home
 curl "http://127.0.0.1:5173/api/psy-centers?cityCode=310100"
 ```
 
-## 5. 核心接口（当前实现）
+Authenticated checks (register first, then pass Bearer token):
 
-- `GET /api/health`
-- `GET /api/system/status`
-- `GET /api/home`
-- `GET /api/psy-centers?cityCode=310100`（兼容 `city_code`）
-- `GET /api/reports?page=1&pageSize=10&keyword=&riskLevel=&emotion=&sortBy=createdAt&sortOrder=desc`
-- `GET /api/reports/{id}`
-- `GET /api/tasks?page=1&pageSize=10&status=&keyword=&sortBy=createdAt&sortOrder=desc`
+```bash
+curl -X POST http://127.0.0.1:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"qa_user","password":"QaPass_123456"}'
 
-列表接口统一结构：
+curl "http://127.0.0.1:8080/api/tasks?page=1&pageSize=10" \
+  -H "Authorization: Bearer <accessToken>"
+
+curl "http://127.0.0.1:8080/api/reports?page=1&pageSize=10" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+## 6. Main API Contracts
+
+- Health: `GET /api/health`
+- System status (admin): `GET /api/system/status`
+- Home: `GET /api/home`
+- Psy centers: `GET /api/psy-centers?cityCode=310100`
+  - Also supports `city_code`
+- Tasks list: `GET /api/tasks?page=1&pageSize=10&status=&keyword=&sortBy=createdAt&sortOrder=desc`
+- Reports list: `GET /api/reports?page=1&pageSize=10&riskLevel=&emotion=&keyword=&sortBy=createdAt&sortOrder=desc`
+- Report detail: `GET /api/reports/{id}`
+
+List response shape:
 
 ```json
 {
@@ -95,32 +125,47 @@ curl "http://127.0.0.1:5173/api/psy-centers?cityCode=310100"
 }
 ```
 
-错误结构统一：
+Error response shape:
 
 ```json
 {
   "code": "HTTP_401",
-  "message": "缺少 Authorization Bearer Token",
-  "traceId": "xxxxxx"
+  "message": "Unauthorized",
+  "traceId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 }
 ```
 
-## 6. 常见问题
+## 7. Admin Governance API
 
-### 6.1 前端报 `ECONNREFUSED`
+- Models:
+  - `GET /api/admin/models`
+  - `POST /api/admin/models`
+  - `POST /api/admin/models/{id}/switch`
+  - `GET /api/admin/models/switch-logs`
+- Warning rules:
+  - `GET /api/admin/warning-rules`
+  - `POST /api/admin/warning-rules`
+  - `PUT /api/admin/warning-rules/{id}`
+  - `POST /api/admin/warning-rules/{id}/toggle?enabled=true|false`
+- Warning events:
+  - `GET /api/admin/warnings?page=1&pageSize=10`
+  - `POST /api/admin/warnings/{id}/actions`
+- Analytics:
+  - `GET /api/admin/analytics/daily?days=14`
+  - `GET /api/admin/governance/summary`
 
-- 确认 backend 已启动在 `127.0.0.1:8080`
-- 确认 `frontend/vite.config.ts` 的 proxy target 为 `http://127.0.0.1:8080`
+## 8. Troubleshooting
 
-### 6.2 后端启动提示 OpenAI API key
+### `ECONNREFUSED` on frontend `/api/*`
 
-- 默认走 `spring` 模式，需要可用的 `OPENROUTER_API_KEY`
-- 若你只做本地联调、不依赖真实模型，可临时切换：
-  - `AI_MODE=mock`
+1. Confirm backend is running on `127.0.0.1:8080`.
+2. Confirm frontend dev is running on `127.0.0.1:5173`.
+3. Confirm `frontend/vite.config.ts` proxy target is `http://127.0.0.1:8080`.
 
-### 6.3 MySQL 连接问题
+### Backend startup fails with OpenAI API key error
 
-- 可通过环境变量覆盖：
-  - `SPRING_DATASOURCE_URL`
-  - `SPRING_DATASOURCE_USERNAME`
-  - `SPRING_DATASOURCE_PASSWORD`
+Set `OPENROUTER_API_KEY` in your shell before running backend.
+
+### Backend startup fails with `Port 8080 was already in use`
+
+Stop the process using port `8080`, or change `server.port` in backend config.

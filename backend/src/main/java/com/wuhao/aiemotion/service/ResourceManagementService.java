@@ -40,19 +40,22 @@ public class ResourceManagementService {
     private final ReportRepository reportRepository;
     private final AudioRepository audioRepository;
     private final ObjectMapper objectMapper;
+    private final WarningEventTriggerService warningEventTriggerService;
 
     public ResourceManagementService(AnalysisTaskRepository analysisTaskRepository,
                                      AnalysisResultRepository analysisResultRepository,
                                      AnalysisSegmentRepository analysisSegmentRepository,
                                      ReportRepository reportRepository,
                                      AudioRepository audioRepository,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     WarningEventTriggerService warningEventTriggerService) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
         this.reportRepository = reportRepository;
         this.audioRepository = audioRepository;
         this.objectMapper = objectMapper;
+        this.warningEventTriggerService = warningEventTriggerService;
     }
 
     public TaskListResponse tasks(int page,
@@ -60,15 +63,20 @@ public class ResourceManagementService {
                                   String status,
                                   String keyword,
                                   String sortBy,
-                                  String sortOrder) {
+                                  String sortOrder,
+                                  boolean adminView,
+                                  long userId) {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(1, pageSize));
         try {
             int offset = (safePage - 1) * safeSize;
-            long total = analysisTaskRepository.countTasks(status, keyword);
-            List<TaskListResponse.TaskDTO> items = analysisTaskRepository
-                    .findTaskPage(offset, safeSize, status, keyword, sortBy, sortOrder)
-                    .stream()
+            long total = adminView
+                    ? analysisTaskRepository.countTasks(status, keyword)
+                    : analysisTaskRepository.countTasksByUser(userId, status, keyword);
+            List<AnalysisTask> rows = adminView
+                    ? analysisTaskRepository.findTaskPage(offset, safeSize, status, keyword, sortBy, sortOrder)
+                    : analysisTaskRepository.findTaskPageByUser(userId, offset, safeSize, status, keyword, sortBy, sortOrder);
+            List<TaskListResponse.TaskDTO> items = rows.stream()
                     .map(it -> new TaskListResponse.TaskDTO(
                             it.id(),
                             it.audioFileId(),
@@ -99,15 +107,20 @@ public class ResourceManagementService {
                                       String emotion,
                                       String keyword,
                                       String sortBy,
-                                      String sortOrder) {
+                                      String sortOrder,
+                                      boolean adminView,
+                                      long userId) {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(1, pageSize));
         try {
             int offset = (safePage - 1) * safeSize;
-            long total = reportRepository.count(riskLevel, emotion, keyword);
-            List<ReportListResponse.ReportDTO> items = reportRepository
-                    .page(riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder)
-                    .stream()
+            long total = adminView
+                    ? reportRepository.count(riskLevel, emotion, keyword)
+                    : reportRepository.countByUser(userId, riskLevel, emotion, keyword);
+            List<ReportResource> rows = adminView
+                    ? reportRepository.page(riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder)
+                    : reportRepository.pageByUser(userId, riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder);
+            List<ReportListResponse.ReportDTO> items = rows.stream()
                     .map(this::toReportDTO)
                     .toList();
             return new ReportListResponse(total, safePage, safeSize, safeSize, items);
@@ -117,16 +130,18 @@ public class ResourceManagementService {
         }
     }
 
-    public ReportListResponse.ReportDTO report(long reportId) {
-        ReportResource report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "report 不存在: " + reportId));
+    public ReportListResponse.ReportDTO report(long reportId, boolean adminView, long userId) {
+        ReportResource report = (adminView
+                ? reportRepository.findById(reportId)
+                : reportRepository.findByIdForUser(reportId, userId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "report not found: " + reportId));
         return toReportDTO(report);
     }
 
     public void deleteReport(long reportId) {
         int updated = reportRepository.softDelete(reportId);
         if (updated == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "report 不存在: " + reportId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "report not found: " + reportId);
         }
     }
 
@@ -154,7 +169,7 @@ public class ResourceManagementService {
     @Transactional
     public void deleteAudio(long audioId) {
         AudioFile audio = audioRepository.findById(audioId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "audio 不存在: " + audioId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "audio not found: " + audioId));
         audioRepository.softDelete(audioId);
         analysisTaskRepository.markDeletedByAudioId(audioId);
         reportRepository.softDeleteByAudioId(audioId);
@@ -162,7 +177,7 @@ public class ResourceManagementService {
             try {
                 Files.deleteIfExists(Path.of(audio.storagePath()));
             } catch (IOException e) {
-                throw new IllegalStateException("删除音频文件失败: " + audio.storagePath(), e);
+                throw new IllegalStateException("failed to delete audio file: " + audio.storagePath(), e);
             }
         }
     }
@@ -185,12 +200,17 @@ public class ResourceManagementService {
         try {
             JsonNode node = objectMapper.readTree(rawJson);
             JsonNode riskNode = node.at("/riskAssessment/risk_level");
-            if (riskNode.isTextual()) riskLevel = riskNode.asText();
+            if (riskNode.isTextual()) {
+                riskLevel = riskNode.asText();
+            }
             JsonNode overallNode = node.at("/ser/overall/emotionCode");
-            if (overallNode.isTextual()) overall = overallNode.asText();
+            if (overallNode.isTextual()) {
+                overall = overallNode.asText();
+            }
         } catch (Exception ignored) {
         }
         reportRepository.upsert(taskId, audioId, rawJson, riskLevel, overall);
+        warningEventTriggerService.tryCreateWarningEvent(taskId, audioId, rawJson, overall, riskLevel);
     }
 
     private ReportListResponse.ReportDTO toReportDTO(ReportResource report) {
@@ -204,8 +224,12 @@ public class ResourceManagementService {
         try {
             JsonNode root = objectMapper.readTree(report.reportJson());
             JsonNode serOverall = root.at("/ser/overall");
-            if (serOverall.hasNonNull("emotionCode")) overall = serOverall.get("emotionCode").asText();
-            if (serOverall.has("confidence") && serOverall.get("confidence").isNumber()) confidence = serOverall.get("confidence").asDouble();
+            if (serOverall.hasNonNull("emotionCode")) {
+                overall = serOverall.get("emotionCode").asText();
+            }
+            if (serOverall.has("confidence") && serOverall.get("confidence").isNumber()) {
+                confidence = serOverall.get("confidence").asDouble();
+            }
             JsonNode riskNode = root.at("/riskAssessment");
             if (riskNode.isObject()) {
                 risk = new ReportListResponse.RiskDTO(riskNode.path("risk_score").asDouble(0D), riskNode.path("risk_level").asText(report.riskLevel()));

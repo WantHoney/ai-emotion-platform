@@ -88,6 +88,20 @@ public class AnalysisTaskRepository {
         return total == null ? 0 : total;
     }
 
+    public long countTasksByUser(long userId, String status, String keyword) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT COUNT(*)
+                FROM analysis_task t
+                JOIN audio_file af ON af.id=t.audio_file_id
+                WHERE af.user_id=?
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(userId);
+        appendTaskFiltersWithAlias("t", status, keyword, sql, args);
+        Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
     public List<AnalysisTask> findTaskPage(int offset,
                                            int size,
                                            String status,
@@ -104,15 +118,44 @@ public class AnalysisTaskRepository {
         return jdbcTemplate.query(sql.toString(), TASK_ROW_MAPPER, args.toArray());
     }
 
+    public List<AnalysisTask> findTaskPageByUser(long userId,
+                                                 int offset,
+                                                 int size,
+                                                 String status,
+                                                 String keyword,
+                                                 String sortBy,
+                                                 String sortOrder) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT t.*
+                FROM analysis_task t
+                JOIN audio_file af ON af.id=t.audio_file_id
+                WHERE af.user_id=?
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(userId);
+        appendTaskFiltersWithAlias("t", status, keyword, sql, args);
+        String orderBy = resolveTaskOrderByWithAlias("t", sortBy, sortOrder);
+        sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add(offset);
+        return jdbcTemplate.query(sql.toString(), TASK_ROW_MAPPER, args.toArray());
+    }
+
     private void appendTaskFilters(String status, String keyword, StringBuilder sql, List<Object> args) {
+        appendTaskFiltersWithAlias("", status, keyword, sql, args);
+    }
+
+    private void appendTaskFiltersWithAlias(String alias, String status, String keyword, StringBuilder sql, List<Object> args) {
+        String prefix = alias == null || alias.isBlank() ? "" : alias + ".";
         if (status != null && !status.isBlank()) {
-            sql.append(" AND status=?");
+            sql.append(" AND ").append(prefix).append("status=?");
             args.add(status.trim().toUpperCase());
         }
         if (keyword != null && !keyword.isBlank()) {
             String normalized = keyword.trim();
             String like = "%" + normalized + "%";
-            sql.append(" AND (CAST(id AS CHAR) LIKE ? OR CAST(audio_file_id AS CHAR) LIKE ? OR trace_id LIKE ?)");
+            sql.append(" AND (CAST(").append(prefix).append("id AS CHAR) LIKE ? OR CAST(").append(prefix)
+                    .append("audio_file_id AS CHAR) LIKE ? OR ").append(prefix).append("trace_id LIKE ?)");
             args.add(like);
             args.add(like);
             args.add(like);
@@ -120,10 +163,15 @@ public class AnalysisTaskRepository {
     }
 
     private String resolveTaskOrderBy(String sortBy, String sortOrder) {
+        return resolveTaskOrderByWithAlias("", sortBy, sortOrder);
+    }
+
+    private String resolveTaskOrderByWithAlias(String alias, String sortBy, String sortOrder) {
+        String prefix = alias == null || alias.isBlank() ? "" : alias + ".";
         String column = switch (sortBy == null ? "" : sortBy.trim()) {
-            case "updatedAt" -> "updated_at";
-            case "status" -> "status";
-            default -> "created_at";
+            case "updatedAt" -> prefix + "updated_at";
+            case "status" -> prefix + "status";
+            default -> prefix + "created_at";
         };
         String direction = "asc".equalsIgnoreCase(sortOrder) ? "ASC" : "DESC";
         return column + " " + direction;

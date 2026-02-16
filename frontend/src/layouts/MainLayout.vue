@@ -32,6 +32,7 @@ const navItems = computed<NavItem[]>(() => {
     { label: 'Models', path: '/admin/models', requiresAuth: true, role: 'ADMIN' },
     { label: 'Rules', path: '/admin/rules', requiresAuth: true, role: 'ADMIN' },
     { label: 'Warnings', path: '/admin/warnings', requiresAuth: true, role: 'ADMIN' },
+    { label: 'Content', path: '/admin/content', requiresAuth: true, role: 'ADMIN' },
     { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
     { label: 'About', path: '/about', requiresAuth: false },
   ]

@@ -145,6 +145,18 @@ const router = createRouter({
           },
         },
         {
+          path: '/admin/content',
+          name: 'adminContent',
+          component: () => import('@/views/AdminContentView.vue'),
+          meta: {
+            requiresAuth: true,
+            requiresRole: 'ADMIN',
+            title: 'Content Operations',
+            description: 'Manage banners, quotes, articles and books',
+            breadcrumb: ['Admin', 'Content Operations'],
+          },
+        },
+        {
           path: '/admin/analytics',
           name: 'adminAnalytics',
           component: () => import('@/views/AdminAnalyticsView.vue'),

@@ -18,31 +18,49 @@ type NavItem = {
   label: string
   path: string
   requiresAuth: boolean
-  role?: 'ADMIN'
+  role?: 'USER' | 'ADMIN'
 }
 
-const navItems = computed<NavItem[]>(() => {
-  const items: NavItem[] = [
-    { label: 'Home', path: '/home', requiresAuth: false },
-    { label: 'Upload', path: '/upload', requiresAuth: true },
-    { label: 'Tasks', path: '/tasks', requiresAuth: true },
-    { label: 'Reports', path: '/reports', requiresAuth: true },
-    { label: 'Psy Centers', path: '/psy-centers', requiresAuth: true },
-    { label: 'System', path: '/system', requiresAuth: true, role: 'ADMIN' },
-    { label: 'Models', path: '/admin/models', requiresAuth: true, role: 'ADMIN' },
-    { label: 'Rules', path: '/admin/rules', requiresAuth: true, role: 'ADMIN' },
-    { label: 'Warnings', path: '/admin/warnings', requiresAuth: true, role: 'ADMIN' },
-    { label: 'Content', path: '/admin/content', requiresAuth: true, role: 'ADMIN' },
-    { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
-    { label: 'About', path: '/about', requiresAuth: false },
-  ]
-  return items.filter((item) => !item.role || authStore.userRole === item.role)
-})
+const publicNavItems: NavItem[] = [
+  { label: 'Home', path: '/home', requiresAuth: false },
+  { label: 'About', path: '/about', requiresAuth: false },
+]
+
+const userNavItems: NavItem[] = [
+  { label: 'Upload', path: '/upload', requiresAuth: true, role: 'USER' },
+  { label: 'Tasks', path: '/tasks', requiresAuth: true, role: 'USER' },
+  { label: 'Reports', path: '/reports', requiresAuth: true, role: 'USER' },
+  { label: 'Trends', path: '/trends', requiresAuth: true, role: 'USER' },
+  { label: 'Psy Centers', path: '/psy-centers', requiresAuth: true, role: 'USER' },
+]
+
+const adminNavItems: NavItem[] = [
+  { label: 'System', path: '/system', requiresAuth: true, role: 'ADMIN' },
+  { label: 'Models', path: '/admin/models', requiresAuth: true, role: 'ADMIN' },
+  { label: 'Rules', path: '/admin/rules', requiresAuth: true, role: 'ADMIN' },
+  { label: 'Warnings', path: '/admin/warnings', requiresAuth: true, role: 'ADMIN' },
+  { label: 'Content', path: '/admin/content', requiresAuth: true, role: 'ADMIN' },
+  { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
+]
+
+const visibleUserNavItems = computed(() => (authStore.userRole === 'USER' ? userNavItems : []))
+const visibleAdminNavItems = computed(() => (authStore.userRole === 'ADMIN' ? adminNavItems : []))
+const visibleNavItems = computed(() => [
+  ...publicNavItems,
+  ...visibleUserNavItems.value,
+  ...visibleAdminNavItems.value,
+])
 
 const activeMenu = computed(() => {
   const path = route.path
-  const found = navItems.value.find((item) => path === item.path || path.startsWith(`${item.path}/`))
-  return found?.path ?? '/home'
+  const found = visibleNavItems.value.find((item) => path === item.path || path.startsWith(`${item.path}/`))
+  if (found) {
+    return found.path
+  }
+  if (path.startsWith('/admin/')) {
+    return '/admin/analytics'
+  }
+  return '/home'
 })
 
 const pageTitle = computed(() => String(route.meta.title ?? 'AI Emotion Console'))
@@ -64,7 +82,7 @@ const goLogin = async () => {
 }
 
 const handleSelect = async (index: string) => {
-  const target = navItems.value.find((item) => item.path === index)
+  const target = visibleNavItems.value.find((item) => item.path === index)
   if (!target) return
 
   if (target.requiresAuth && !authStore.isAuthenticated) {
@@ -89,7 +107,19 @@ const toggleTheme = () => {
         <span v-else>EC</span>
       </div>
       <el-menu :default-active="activeMenu" :collapse="!sidebarOpen" @select="handleSelect">
-        <el-menu-item v-for="item in navItems" :key="item.path" :index="item.path">{{ item.label }}</el-menu-item>
+        <el-menu-item v-for="item in publicNavItems" :key="item.path" :index="item.path">
+          {{ item.label }}
+        </el-menu-item>
+        <el-menu-item-group v-if="visibleUserNavItems.length" title="User Portal">
+          <el-menu-item v-for="item in visibleUserNavItems" :key="item.path" :index="item.path">
+            {{ item.label }}
+          </el-menu-item>
+        </el-menu-item-group>
+        <el-menu-item-group v-if="visibleAdminNavItems.length" title="Admin Console">
+          <el-menu-item v-for="item in visibleAdminNavItems" :key="item.path" :index="item.path">
+            {{ item.label }}
+          </el-menu-item>
+        </el-menu-item-group>
       </el-menu>
     </el-aside>
 

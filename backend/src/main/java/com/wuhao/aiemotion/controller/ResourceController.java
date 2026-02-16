@@ -8,6 +8,7 @@ import com.wuhao.aiemotion.dto.response.TaskListResponse;
 import com.wuhao.aiemotion.service.AuthService;
 import com.wuhao.aiemotion.service.ResourceManagementService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -80,6 +84,15 @@ public class ResourceController {
                 adminView,
                 user.userId()
         );
+    }
+
+    @GetMapping("/reports/trend")
+    public Map<String, Object> reportTrend(@RequestParam(defaultValue = "30") int days,
+                                           @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        if (!AuthService.ROLE_USER.equals(user.role())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only user account can access personal trend");
+        }
+        return resourceManagementService.reportTrend(user.userId(), days);
     }
 
     @GetMapping("/reports/{reportId}")

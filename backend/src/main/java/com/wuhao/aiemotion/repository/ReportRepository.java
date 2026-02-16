@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -188,5 +189,52 @@ public class ReportRepository {
 
     public void softDeleteByAudioId(long audioId) {
         jdbcTemplate.update("UPDATE report_resource SET deleted_at = NOW() WHERE audio_id=? AND deleted_at IS NULL", audioId);
+    }
+
+    public List<Map<String, Object>> listUserDailyTrend(long userId, int days) {
+        int safeDays = Math.min(180, Math.max(1, days));
+        return jdbcTemplate.queryForList(
+                """
+                SELECT DATE(rr.created_at) AS stat_date,
+                       COUNT(*) AS report_count,
+                       AVG(
+                         CASE
+                           WHEN (
+                             CASE
+                               WHEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4)) > 0
+                                 THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4))
+                               ELSE CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.analysis_result.risk_assessment.risk_score')), '0') AS DECIMAL(10,4))
+                             END
+                           ) <= 1
+                             THEN (
+                               CASE
+                                 WHEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4)) > 0
+                                   THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4))
+                                 ELSE CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.analysis_result.risk_assessment.risk_score')), '0') AS DECIMAL(10,4))
+                               END
+                             ) * 100
+                           ELSE (
+                             CASE
+                               WHEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4)) > 0
+                                 THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4))
+                               ELSE CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.analysis_result.risk_assessment.risk_score')), '0') AS DECIMAL(10,4))
+                             END
+                           )
+                         END
+                       ) AS avg_risk_score,
+                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='LOW' THEN 1 ELSE 0 END) AS low_count,
+                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='MEDIUM' THEN 1 ELSE 0 END) AS medium_count,
+                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='HIGH' THEN 1 ELSE 0 END) AS high_count
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.deleted_at IS NULL
+                  AND af.user_id=?
+                  AND rr.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                GROUP BY DATE(rr.created_at)
+                ORDER BY stat_date ASC
+                """,
+                userId,
+                safeDays
+        );
     }
 }

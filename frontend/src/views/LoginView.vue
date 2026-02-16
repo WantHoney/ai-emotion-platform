@@ -3,7 +3,6 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-import type { AuthRole } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { toErrorMessage } from '@/utils/errorMessage'
 
@@ -12,10 +11,15 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const activeTab = ref<'login' | 'register'>('login')
-const loginRole = ref<AuthRole>('USER')
+const portalTab = ref<'user' | 'admin'>('user')
+const userAuthTab = ref<'login' | 'register'>('login')
 
-const loginForm = reactive({
+const userLoginForm = reactive({
+  username: '',
+  password: '',
+})
+
+const adminLoginForm = reactive({
   username: '',
   password: '',
 })
@@ -27,19 +31,40 @@ const registerForm = reactive({
   confirmPassword: '',
 })
 
-const goAfterAuth = async () => {
-  const redirect = String(route.query.redirect ?? '/home')
-  await router.push(redirect)
+const resolveRedirect = (role: 'USER' | 'ADMIN') => {
+  const fallback = role === 'ADMIN' ? '/admin/analytics' : '/home'
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.trim()) {
+    return redirect
+  }
+  return fallback
 }
 
-const handleLogin = async () => {
+const goAfterAuth = async (role: 'USER' | 'ADMIN') => {
+  await router.push(resolveRedirect(role))
+}
+
+const handleUserLogin = async () => {
   loading.value = true
   try {
-    await authStore.login(loginForm.username, loginForm.password, loginRole.value)
-    ElMessage.success(loginRole.value === 'ADMIN' ? '运营端登录成功' : '用户登录成功')
-    await goAfterAuth()
+    await authStore.login(userLoginForm.username, userLoginForm.password, 'USER')
+    ElMessage.success('User login succeeded')
+    await goAfterAuth('USER')
   } catch (error) {
-    ElMessage.error(toErrorMessage(error, '登录失败'))
+    ElMessage.error(toErrorMessage(error, 'User login failed'))
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAdminLogin = async () => {
+  loading.value = true
+  try {
+    await authStore.login(adminLoginForm.username, adminLoginForm.password, 'ADMIN')
+    ElMessage.success('Admin login succeeded')
+    await goAfterAuth('ADMIN')
+  } catch (error) {
+    ElMessage.error(toErrorMessage(error, 'Admin login failed'))
   } finally {
     loading.value = false
   }
@@ -47,17 +72,17 @@ const handleLogin = async () => {
 
 const handleRegister = async () => {
   if (registerForm.password !== registerForm.confirmPassword) {
-    ElMessage.warning('两次密码输入不一致')
+    ElMessage.warning('Passwords are inconsistent')
     return
   }
 
   loading.value = true
   try {
     await authStore.register(registerForm.username, registerForm.password, registerForm.nickname)
-    ElMessage.success('注册成功，已自动登录')
-    await goAfterAuth()
+    ElMessage.success('Registration succeeded and user is logged in')
+    await goAfterAuth('USER')
   } catch (error) {
-    ElMessage.error(toErrorMessage(error, '注册失败'))
+    ElMessage.error(toErrorMessage(error, 'Registration failed'))
   } finally {
     loading.value = false
   }
@@ -69,51 +94,83 @@ const handleRegister = async () => {
     <el-card class="login-card">
       <template #header>
         <div class="login-card-header">
-          <span>登录 / 注册</span>
-          <el-tag type="info">用户端与运营端分离</el-tag>
+          <span>Account Access</span>
+          <el-tag type="info">User Portal / Admin Console</el-tag>
         </div>
       </template>
 
-      <el-tabs v-model="activeTab" stretch>
-        <el-tab-pane label="登录" name="login">
+      <el-tabs v-model="portalTab" stretch>
+        <el-tab-pane label="User Portal" name="user">
+          <el-tabs v-model="userAuthTab" stretch>
+            <el-tab-pane label="Login" name="login">
+              <el-form label-position="top" class="mt-16" @submit.prevent="handleUserLogin">
+                <el-form-item label="Username">
+                  <el-input v-model="userLoginForm.username" placeholder="Enter username" />
+                </el-form-item>
+                <el-form-item label="Password">
+                  <el-input
+                    v-model="userLoginForm.password"
+                    type="password"
+                    placeholder="Enter password"
+                    show-password
+                  />
+                </el-form-item>
+                <el-button type="primary" :loading="loading" @click="handleUserLogin">Login</el-button>
+              </el-form>
+            </el-tab-pane>
+
+            <el-tab-pane label="Register" name="register">
+              <el-form label-position="top" class="mt-16" @submit.prevent="handleRegister">
+                <el-form-item label="Username">
+                  <el-input v-model="registerForm.username" placeholder="Enter username" />
+                </el-form-item>
+                <el-form-item label="Nickname (optional)">
+                  <el-input v-model="registerForm.nickname" placeholder="Enter nickname" />
+                </el-form-item>
+                <el-form-item label="Password">
+                  <el-input
+                    v-model="registerForm.password"
+                    type="password"
+                    placeholder="At least 8 chars with letters and digits"
+                    show-password
+                  />
+                </el-form-item>
+                <el-form-item label="Confirm Password">
+                  <el-input
+                    v-model="registerForm.confirmPassword"
+                    type="password"
+                    placeholder="Enter password again"
+                    show-password
+                  />
+                </el-form-item>
+                <el-button type="primary" :loading="loading" @click="handleRegister">
+                  Register and Login
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+          </el-tabs>
+        </el-tab-pane>
+
+        <el-tab-pane label="Admin Console" name="admin">
           <el-alert
-            title="运营端请切换到“运营端登录”，默认账号 operator / operator123。"
-            type="info"
+            title="Admin accounts are seeded by backend config only. Registration is disabled."
+            type="warning"
             :closable="false"
             show-icon
           />
-          <el-form label-position="top" class="mt-16" @submit.prevent="handleLogin">
-            <el-form-item label="登录身份">
-              <el-radio-group v-model="loginRole">
-                <el-radio-button label="USER">用户端</el-radio-button>
-                <el-radio-button label="ADMIN">运营端</el-radio-button>
-              </el-radio-group>
+          <el-form label-position="top" class="mt-16" @submit.prevent="handleAdminLogin">
+            <el-form-item label="Admin Username">
+              <el-input v-model="adminLoginForm.username" placeholder="Enter admin username" />
             </el-form-item>
-            <el-form-item label="用户名">
-              <el-input v-model="loginForm.username" placeholder="请输入用户名" />
+            <el-form-item label="Password">
+              <el-input
+                v-model="adminLoginForm.password"
+                type="password"
+                placeholder="Enter password"
+                show-password
+              />
             </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" show-password />
-            </el-form-item>
-            <el-button type="primary" :loading="loading" @click="handleLogin">立即登录</el-button>
-          </el-form>
-        </el-tab-pane>
-
-        <el-tab-pane label="注册" name="register">
-          <el-form label-position="top" @submit.prevent="handleRegister">
-            <el-form-item label="用户名">
-              <el-input v-model="registerForm.username" placeholder="请输入用户名" />
-            </el-form-item>
-            <el-form-item label="昵称（选填）">
-              <el-input v-model="registerForm.nickname" placeholder="请输入昵称" />
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="registerForm.password" type="password" placeholder="请输入密码" show-password />
-            </el-form-item>
-            <el-form-item label="确认密码">
-              <el-input v-model="registerForm.confirmPassword" type="password" placeholder="请再次输入密码" show-password />
-            </el-form-item>
-            <el-button type="primary" :loading="loading" @click="handleRegister">注册并登录</el-button>
+            <el-button type="primary" :loading="loading" @click="handleAdminLogin">Admin Login</el-button>
           </el-form>
         </el-tab-pane>
       </el-tabs>
@@ -131,13 +188,14 @@ const handleRegister = async () => {
 }
 
 .login-card {
-  width: 460px;
+  width: min(520px, calc(100vw - 32px));
 }
 
 .login-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .mt-16 {

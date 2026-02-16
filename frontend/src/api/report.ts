@@ -32,6 +32,23 @@ export interface ReportListQuery {
   sortOrder?: 'asc' | 'desc'
 }
 
+export interface ReportTrendItem {
+  date: string
+  reportCount: number
+  avgRiskScore: number
+  lowCount: number
+  mediumCount: number
+  highCount: number
+}
+
+export interface ReportTrendResponse {
+  items: ReportTrendItem[]
+  total: number
+  page: number
+  pageSize: number
+  days: number
+}
+
 interface ReportSummaryRaw {
   id?: number | string
   report_id?: number | string
@@ -159,4 +176,11 @@ export const getReportDetail = async (reportId: number) => {
     ...response,
     data: normalizeReportDetail(response.data),
   }
+}
+
+export const getReportTrend = async (days = 30) => {
+  const response = await http.get<ReportTrendResponse>('/api/reports/trend', {
+    params: { days },
+  })
+  return response.data
 }

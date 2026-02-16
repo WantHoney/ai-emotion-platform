@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { ref } from 'vue'
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type UploadProps } from 'element-plus'
 
@@ -24,12 +24,63 @@ const uploadHint = ref('Waiting for upload')
 const currentUploadId = ref<string | null>(null)
 const errorState = ref<ErrorStatePayload | null>(null)
 
-const beforeUpload: UploadProps['beforeUpload'] = (file) => {
-  const isAudio = file.type.startsWith('audio/')
-  if (!isAudio) {
-    ElMessage.warning('Only audio files are supported')
+const isRecording = ref(false)
+const recordingSeconds = ref(0)
+const recorderMimeType = ref('audio/webm')
+const recordedFile = ref<File | null>(null)
+const recordingError = ref<string | null>(null)
+
+let mediaStream: MediaStream | null = null
+let mediaRecorder: MediaRecorder | null = null
+let timerHandle: number | null = null
+let recorderChunks: Blob[] = []
+
+const recorderSupported = computed(() => {
+  return typeof window !== 'undefined' && 'MediaRecorder' in window && !!navigator.mediaDevices
+})
+
+const releaseRecorderResources = () => {
+  if (timerHandle != null) {
+    window.clearInterval(timerHandle)
+    timerHandle = null
   }
-  return isAudio
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+  }
+  mediaRecorder = null
+  isRecording.value = false
+}
+
+const pickRecorderMimeType = () => {
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) {
+      return candidate
+    }
+  }
+  return ''
+}
+
+const buildRecordFile = (blob: Blob) => {
+  const mime = blob.type || 'audio/webm'
+  let ext = '.webm'
+  if (mime.includes('ogg')) ext = '.ogg'
+  else if (mime.includes('mp4') || mime.includes('m4a')) ext = '.m4a'
+
+  return new File([blob], `recording-${Date.now()}${ext}`, { type: mime })
+}
+
+const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+  const type = file.type?.toLowerCase() ?? ''
+  const name = file.name?.toLowerCase() ?? ''
+  const isAudioType = type.startsWith('audio/')
+  const isAudioName = /\.(wav|mp3|m4a|ogg|webm|aac|flac)$/i.test(name)
+  if (!isAudioType && !isAudioName) {
+    ElMessage.warning('Only audio files are supported')
+    return false
+  }
+  return true
 }
 
 const uploadInChunks = async (file: File) => {
@@ -73,14 +124,14 @@ const uploadInChunks = async (file: File) => {
   return complete
 }
 
-const onUpload: UploadProps['httpRequest'] = async (options) => {
+const submitFile = async (file: File) => {
   uploading.value = true
   errorState.value = null
   hasUploaded.value = false
   uploadPercent.value = 0
 
   try {
-    const result = await uploadInChunks(options.file as File)
+    const result = await uploadInChunks(file)
     hasUploaded.value = true
 
     if (result.taskId) {
@@ -97,6 +148,75 @@ const onUpload: UploadProps['httpRequest'] = async (options) => {
   }
 }
 
+const onUpload: UploadProps['httpRequest'] = async (options) => {
+  await submitFile(options.file as File)
+}
+
+const startRecording = async () => {
+  if (uploading.value || isRecording.value) {
+    return
+  }
+  if (!recorderSupported.value) {
+    recordingError.value = 'Current browser does not support in-browser recording'
+    return
+  }
+
+  recordingError.value = null
+  recordedFile.value = null
+  recorderChunks = []
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const mimeType = pickRecorderMimeType()
+    recorderMimeType.value = mimeType || 'audio/webm'
+    mediaRecorder = mimeType
+      ? new MediaRecorder(mediaStream, { mimeType })
+      : new MediaRecorder(mediaStream)
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recorderChunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recorderChunks, {
+        type: mediaRecorder?.mimeType || recorderMimeType.value,
+      })
+      recordedFile.value = buildRecordFile(blob)
+      uploadHint.value = 'Recording finished, ready to upload'
+      releaseRecorderResources()
+    }
+
+    mediaRecorder.start(1000)
+    isRecording.value = true
+    recordingSeconds.value = 0
+    uploadHint.value = 'Recording in progress'
+
+    timerHandle = window.setInterval(() => {
+      recordingSeconds.value += 1
+    }, 1000)
+  } catch (error) {
+    recordingError.value = parseError(error, 'Failed to start recording').detail
+    releaseRecorderResources()
+  }
+}
+
+const stopRecording = () => {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    return
+  }
+  mediaRecorder.stop()
+}
+
+const uploadRecorded = async () => {
+  if (!recordedFile.value) {
+    ElMessage.warning('No recorded audio found')
+    return
+  }
+  await submitFile(recordedFile.value)
+}
+
 const cancelCurrentUpload = async () => {
   if (!currentUploadId.value) {
     return
@@ -111,6 +231,10 @@ const cancelCurrentUpload = async () => {
     ElMessage.error(parsed.detail)
   }
 }
+
+onBeforeUnmount(() => {
+  releaseRecorderResources()
+})
 </script>
 
 <template>
@@ -130,12 +254,53 @@ const cancelCurrentUpload = async () => {
     />
     <template v-else>
       <el-alert
-        title="The client uploads chunks to backend, backend merges and starts analysis task automatically"
+        title="Use local recording or file upload. Audio is uploaded in chunks with live progress."
         type="info"
         show-icon
         :closable="false"
         class="mb-16"
       />
+
+      <el-card class="mb-16" shadow="never">
+        <template #header>
+          <div class="recording-head">In-browser recording</div>
+        </template>
+
+        <el-alert
+          v-if="!recorderSupported"
+          title="Current browser does not support MediaRecorder. Use file upload mode."
+          type="warning"
+          :closable="false"
+          show-icon
+          class="mb-12"
+        />
+
+        <el-alert
+          v-if="recordingError"
+          :title="recordingError"
+          type="error"
+          :closable="false"
+          show-icon
+          class="mb-12"
+        />
+
+        <div class="recording-row">
+          <el-tag :type="isRecording ? 'danger' : 'info'">
+            {{ isRecording ? `Recording ${recordingSeconds}s` : 'Not recording' }}
+          </el-tag>
+          <div class="recording-actions">
+            <el-button type="danger" :disabled="!recorderSupported || isRecording || uploading" @click="startRecording">
+              Start Recording
+            </el-button>
+            <el-button type="warning" :disabled="!isRecording" @click="stopRecording">Stop</el-button>
+            <el-button type="primary" :disabled="!recordedFile || uploading" @click="uploadRecorded">
+              Upload Recording
+            </el-button>
+          </div>
+        </div>
+
+        <p v-if="recordedFile" class="recording-file">Ready: {{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})</p>
+      </el-card>
 
       <LoadingState v-if="uploading && uploadPercent < 5" />
 
@@ -150,7 +315,7 @@ const cancelCurrentUpload = async () => {
       >
         <div class="el-upload__text">Drop audio file here, or <em>click to upload</em></div>
         <template #tip>
-          <div class="el-upload__tip">Supports mp3/wav/m4a. Chunk upload with real-time progress.</div>
+          <div class="el-upload__tip">Supports mp3/wav/m4a/webm. Chunk upload with real-time progress.</div>
         </template>
       </el-upload>
 
@@ -165,7 +330,7 @@ const cancelCurrentUpload = async () => {
       <EmptyState
         v-if="!hasUploaded"
         title="No upload yet"
-        description="Select an audio file to start chunk upload and analysis workflow."
+        description="Record or select an audio file to start chunk upload and analysis workflow."
         action-text="Refresh"
         @action="$router.go(0)"
       />
@@ -182,8 +347,36 @@ const cancelCurrentUpload = async () => {
   margin-bottom: 16px;
 }
 
+.mb-12 {
+  margin-bottom: 12px;
+}
+
 .mt-16 {
   margin-top: 16px;
+}
+
+.recording-head {
+  font-weight: 600;
+}
+
+.recording-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recording-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recording-file {
+  margin: 12px 0 0;
+  color: #334155;
+  font-size: 13px;
 }
 
 .hint {

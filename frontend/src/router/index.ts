@@ -36,6 +36,7 @@ const router = createRouter({
           component: () => import('@/views/UploadView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Upload Audio',
             description: 'Upload audio and create analysis task',
             breadcrumb: ['Workspace', 'Upload Audio'],
@@ -47,6 +48,7 @@ const router = createRouter({
           component: () => import('@/views/TasksView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Tasks',
             description: 'Monitor task status and processing pipeline',
             breadcrumb: ['Workspace', 'Tasks'],
@@ -58,6 +60,7 @@ const router = createRouter({
           component: () => import('@/views/TaskView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Task Detail',
             description: 'Task result, risk score and suggestion detail',
             breadcrumb: ['Workspace', 'Tasks', 'Task Detail'],
@@ -69,9 +72,22 @@ const router = createRouter({
           component: () => import('@/views/ReportsView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Reports',
             description: 'Browse and filter emotional analysis reports',
             breadcrumb: ['Workspace', 'Reports'],
+          },
+        },
+        {
+          path: '/trends',
+          name: 'trends',
+          component: () => import('@/views/TrendsView.vue'),
+          meta: {
+            requiresAuth: true,
+            requiresRole: 'USER',
+            title: 'Trends',
+            description: 'Timeline and score trend of personal reports',
+            breadcrumb: ['Workspace', 'Trends'],
           },
         },
         {
@@ -80,6 +96,7 @@ const router = createRouter({
           component: () => import('@/views/ReportView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Report Detail',
             description: 'Composed emotion, risk level and recommendations',
             breadcrumb: ['Workspace', 'Reports', 'Report Detail'],
@@ -91,6 +108,7 @@ const router = createRouter({
           component: () => import('@/views/PsyCentersView.vue'),
           meta: {
             requiresAuth: true,
+            requiresRole: 'USER',
             title: 'Psy Centers',
             description: 'Find psychology and support centers',
             breadcrumb: ['Workspace', 'Psy Centers'],
@@ -186,10 +204,11 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore(pinia)
+  const defaultPath = authStore.userRole === 'ADMIN' ? '/admin/analytics' : '/home'
 
   if (to.meta.public) {
     if (to.name === 'login' && authStore.isAuthenticated) {
-      return '/home'
+      return defaultPath
     }
     return true
   }
@@ -205,7 +224,7 @@ router.beforeEach((to) => {
   const requiredRole = to.meta.requiresRole
   if (requiredRole && authStore.userRole !== requiredRole) {
     ElMessage.error('Current account has no permission to access this page.')
-    return '/home'
+    return defaultPath
   }
 
   return true

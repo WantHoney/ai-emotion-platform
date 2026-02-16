@@ -26,7 +26,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ResourceManagementService {
@@ -136,6 +138,22 @@ public class ResourceManagementService {
                 : reportRepository.findByIdForUser(reportId, userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "report not found: " + reportId));
         return toReportDTO(report);
+    }
+
+    public Map<String, Object> reportTrend(long userId, int days) {
+        int safeDays = Math.min(180, Math.max(1, days));
+        List<Map<String, Object>> trendRows = reportRepository.listUserDailyTrend(userId, safeDays);
+        List<Map<String, Object>> items = trendRows.stream()
+                .map(this::toTrendItem)
+                .toList();
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("items", items);
+        response.put("total", items.size());
+        response.put("page", 1);
+        response.put("pageSize", items.size());
+        response.put("days", safeDays);
+        return response;
     }
 
     public void deleteReport(long reportId) {
@@ -250,6 +268,49 @@ public class ResourceManagementService {
         }
 
         return new ReportListResponse.ReportDTO(report.id(), report.taskId(), overall, segments, risk, confidence, format(report.createdAt()), audio);
+    }
+
+    private Map<String, Object> toTrendItem(Map<String, Object> row) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("date", asString(row.get("stat_date")));
+        item.put("reportCount", toLong(row.get("report_count")));
+        item.put("avgRiskScore", toRoundedDouble(row.get("avg_risk_score")));
+        item.put("lowCount", toLong(row.get("low_count")));
+        item.put("mediumCount", toLong(row.get("medium_count")));
+        item.put("highCount", toLong(row.get("high_count")));
+        return item;
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    private double toRoundedDouble(Object value) {
+        double number = 0D;
+        if (value instanceof Number numericValue) {
+            number = numericValue.doubleValue();
+        } else if (value != null) {
+            try {
+                number = Double.parseDouble(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                number = 0D;
+            }
+        }
+        return Math.round(number * 100D) / 100D;
     }
 
     private String format(LocalDateTime value) {

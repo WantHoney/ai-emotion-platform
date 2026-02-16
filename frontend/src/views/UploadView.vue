@@ -6,6 +6,8 @@ import { ElMessage, type UploadProps } from 'element-plus'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
+import SectionBlock from '@/components/ui/SectionBlock.vue'
+import LoreCard from '@/components/ui/LoreCard.vue'
 import {
   cancelUploadSession,
   completeUploadSession,
@@ -238,125 +240,120 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <el-card shadow="hover">
-    <template #header>
-      <div class="header-row">
-        <span>Audio Upload and Analysis</span>
-      </div>
-    </template>
-
-    <ErrorState
-      v-if="errorState"
-      :title="errorState.title"
-      :detail="errorState.detail"
-      :trace-id="errorState.traceId"
-      @retry="errorState = null"
-    />
-    <template v-else>
-      <el-alert
-        title="Use local recording or file upload. Audio is uploaded in chunks with live progress."
-        type="info"
-        show-icon
-        :closable="false"
-        class="mb-16"
+  <div class="upload-page user-layout">
+    <SectionBlock
+      eyebrow="Acquisition"
+      title="Voice Upload Studio"
+      description="Record in-browser or upload local audio. Large files are uploaded in chunks with session progress."
+    >
+      <ErrorState
+        v-if="errorState"
+        :title="errorState.title"
+        :detail="errorState.detail"
+        :trace-id="errorState.traceId"
+        @retry="errorState = null"
       />
+      <template v-else>
+        <div class="layout-grid">
+          <LoreCard title="Realtime Recording" subtitle="Capture voice directly from browser microphone.">
+            <el-alert
+              v-if="!recorderSupported"
+              title="Current browser does not support MediaRecorder. Use file upload mode."
+              type="warning"
+              :closable="false"
+              show-icon
+              class="mb-12"
+            />
+            <el-alert
+              v-if="recordingError"
+              :title="recordingError"
+              type="error"
+              :closable="false"
+              show-icon
+              class="mb-12"
+            />
 
-      <el-card class="mb-16" shadow="never">
-        <template #header>
-          <div class="recording-head">In-browser recording</div>
-        </template>
+            <div class="recording-row">
+              <el-tag :type="isRecording ? 'danger' : 'info'">
+                {{ isRecording ? `Recording ${recordingSeconds}s` : 'Not recording' }}
+              </el-tag>
+              <div class="recording-actions">
+                <el-button
+                  type="danger"
+                  :disabled="!recorderSupported || isRecording || uploading"
+                  @click="startRecording"
+                >
+                  Start
+                </el-button>
+                <el-button type="warning" :disabled="!isRecording" @click="stopRecording">Stop</el-button>
+                <el-button type="primary" :disabled="!recordedFile || uploading" @click="uploadRecorded">
+                  Upload Record
+                </el-button>
+              </div>
+            </div>
+            <p v-if="recordedFile" class="recording-file">
+              Ready: {{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})
+            </p>
+          </LoreCard>
 
-        <el-alert
-          v-if="!recorderSupported"
-          title="Current browser does not support MediaRecorder. Use file upload mode."
-          type="warning"
-          :closable="false"
-          show-icon
-          class="mb-12"
-        />
-
-        <el-alert
-          v-if="recordingError"
-          :title="recordingError"
-          type="error"
-          :closable="false"
-          show-icon
-          class="mb-12"
-        />
-
-        <div class="recording-row">
-          <el-tag :type="isRecording ? 'danger' : 'info'">
-            {{ isRecording ? `Recording ${recordingSeconds}s` : 'Not recording' }}
-          </el-tag>
-          <div class="recording-actions">
-            <el-button type="danger" :disabled="!recorderSupported || isRecording || uploading" @click="startRecording">
-              Start Recording
-            </el-button>
-            <el-button type="warning" :disabled="!isRecording" @click="stopRecording">Stop</el-button>
-            <el-button type="primary" :disabled="!recordedFile || uploading" @click="uploadRecorded">
-              Upload Recording
-            </el-button>
-          </div>
+          <LoreCard title="File Upload" subtitle="Drag and drop audio files (mp3/wav/m4a/webm).">
+            <LoadingState v-if="uploading && uploadPercent < 5" />
+            <el-upload
+              drag
+              :show-file-list="true"
+              :http-request="onUpload"
+              :before-upload="beforeUpload"
+              accept="audio/*"
+              :disabled="uploading"
+              :limit="1"
+            >
+              <div class="el-upload__text">Drop audio file here, or <em>click to upload</em></div>
+              <template #tip>
+                <div class="el-upload__tip">Chunk upload with real-time progress and cancel support.</div>
+              </template>
+            </el-upload>
+          </LoreCard>
         </div>
 
-        <p v-if="recordedFile" class="recording-file">Ready: {{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})</p>
-      </el-card>
+        <LoreCard title="Upload Session Progress">
+          <el-progress :percentage="uploadPercent" :stroke-width="14" />
+          <p class="hint">{{ uploadHint }}</p>
+          <el-button v-if="currentUploadId" type="danger" text @click="cancelCurrentUpload">
+            Cancel Current Upload
+          </el-button>
+        </LoreCard>
 
-      <LoadingState v-if="uploading && uploadPercent < 5" />
+        <EmptyState
+          v-if="!hasUploaded"
+          title="No upload yet"
+          description="Record or select an audio file to start chunk upload and analysis workflow."
+          action-text="Refresh"
+          @action="$router.go(0)"
+        />
 
-      <el-upload
-        drag
-        :show-file-list="true"
-        :http-request="onUpload"
-        :before-upload="beforeUpload"
-        accept="audio/*"
-        :disabled="uploading"
-        :limit="1"
-      >
-        <div class="el-upload__text">Drop audio file here, or <em>click to upload</em></div>
-        <template #tip>
-          <div class="el-upload__tip">Supports mp3/wav/m4a/webm. Chunk upload with real-time progress.</div>
-        </template>
-      </el-upload>
-
-      <el-card class="mt-16" shadow="never">
-        <el-progress :percentage="uploadPercent" :stroke-width="14" />
-        <p class="hint">{{ uploadHint }}</p>
-        <el-button v-if="currentUploadId" type="danger" text @click="cancelCurrentUpload">
-          Cancel Current Upload
-        </el-button>
-      </el-card>
-
-      <EmptyState
-        v-if="!hasUploaded"
-        title="No upload yet"
-        description="Record or select an audio file to start chunk upload and analysis workflow."
-        action-text="Refresh"
-        @action="$router.go(0)"
-      />
-
-      <div class="actions">
-        <el-button @click="$router.back()">Back</el-button>
-      </div>
-    </template>
-  </el-card>
+        <div class="actions">
+          <el-button @click="$router.back()">Back</el-button>
+        </div>
+      </template>
+    </SectionBlock>
+  </div>
 </template>
 
 <style scoped>
-.mb-16 {
-  margin-bottom: 16px;
+.upload-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .mb-12 {
   margin-bottom: 12px;
-}
-
-.mt-16 {
-  margin-top: 16px;
-}
-
-.recording-head {
-  font-weight: 600;
 }
 
 .recording-row {
@@ -375,16 +372,22 @@ onBeforeUnmount(() => {
 
 .recording-file {
   margin: 12px 0 0;
-  color: #334155;
+  color: #cddbf2;
   font-size: 13px;
 }
 
 .hint {
   margin: 10px 0 0;
-  color: #475569;
+  color: #b8ccec;
 }
 
 .actions {
-  margin-top: 16px;
+  margin-top: 10px;
+}
+
+@media (max-width: 980px) {
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -23,10 +23,10 @@ const emit = defineEmits<{
 
 <style scoped>
 .state-card {
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed rgba(145, 169, 212, 0.48);
   border-radius: var(--radius-lg);
-  background: #fff;
-  padding: 28px;
+  background: rgba(15, 26, 44, 0.62);
+  padding: 24px;
 }
 
 .state-center {
@@ -38,16 +38,17 @@ const emit = defineEmits<{
 }
 
 .state-icon {
-  color: #6366f1;
+  color: #8ab8c1;
 }
 
 h3 {
   margin: 0;
   font-size: 18px;
+  color: #eff5ff;
 }
 
 p {
   margin: 0;
-  color: #64748b;
+  color: #b4c9ec;
 }
 </style>

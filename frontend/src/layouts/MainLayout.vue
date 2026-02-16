@@ -1,9 +1,10 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Expand, Fold, Moon, Promotion, Setting, Sunny, User } from '@element-plus/icons-vue'
+import { Expand, Fold, Promotion, UserFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
+import AppShell, { type AppNavItem } from '@/components/ui/AppShell.vue'
 import PageContainer from '@/components/layout/PageContainer.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -12,55 +13,70 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const sidebarOpen = ref(true)
-const isDark = ref(false)
 
-type NavItem = {
-  label: string
-  path: string
+type NavItem = AppNavItem & {
   requiresAuth: boolean
   role?: 'USER' | 'ADMIN'
 }
 
 const publicNavItems: NavItem[] = [
   { label: 'Home', path: '/home', requiresAuth: false },
+  { label: 'Content', path: '/content', requiresAuth: false },
   { label: 'About', path: '/about', requiresAuth: false },
 ]
 
 const userNavItems: NavItem[] = [
   { label: 'Upload', path: '/upload', requiresAuth: true, role: 'USER' },
-  { label: 'Tasks', path: '/tasks', requiresAuth: true, role: 'USER' },
   { label: 'Reports', path: '/reports', requiresAuth: true, role: 'USER' },
   { label: 'Trends', path: '/trends', requiresAuth: true, role: 'USER' },
   { label: 'Psy Centers', path: '/psy-centers', requiresAuth: true, role: 'USER' },
+  { label: 'Profile', path: '/profile', requiresAuth: true, role: 'USER' },
 ]
 
 const adminNavItems: NavItem[] = [
+  { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
   { label: 'System', path: '/system', requiresAuth: true, role: 'ADMIN' },
   { label: 'Models', path: '/admin/models', requiresAuth: true, role: 'ADMIN' },
   { label: 'Rules', path: '/admin/rules', requiresAuth: true, role: 'ADMIN' },
   { label: 'Warnings', path: '/admin/warnings', requiresAuth: true, role: 'ADMIN' },
   { label: 'Content', path: '/admin/content', requiresAuth: true, role: 'ADMIN' },
-  { label: 'Analytics', path: '/admin/analytics', requiresAuth: true, role: 'ADMIN' },
 ]
 
-const visibleUserNavItems = computed(() => (authStore.userRole === 'USER' ? userNavItems : []))
-const visibleAdminNavItems = computed(() => (authStore.userRole === 'ADMIN' ? adminNavItems : []))
-const visibleNavItems = computed(() => [
-  ...publicNavItems,
-  ...visibleUserNavItems.value,
-  ...visibleAdminNavItems.value,
-])
+const adminContextPaths = new Set(['/system'])
 
-const activeMenu = computed(() => {
-  const path = route.path
-  const found = visibleNavItems.value.find((item) => path === item.path || path.startsWith(`${item.path}/`))
-  if (found) {
-    return found.path
+const isAdminContext = computed(() => {
+  return (
+    route.path.startsWith('/admin') ||
+    adminContextPaths.has(route.path) ||
+    route.meta.requiresRole === 'ADMIN'
+  )
+})
+
+const userTopNavItems = computed(() => {
+  const items = [...publicNavItems]
+  if (authStore.userRole === 'USER') {
+    items.push(...userNavItems)
   }
-  if (path.startsWith('/admin/')) {
-    return '/admin/analytics'
-  }
-  return '/home'
+  return items.map((item) => ({ label: item.label, path: item.path }))
+})
+
+const visibleAdminNavItems = computed(() => {
+  if (authStore.userRole !== 'ADMIN') return []
+  return adminNavItems
+})
+
+const activeUserPath = computed(() => {
+  const found = userTopNavItems.value.find(
+    (item) => route.path === item.path || route.path.startsWith(`${item.path}/`),
+  )
+  return found?.path ?? '/home'
+})
+
+const activeAdminPath = computed(() => {
+  const found = visibleAdminNavItems.value.find(
+    (item) => route.path === item.path || route.path.startsWith(`${item.path}/`),
+  )
+  return found?.path ?? '/admin/analytics'
 })
 
 const pageTitle = computed(() => String(route.meta.title ?? 'AI Emotion Console'))
@@ -72,6 +88,8 @@ const breadcrumbs = computed(() => {
   return Array.isArray(items) ? items.map(String) : ['Workspace']
 })
 
+const hidePageHeader = computed(() => Boolean(route.meta.hidePageHeader))
+
 const logout = async () => {
   await authStore.clearToken()
   await router.push('/login')
@@ -81,147 +99,160 @@ const goLogin = async () => {
   await router.push({ path: '/login', query: { redirect: route.fullPath } })
 }
 
-const handleSelect = async (index: string) => {
-  const target = visibleNavItems.value.find((item) => item.path === index)
-  if (!target) return
-
-  if (target.requiresAuth && !authStore.isAuthenticated) {
+const navigateByItem = async (path: string, options?: { requiresAuth?: boolean }) => {
+  if (options?.requiresAuth && !authStore.isAuthenticated) {
     ElMessage.warning('Please login first.')
     await goLogin()
     return
   }
-  await router.push(index)
+  await router.push(path)
 }
 
-const toggleTheme = () => {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark-theme', isDark.value)
+const handleUserNavigate = async (path: string) => {
+  const target = [...publicNavItems, ...userNavItems].find((item) => item.path === path)
+  await navigateByItem(path, { requiresAuth: target?.requiresAuth })
+}
+
+const handleAdminSelect = async (path: string) => {
+  const target = adminNavItems.find((item) => item.path === path)
+  await navigateByItem(path, { requiresAuth: target?.requiresAuth })
 }
 </script>
 
 <template>
-  <el-container class="main-layout">
-    <el-aside :width="sidebarOpen ? '248px' : '72px'" class="sider">
-      <div class="brand">
-        <span v-if="sidebarOpen">Emotion Console</span>
-        <span v-else>EC</span>
-      </div>
-      <el-menu :default-active="activeMenu" :collapse="!sidebarOpen" @select="handleSelect">
-        <el-menu-item v-for="item in publicNavItems" :key="item.path" :index="item.path">
-          {{ item.label }}
-        </el-menu-item>
-        <el-menu-item-group v-if="visibleUserNavItems.length" title="User Portal">
-          <el-menu-item v-for="item in visibleUserNavItems" :key="item.path" :index="item.path">
-            {{ item.label }}
-          </el-menu-item>
-        </el-menu-item-group>
-        <el-menu-item-group v-if="visibleAdminNavItems.length" title="Admin Console">
-          <el-menu-item v-for="item in visibleAdminNavItems" :key="item.path" :index="item.path">
-            {{ item.label }}
-          </el-menu-item>
-        </el-menu-item-group>
-      </el-menu>
-    </el-aside>
-
-    <el-container>
-      <el-header class="header">
-        <div class="header-left">
-          <el-button circle text @click="sidebarOpen = !sidebarOpen">
-            <el-icon><Fold v-if="sidebarOpen" /><Expand v-else /></el-icon>
-          </el-button>
-          <div>
-            <h2 class="top-title">{{ pageTitle }}</h2>
-            <el-breadcrumb separator="/">
-              <el-breadcrumb-item v-for="item in breadcrumbs" :key="item">{{ item }}</el-breadcrumb-item>
-            </el-breadcrumb>
+  <div v-if="isAdminContext" class="admin-layout">
+    <el-container class="admin-shell">
+      <el-aside :width="sidebarOpen ? '252px' : '74px'" class="admin-sider">
+        <div class="admin-brand">{{ sidebarOpen ? 'Emotion Admin' : 'EA' }}</div>
+        <el-menu :default-active="activeAdminPath" :collapse="!sidebarOpen" @select="handleAdminSelect">
+          <el-menu-item-group title="Console">
+            <el-menu-item v-for="item in visibleAdminNavItems" :key="item.path" :index="item.path">
+              {{ item.label }}
+            </el-menu-item>
+          </el-menu-item-group>
+        </el-menu>
+      </el-aside>
+      <el-container>
+        <el-header class="admin-header">
+          <div class="admin-header-left">
+            <el-button circle text @click="sidebarOpen = !sidebarOpen">
+              <el-icon><Fold v-if="sidebarOpen" /><Expand v-else /></el-icon>
+            </el-button>
+            <div>
+              <h2 class="admin-title">{{ pageTitle }}</h2>
+              <el-breadcrumb separator="/">
+                <el-breadcrumb-item v-for="item in breadcrumbs" :key="item">{{ item }}</el-breadcrumb-item>
+              </el-breadcrumb>
+            </div>
           </div>
-        </div>
-
-        <div class="header-actions">
-          <el-button circle text @click="toggleTheme">
-            <el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon>
-          </el-button>
-          <el-button circle text><el-icon><Setting /></el-icon></el-button>
-
-          <template v-if="authStore.isAuthenticated">
-            <el-dropdown>
-              <el-button text>
-                <el-icon><User /></el-icon>
-                <span style="margin-left: 6px">
-                  {{ authStore.currentUser?.username }} ({{ authStore.userRole }})
-                </span>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="logout">Logout</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-          <el-button v-else type="primary" @click="goLogin">
-            <el-icon><Promotion /></el-icon>
-            Login / Register
-          </el-button>
-        </div>
-      </el-header>
-
-      <el-main class="content-wrap">
-        <PageContainer :title="pageTitle" :description="pageDescription">
-          <router-view />
-        </PageContainer>
-      </el-main>
+          <div class="admin-actions">
+            <el-button text @click="router.push('/home')">
+              <el-icon><Promotion /></el-icon>
+              <span>Open User Site</span>
+            </el-button>
+            <template v-if="authStore.isAuthenticated">
+              <el-dropdown>
+                <el-button text>
+                  <el-icon><UserFilled /></el-icon>
+                  <span style="margin-left: 6px">
+                    {{ authStore.currentUser?.username }} ({{ authStore.userRole }})
+                  </span>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="logout">Logout</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+          </div>
+        </el-header>
+        <el-main class="admin-content">
+          <PageContainer
+            variant="admin"
+            :title="pageTitle"
+            :description="pageDescription"
+            :hide-header="hidePageHeader"
+          >
+            <router-view />
+          </PageContainer>
+        </el-main>
+      </el-container>
     </el-container>
-  </el-container>
+  </div>
+
+  <div v-else class="user-layout">
+    <AppShell
+      :nav-items="userTopNavItems"
+      :active-path="activeUserPath"
+      :authenticated="authStore.isAuthenticated"
+      :username="authStore.currentUser?.username"
+      :role="authStore.userRole"
+      @navigate="handleUserNavigate"
+      @login="goLogin"
+      @logout="logout"
+    >
+      <PageContainer
+        variant="user"
+        :title="pageTitle"
+        :description="pageDescription"
+        :hide-header="hidePageHeader"
+      >
+        <router-view />
+      </PageContainer>
+    </AppShell>
+  </div>
 </template>
 
 <style scoped>
-.main-layout {
+.admin-shell {
   min-height: 100vh;
 }
 
-.sider {
-  border-right: 1px solid var(--el-border-color);
+.admin-sider {
+  border-right: 1px solid rgba(71, 92, 127, 0.44);
   transition: width 0.2s ease;
-  background: #fff;
 }
 
-.brand {
-  font-weight: 700;
-  height: 56px;
+.admin-brand {
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid var(--el-border-color);
+  color: #d6e3fa;
+  letter-spacing: 0.09em;
+  font-size: 14px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(71, 92, 127, 0.44);
 }
 
-.header {
-  border-bottom: 1px solid var(--el-border-color);
+.admin-header {
+  height: 74px;
+  border-bottom: 1px solid rgba(71, 92, 127, 0.44);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
-  height: 72px;
 }
 
-.header-left {
+.admin-header-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.top-title {
+.admin-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
+  color: #dce9ff;
 }
 
-.header-actions {
+.admin-actions {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 10px;
 }
 
-.content-wrap {
-  background: var(--app-bg);
+.admin-content {
   padding: 0;
 }
 </style>

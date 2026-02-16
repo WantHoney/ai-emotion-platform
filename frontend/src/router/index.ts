@@ -26,8 +26,21 @@ const router = createRouter({
           meta: {
             public: true,
             title: 'Home',
-            description: 'Home recommendations, support resources and quick entries',
+            description: 'Immersive content portal for emotion analysis and support',
             breadcrumb: ['Workspace', 'Home'],
+            hidePageHeader: true,
+          },
+        },
+        {
+          path: '/content',
+          name: 'content',
+          component: () => import('@/views/ContentView.vue'),
+          meta: {
+            public: true,
+            title: 'Content Atlas',
+            description: 'Curated articles, books and quotes',
+            breadcrumb: ['Workspace', 'Content Atlas'],
+            hidePageHeader: true,
           },
         },
         {
@@ -40,6 +53,7 @@ const router = createRouter({
             title: 'Upload Audio',
             description: 'Upload audio and create analysis task',
             breadcrumb: ['Workspace', 'Upload Audio'],
+            hidePageHeader: true,
           },
         },
         {
@@ -76,6 +90,7 @@ const router = createRouter({
             title: 'Reports',
             description: 'Browse and filter emotional analysis reports',
             breadcrumb: ['Workspace', 'Reports'],
+            hidePageHeader: true,
           },
         },
         {
@@ -100,6 +115,7 @@ const router = createRouter({
             title: 'Report Detail',
             description: 'Composed emotion, risk level and recommendations',
             breadcrumb: ['Workspace', 'Reports', 'Report Detail'],
+            hidePageHeader: true,
           },
         },
         {
@@ -112,6 +128,19 @@ const router = createRouter({
             title: 'Psy Centers',
             description: 'Find psychology and support centers',
             breadcrumb: ['Workspace', 'Psy Centers'],
+          },
+        },
+        {
+          path: '/profile',
+          name: 'profile',
+          component: () => import('@/views/ProfileView.vue'),
+          meta: {
+            requiresAuth: true,
+            requiresRole: 'USER',
+            title: 'Profile',
+            description: 'Personal account and activity summary',
+            breadcrumb: ['Workspace', 'Profile'],
+            hidePageHeader: true,
           },
         },
         {

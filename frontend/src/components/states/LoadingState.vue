@@ -14,9 +14,9 @@
 
 <style scoped>
 .state-card {
-  border: 1px solid var(--surface-border);
+  border: 1px solid rgba(126, 149, 190, 0.38);
   border-radius: var(--radius-lg);
-  background: var(--panel-bg);
+  background: rgba(13, 23, 39, 0.72);
   padding: 20px;
 }
 
@@ -24,7 +24,7 @@
   height: 16px;
   border-radius: 8px;
   margin-bottom: 12px;
-  background: #eef2ff;
+  background: rgba(103, 143, 201, 0.32);
 }
 
 .skeleton-line.lg {

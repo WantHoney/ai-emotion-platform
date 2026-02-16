@@ -16,7 +16,7 @@ const expanded = ref(false)
 
 const copyTraceId = async (traceId: string) => {
   await navigator.clipboard.writeText(traceId)
-  ElMessage.success('traceId 已复制')
+  ElMessage.success('Trace ID copied')
 }
 </script>
 
@@ -25,24 +25,24 @@ const copyTraceId = async (traceId: string) => {
     <h3>{{ title }}</h3>
 
     <el-button link type="danger" @click="expanded = !expanded">
-      {{ expanded ? '收起错误详情' : '展开错误详情' }}
+      {{ expanded ? 'Hide error detail' : 'Show error detail' }}
     </el-button>
     <el-alert v-if="expanded && detail" :title="detail" type="error" :closable="false" show-icon class="mt-8" />
 
     <div class="trace" v-if="traceId">
       <span>Trace ID: {{ traceId }}</span>
-      <el-button text type="primary" @click="copyTraceId(traceId)">复制</el-button>
+      <el-button text type="primary" @click="copyTraceId(traceId)">Copy</el-button>
     </div>
 
-    <el-button type="danger" plain @click="emit('retry')">重试</el-button>
+    <el-button type="danger" plain @click="emit('retry')">Retry</el-button>
   </div>
 </template>
 
 <style scoped>
 .state-card {
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.55);
   border-radius: var(--radius-lg);
-  background: #fff1f2;
+  background: rgba(79, 23, 32, 0.34);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -62,7 +62,7 @@ h3 {
 
 .trace {
   font-size: 13px;
-  color: #881337;
+  color: #fecaca;
   display: flex;
   align-items: center;
   gap: 8px;

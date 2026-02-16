@@ -2,78 +2,132 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getReportDetail, type ReportDetail } from '@/api/report'
+import { getHomeContent, type HomePayload } from '@/api/home'
+import SectionBlock from '@/components/ui/SectionBlock.vue'
+import LoreCard from '@/components/ui/LoreCard.vue'
+import KpiGrid, { type KpiItem } from '@/components/ui/KpiGrid.vue'
+import BadgeTag from '@/components/ui/BadgeTag.vue'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import { getReportDetail, type ReportDetail } from '@/api/report'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
 
 const reportId = computed(() => Number(route.params.id))
-const result = ref<ReportDetail | null>(null)
 const loading = ref(false)
+const report = ref<ReportDetail | null>(null)
+const homeContent = ref<HomePayload | null>(null)
 const errorState = ref<ErrorStatePayload | null>(null)
 
 const normalizedRiskScore = computed(() => {
-  const score = result.value?.riskScore
+  const score = report.value?.riskScore
   if (score == null || Number.isNaN(score)) return 0
   return Math.max(0, Math.min(100, score <= 1 ? score * 100 : score))
 })
 
-const riskTagType = computed(() => {
-  const level = (result.value?.riskLevel ?? '').toLowerCase()
-  if (level.includes('high') || level.includes('高')) return 'danger'
-  if (level.includes('medium') || level.includes('中')) return 'warning'
-  if (level.includes('low') || level.includes('低')) return 'success'
-  return 'info'
-})
-
 const confidencePercent = computed(() => {
-  const confidence = result.value?.confidence
-  if (confidence == null || Number.isNaN(confidence)) return '-'
+  const confidence = report.value?.confidence
+  if (confidence == null || Number.isNaN(confidence)) return 'N/A'
   const normalized = confidence <= 1 ? confidence * 100 : confidence
   return `${normalized.toFixed(2)}%`
 })
 
+const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
+  const level = (report.value?.riskLevel ?? '').toLowerCase()
+  if (level.includes('high')) return 'high'
+  if (level.includes('medium')) return 'medium'
+  if (level.includes('low')) return 'low'
+  return 'neutral'
+})
+
 const formattedCreatedAt = computed(() => {
-  const createdAt = result.value?.createdAt
-  if (!createdAt) return '未知时间'
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) return createdAt
-  return date.toLocaleString('zh-CN', { hour12: false })
+  const value = report.value?.createdAt
+  if (!value) return 'Unknown'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('en-US', { hour12: false })
 })
 
-const summaryText = computed(() => {
-  if (!result.value) return ''
-  return `报告 #${result.value.id} 综合情绪为 ${result.value.overall ?? '未知'}，风险等级 ${result.value.riskLevel ?? '未知'}，建议结合任务上下文持续跟踪。`
+const kpiItems = computed<KpiItem[]>(() => {
+  if (!report.value) return []
+  return [
+    { label: 'Emotion', value: report.value.overall || '-' },
+    { label: 'Confidence', value: confidencePercent.value },
+    { label: 'Risk Score', value: `${normalizedRiskScore.value.toFixed(0)}/100` },
+    { label: 'Task ID', value: `#${report.value.taskId}` },
+  ]
 })
 
-const exportJson = () => {
-  if (!result.value) return
-  const content = JSON.stringify(result.value, null, 2)
-  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `report-${reportId.value}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+const adviceBuckets = computed(() => {
+  const fallbackByRisk = {
+    instant: ['Take a short breathing break and avoid continuous overload.'],
+    longTerm: ['Maintain sleep rhythm and weekly emotional self-check.'],
+    resource: ['If needed, consult local psychological support resources.'],
+  }
+
+  const source = report.value?.adviceText?.trim()
+  if (!source) {
+    return fallbackByRisk
+  }
+
+  const items = source
+    .split(/\n|；|;|。|\./)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return {
+    instant: items.slice(0, 2).length ? items.slice(0, 2) : fallbackByRisk.instant,
+    longTerm: items.slice(2, 4).length ? items.slice(2, 4) : fallbackByRisk.longTerm,
+    resource: items.slice(4, 7).length ? items.slice(4, 7) : fallbackByRisk.resource,
+  }
+})
+
+const contributionFactors = computed(() => {
+  const factors: string[] = []
+  if (!report.value) return factors
+
+  factors.push(`Overall emotion judged as ${report.value.overall ?? 'unknown'}.`)
+  factors.push(`Risk score normalized to ${normalizedRiskScore.value.toFixed(1)}.`)
+
+  const topSegments = [...(report.value.segments ?? [])]
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 3)
+
+  topSegments.forEach((segment, index) => {
+    factors.push(
+      `Factor ${index + 1}: ${segment.emotion} at ${(segment.confidence * 100).toFixed(1)}% confidence, ` +
+        `window ${segment.start}ms-${segment.end}ms.`,
+    )
+  })
+
+  return factors
+})
+
+const openArticle = (url?: string) => {
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-const exportAsImageOrPdf = () => {
-  window.print()
+const openBook = (url?: string) => {
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const loadReport = async () => {
   loading.value = true
   errorState.value = null
   try {
-    const { data } = await getReportDetail(reportId.value)
-    result.value = data
+    const [detailResp, homeResp] = await Promise.all([
+      getReportDetail(reportId.value),
+      getHomeContent().catch(() => null),
+    ])
+    report.value = detailResp.data
+    homeContent.value = homeResp
   } catch (error) {
-    errorState.value = parseError(error, '报告详情加载失败')
+    errorState.value = parseError(error, 'Failed to load report detail')
   } finally {
     loading.value = false
   }
@@ -85,7 +139,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="report-page">
+  <div class="report-page user-layout">
     <LoadingState v-if="loading" />
     <ErrorState
       v-else-if="errorState"
@@ -95,248 +149,176 @@ onMounted(() => {
       @retry="loadReport"
     />
     <EmptyState
-      v-else-if="!result"
-      title="报告未生成"
-      description="此报告尚不可用，请稍后刷新。"
-      action-text="刷新详情"
+      v-else-if="!report"
+      title="Report unavailable"
+      description="The report cannot be displayed currently."
+      action-text="Reload"
       @action="loadReport"
     />
-
     <template v-else>
-      <section class="page-header card-shell">
-        <div class="header-left">
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item @click="router.push('/reports')">报告中心</el-breadcrumb-item>
-            <el-breadcrumb-item>报告详情</el-breadcrumb-item>
-          </el-breadcrumb>
-          <h1>报告详情 #{{ result.id }}</h1>
-          <p>
-            生成时间：{{ formattedCreatedAt }} ｜ 来源任务：#{{ result.taskId }} ｜
-            <el-tag size="small" effect="light" :type="riskTagType">{{ result.riskLevel ?? '未知等级' }}</el-tag>
-          </p>
+      <SectionBlock
+        eyebrow="Case File"
+        :title="`Report #${report.id}`"
+        description="Structured output from multimodal emotion analysis."
+      >
+        <div class="top-meta">
+          <p>Created at: {{ formattedCreatedAt }}</p>
+          <BadgeTag :tone="riskTone" :text="report.riskLevel || 'Unknown Risk'" />
         </div>
-        <div class="header-actions">
-          <el-button plain @click="router.push('/reports')">返回列表</el-button>
-          <el-button type="info" plain @click="router.push(`/tasks/${result.taskId}`)">关联任务</el-button>
-          <el-button type="info" plain @click="exportJson">导出 JSON</el-button>
-          <el-button type="primary" @click="exportAsImageOrPdf">导出图片/PDF</el-button>
+
+        <KpiGrid :items="kpiItems" />
+      </SectionBlock>
+
+      <div class="report-grid">
+        <SectionBlock title="Recommendation Bundle" description="Actionable suggestions grouped by intervention timeline.">
+          <div class="bucket-grid">
+            <LoreCard title="Immediate Actions">
+              <ul>
+                <li v-for="item in adviceBuckets.instant" :key="`instant-${item}`">{{ item }}</li>
+              </ul>
+            </LoreCard>
+            <LoreCard title="Long-term Plan">
+              <ul>
+                <li v-for="item in adviceBuckets.longTerm" :key="`long-${item}`">{{ item }}</li>
+              </ul>
+            </LoreCard>
+            <LoreCard title="Resource Guidance">
+              <ul>
+                <li v-for="item in adviceBuckets.resource" :key="`res-${item}`">{{ item }}</li>
+              </ul>
+            </LoreCard>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="Explainability" description="Transparent factors that contribute to this score.">
+          <LoreCard title="Score Contribution Factors">
+            <ul>
+              <li v-for="item in contributionFactors" :key="item">{{ item }}</li>
+            </ul>
+          </LoreCard>
+
+          <LoreCard title="Emotion Segments" subtitle="High confidence windows from this record">
+            <div v-if="report.segments?.length" class="segment-grid">
+              <article v-for="(segment, index) in report.segments" :key="`${segment.start}-${segment.end}-${index}`" class="segment-item">
+                <strong>{{ segment.emotion }}</strong>
+                <span>{{ (segment.confidence * 100).toFixed(1) }}%</span>
+                <span>{{ segment.start }}ms - {{ segment.end }}ms</span>
+              </article>
+            </div>
+            <p v-else class="muted">No segment details available.</p>
+          </LoreCard>
+        </SectionBlock>
+      </div>
+
+      <SectionBlock
+        eyebrow="Related Content"
+        title="Recommended Reading and Practice"
+        description="Continue with educational resources to build emotional resilience."
+      >
+        <div class="recommend-grid">
+          <LoreCard
+            v-for="item in homeContent?.recommendedArticles ?? []"
+            :key="`article-${item.id}`"
+            :title="item.title"
+            :subtitle="item.summary || 'Open article'"
+            interactive
+            @click="openArticle(item.contentUrl)"
+          />
+          <LoreCard
+            v-for="item in homeContent?.recommendedBooks ?? []"
+            :key="`book-${item.id}`"
+            :title="item.title"
+            :subtitle="item.author || 'Open book detail'"
+            interactive
+            @click="openBook(item.purchaseUrl)"
+          />
         </div>
-      </section>
+      </SectionBlock>
 
-      <section class="kpi-grid">
-        <el-card class="kpi-card" shadow="hover">
-          <p>综合情绪</p>
-          <el-tag size="large" effect="dark">{{ result.overall ?? '-' }}</el-tag>
-        </el-card>
-        <el-card class="kpi-card" shadow="hover">
-          <p>置信度</p>
-          <h3>{{ confidencePercent }}</h3>
-        </el-card>
-        <el-card class="kpi-card" shadow="hover">
-          <p>风险等级</p>
-          <el-tag effect="dark" :type="riskTagType">{{ result.riskLevel ?? '-' }}</el-tag>
-        </el-card>
-        <el-card class="kpi-card" shadow="hover">
-          <p>风险评分</p>
-          <h3>{{ normalizedRiskScore.toFixed(0) }}/100</h3>
-          <el-progress :percentage="normalizedRiskScore" :stroke-width="8" :show-text="false" :status="riskTagType === 'danger' ? 'exception' : undefined" />
-        </el-card>
-        <el-card class="kpi-card" shadow="hover">
-          <p>关联任务</p>
-          <el-link type="primary" @click="router.push(`/tasks/${result.taskId}`)">任务 #{{ result.taskId }}</el-link>
-        </el-card>
-        <el-card class="kpi-card" shadow="hover">
-          <p>报告 ID</p>
-          <h3>#{{ result.id }}</h3>
-        </el-card>
-      </section>
-
-      <section class="card-shell detail-card">
-        <h2>详情信息</h2>
-        <div class="field-grid">
-          <div class="field-item">
-            <span class="label">报告 ID</span>
-            <span class="value">{{ result.id }}</span>
-          </div>
-          <div class="field-item">
-            <span class="label">来源任务</span>
-            <span class="value">{{ result.taskId }}</span>
-          </div>
-          <div class="field-item">
-            <span class="label">综合情绪</span>
-            <span class="value">{{ result.overall ?? '-' }}</span>
-          </div>
-          <div class="field-item">
-            <span class="label">风险等级</span>
-            <span class="value"><el-tag :type="riskTagType">{{ result.riskLevel ?? '-' }}</el-tag></span>
-          </div>
-          <div class="field-item">
-            <span class="label">风险评分</span>
-            <span class="value">{{ normalizedRiskScore.toFixed(0) }}</span>
-          </div>
-          <div class="field-item">
-            <span class="label">置信度</span>
-            <span class="value">{{ confidencePercent }}</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="content-grid">
-        <el-card shadow="never" class="content-card">
-          <template #header>建议</template>
-          <p v-if="result.adviceText">{{ result.adviceText }}</p>
-          <EmptyState v-else title="暂无建议" description="当前报告没有生成建议内容。" action-text="已了解" @action="() => {}" />
-        </el-card>
-
-        <el-card shadow="never" class="content-card">
-          <template #header>结论</template>
-          <p v-if="result.riskLevel || result.overall">当前报告判定为 {{ result.riskLevel ?? '未知' }} 风险，建议重点关注 {{ result.overall ?? '情绪波动' }} 相关片段。</p>
-          <EmptyState v-else title="暂无结论" description="当前报告没有可展示的结论。" action-text="已了解" @action="() => {}" />
-        </el-card>
-
-        <el-card shadow="never" class="content-card">
-          <template #header>摘要</template>
-          <p v-if="summaryText">{{ summaryText }}</p>
-          <EmptyState v-else title="暂无摘要" description="当前报告没有摘要信息。" action-text="已了解" @action="() => {}" />
-        </el-card>
-      </section>
+      <div class="footer-actions">
+        <el-button @click="router.push('/reports')">Back to Reports</el-button>
+        <el-button type="primary" plain @click="router.push(`/tasks/${report.taskId}`)">Go to Task</el-button>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
 .report-page {
-  max-width: 1160px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.card-shell {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 18px 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.header-left h1 {
-  margin: 10px 0 6px;
-  color: #111827;
-}
-
-.header-left p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 13px;
+.top-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  color: #bcd0ef;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.top-meta p {
+  margin: 0;
 }
 
-.kpi-grid {
+.report-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: 1.05fr 1fr;
 }
 
-.kpi-card :deep(.el-card__body) {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-}
-
-.kpi-card p {
-  margin: 0;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.kpi-card h3 {
-  margin: 0;
-  font-size: 24px;
-  color: #111827;
-}
-
-.detail-card h2 {
-  margin: 0 0 14px;
-  font-size: 18px;
-}
-
-.field-grid {
+.bucket-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px 20px;
+  gap: 10px;
 }
 
-.field-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.label {
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.value {
-  color: #111827;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.content-card {
-  min-height: 180px;
-}
-
-.content-card p {
+ul {
   margin: 0;
-  color: #374151;
+  padding-left: 18px;
+  color: #d9e7fb;
   line-height: 1.7;
 }
 
-@media (max-width: 1100px) {
-  .kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .field-grid,
-  .content-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.segment-grid {
+  display: grid;
+  gap: 8px;
 }
 
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-  }
+.segment-item {
+  border: 1px solid rgba(141, 163, 205, 0.35);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  color: #cfddf5;
+}
 
-  .kpi-grid,
-  .field-grid,
-  .content-grid {
+.segment-item strong {
+  color: #f5f9ff;
+}
+
+.muted {
+  margin: 0;
+  color: #aac0e2;
+}
+
+.recommend-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1024px) {
+  .report-grid,
+  .recommend-grid {
     grid-template-columns: 1fr;
   }
 }

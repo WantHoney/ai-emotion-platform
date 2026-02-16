@@ -15,6 +15,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@vueuse/motion": "^3.0.3",
     "axios": "^1.13.5",
     "element-plus": "^2.13.2",
     "pinia": "^3.0.4",

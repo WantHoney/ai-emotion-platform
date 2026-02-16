@@ -2,10 +2,13 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getReportList, type ReportSummary } from '@/api/report'
+import SectionBlock from '@/components/ui/SectionBlock.vue'
+import LoreCard from '@/components/ui/LoreCard.vue'
+import BadgeTag from '@/components/ui/BadgeTag.vue'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import { getReportList, type ReportSummary } from '@/api/report'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const router = useRouter()
@@ -16,21 +19,29 @@ const errorState = ref<ErrorStatePayload | null>(null)
 
 const query = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: 9,
   keyword: '',
   riskLevel: '' as '' | 'low' | 'medium' | 'high',
   emotion: '',
 })
+
+const toTone = (risk?: string): 'low' | 'medium' | 'high' | 'neutral' => {
+  const value = (risk ?? '').toLowerCase()
+  if (value.includes('low')) return 'low'
+  if (value.includes('medium')) return 'medium'
+  if (value.includes('high')) return 'high'
+  return 'neutral'
+}
 
 const loadReports = async () => {
   loading.value = true
   errorState.value = null
   try {
     const { data } = await getReportList(query)
-    rows.value = data.items ?? data.list ?? []
-    total.value = data.total
+    rows.value = data.items ?? []
+    total.value = Number(data.total ?? 0)
   } catch (error) {
-    errorState.value = parseError(error, '报告列表加载失败')
+    errorState.value = parseError(error, 'Failed to load reports')
   } finally {
     loading.value = false
   }
@@ -40,72 +51,119 @@ void loadReports()
 </script>
 
 <template>
-  <el-card>
-    <template #header>报告中心</template>
-
-    <el-form inline>
-      <el-form-item label="风险等级">
-        <el-select v-model="query.riskLevel" clearable style="width: 140px">
+  <div class="reports-page user-layout">
+    <SectionBlock
+      eyebrow="Archive"
+      title="Report Atlas"
+      description="Browse historical records with filters instead of dense tables."
+    >
+      <div class="filters">
+        <el-input v-model="query.keyword" placeholder="Search by report/task id" clearable />
+        <el-input v-model="query.emotion" placeholder="Emotion e.g. SAD" clearable />
+        <el-select v-model="query.riskLevel" clearable placeholder="Risk" style="width: 140px">
           <el-option label="low" value="low" />
           <el-option label="medium" value="medium" />
           <el-option label="high" value="high" />
         </el-select>
-      </el-form-item>
-      <el-form-item label="情绪筛选">
-        <el-input v-model="query.emotion" placeholder="如 calm/anxious" clearable />
-      </el-form-item>
-      <el-form-item label="搜索">
-        <el-input v-model="query.keyword" placeholder="报告ID/任务ID" clearable />
-      </el-form-item>
-      <el-button type="primary" @click="loadReports">查询</el-button>
-    </el-form>
-
-    <LoadingState v-if="loading" />
-    <ErrorState
-      v-else-if="errorState"
-      :title="errorState.title"
-      :detail="errorState.detail"
-      :trace-id="errorState.traceId"
-      @retry="loadReports"
-    />
-    <EmptyState
-      v-else-if="rows.length === 0"
-      title="暂无报告"
-      description="当前没有可展示的分析报告。"
-      action-text="立即刷新"
-      @action="loadReports"
-    />
-    <template v-else>
-      <el-table :data="rows" border>
-        <el-table-column prop="id" label="报告ID" width="100" />
-        <el-table-column prop="taskId" label="关联任务" width="100" />
-        <el-table-column prop="overall" label="综合情绪" width="120" />
-        <el-table-column prop="riskLevel" label="风险" width="100" />
-        <el-table-column prop="createdAt" label="生成时间" min-width="180" />
-        <el-table-column label="操作" width="120">
-          <template #default="scope">
-            <el-button link type="primary" @click="router.push(`/reports/${scope.row.id}`)">详情</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pager">
-        <el-pagination
-          v-model:current-page="query.page"
-          v-model:page-size="query.pageSize"
-          layout="total, sizes, prev, pager, next"
-          :total="total"
-          @change="loadReports"
-        />
+        <el-button type="primary" @click="loadReports">Apply</el-button>
       </div>
-    </template>
-  </el-card>
+
+      <LoadingState v-if="loading" />
+      <ErrorState
+        v-else-if="errorState"
+        :title="errorState.title"
+        :detail="errorState.detail"
+        :trace-id="errorState.traceId"
+        @retry="loadReports"
+      />
+      <EmptyState
+        v-else-if="rows.length === 0"
+        title="No reports found"
+        description="Try adjusting filters or upload more audio samples."
+        action-text="Reload"
+        @action="loadReports"
+      />
+      <template v-else>
+        <div class="report-cards">
+          <LoreCard
+            v-for="item in rows"
+            :key="item.id"
+            :title="`Report #${item.id}`"
+            :subtitle="`Task #${item.taskId}`"
+            interactive
+            @click="router.push(`/reports/${item.id}`)"
+          >
+            <div class="card-meta">
+              <BadgeTag :tone="toTone(item.riskLevel)" :text="item.riskLevel || 'Unknown risk'" />
+              <span>{{ item.overall || 'Unknown emotion' }}</span>
+            </div>
+            <p class="created-at">{{ item.createdAt || 'Unknown time' }}</p>
+            <template #footer>
+              <el-button type="primary" text @click.stop="router.push(`/reports/${item.id}`)">Open Detail</el-button>
+            </template>
+          </LoreCard>
+        </div>
+
+        <div class="pager">
+          <el-pagination
+            v-model:current-page="query.page"
+            v-model:page-size="query.pageSize"
+            layout="total, prev, pager, next"
+            :total="total"
+            @change="loadReports"
+          />
+        </div>
+      </template>
+    </SectionBlock>
+  </div>
 </template>
 
 <style scoped>
+.reports-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 140px auto;
+  gap: 10px;
+}
+
+.report-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4d6f3;
+  margin-bottom: 6px;
+}
+
+.created-at {
+  margin: 0;
+  color: #a9bedf;
+  font-size: 13px;
+}
+
 .pager {
-  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  margin-top: 8px;
+}
+
+@media (max-width: 960px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cards {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

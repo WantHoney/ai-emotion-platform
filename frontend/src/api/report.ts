@@ -28,6 +28,8 @@ export interface ReportListQuery {
   keyword?: string
   riskLevel?: '' | 'low' | 'medium' | 'high'
   emotion?: string
+  sortBy?: 'createdAt' | 'riskLevel' | 'overall'
+  sortOrder?: 'asc' | 'desc'
 }
 
 interface ReportSummaryRaw {
@@ -39,6 +41,10 @@ interface ReportSummaryRaw {
   overall_emotion_code?: string
   riskLevel?: string
   risk_level?: string
+  risk?: {
+    score?: number | string
+    level?: string
+  }
   confidence?: number | string
   overall_confidence?: number | string
   createdAt?: string
@@ -51,10 +57,13 @@ interface ReportDetailRaw extends ReportSummaryRaw {
   adviceText?: string
   advice_text?: string
   segments?: Array<{
-    start: number
-    end: number
-    emotion: string
-    confidence: number
+    start?: number
+    end?: number
+    startMs?: number
+    endMs?: number
+    emotion?: string
+    emotionCode?: string
+    confidence?: number
   }>
 }
 
@@ -75,7 +84,7 @@ const normalizeReportSummary = (raw: ReportSummaryRaw): ReportSummary => {
     id,
     taskId,
     overall: raw.overall ?? raw.overall_emotion_code,
-    riskLevel: raw.riskLevel ?? raw.risk_level,
+    riskLevel: raw.riskLevel ?? raw.risk_level ?? raw.risk?.level,
     confidence: toNumber(raw.confidence ?? raw.overall_confidence),
     createdAt: raw.createdAt ?? raw.created_at,
   }
@@ -84,11 +93,20 @@ const normalizeReportSummary = (raw: ReportSummaryRaw): ReportSummary => {
 const normalizeReportDetail = (raw: ReportDetailRaw): ReportDetail => {
   const summary = normalizeReportSummary(raw)
 
+  const segments = Array.isArray(raw.segments)
+    ? raw.segments.map((segment) => ({
+        start: segment.start ?? segment.startMs ?? 0,
+        end: segment.end ?? segment.endMs ?? 0,
+        emotion: segment.emotion ?? segment.emotionCode ?? '',
+        confidence: segment.confidence ?? 0,
+      }))
+    : undefined
+
   return {
     ...summary,
-    riskScore: toNumber(raw.riskScore ?? raw.risk_score),
+    riskScore: toNumber(raw.riskScore ?? raw.risk_score ?? raw.risk?.score),
     adviceText: raw.adviceText ?? raw.advice_text,
-    segments: raw.segments,
+    segments,
   }
 }
 
@@ -100,6 +118,8 @@ const buildQueryParams = (params: ReportListQuery) => {
   if (params.keyword?.trim()) nextParams.keyword = params.keyword.trim()
   if (params.riskLevel) nextParams.riskLevel = params.riskLevel
   if (params.emotion?.trim()) nextParams.emotion = params.emotion.trim()
+  if (params.sortBy) nextParams.sortBy = params.sortBy
+  if (params.sortOrder) nextParams.sortOrder = params.sortOrder
 
   return nextParams
 }
@@ -110,16 +130,21 @@ const normalizeListResponse = (payload: unknown): PaginatedResponse<ReportSummar
 
   const rows = Array.isArray(list) ? list.map((item) => normalizeReportSummary(item as ReportSummaryRaw)) : []
 
+  const pageSize = toNumber(source.pageSize ?? source.size) ?? rows.length
+
   return {
     items: rows,
     total: toNumber(source.total ?? source.totalCount ?? source.count) ?? rows.length,
     page: toNumber(source.page ?? source.current) ?? 1,
-    pageSize: toNumber(source.pageSize ?? source.size) ?? rows.length,
+    pageSize,
+    size: pageSize,
   }
 }
 
 export const getReportList = async (params: ReportListQuery) => {
-  const response = await http.get<PaginatedResponse<ReportSummaryRaw>>('/api/reports', { params: buildQueryParams(params) })
+  const response = await http.get<PaginatedResponse<ReportSummaryRaw>>('/api/reports', {
+    params: buildQueryParams(params),
+  })
 
   return {
     ...response,

@@ -23,7 +23,11 @@ const loadHome = async () => {
   loading.value = true
   errorState.value = null
   try {
-    const [homeData, dashboardData] = await Promise.all([getHomeContent(), getLightDashboard().catch(() => null)])
+    const dashboardPromise =
+      authStore.isAuthenticated && authStore.userRole === 'ADMIN'
+        ? getLightDashboard().catch(() => null)
+        : Promise.resolve(null)
+    const [homeData, dashboardData] = await Promise.all([getHomeContent(), dashboardPromise])
     home.value = homeData
     dashboard.value = dashboardData
   } catch (error) {
@@ -34,6 +38,9 @@ const loadHome = async () => {
 }
 
 const reportClick = (contentType: ContentType, contentId: string | number) => {
+  if (!authStore.isAuthenticated) {
+    return
+  }
   void postContentClick(contentType, contentId).catch(() => undefined)
 }
 

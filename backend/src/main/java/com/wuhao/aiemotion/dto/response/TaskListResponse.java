@@ -5,6 +5,7 @@ import java.util.List;
 public record TaskListResponse(
         long total,
         int page,
+        int pageSize,
         int size,
         List<TaskDTO> items
 ) {

@@ -25,19 +25,35 @@ public class ResourceController {
 
     @GetMapping("/tasks")
     public TaskListResponse tasks(@RequestParam(defaultValue = "1") int page,
-                                  @RequestParam(defaultValue = "10") int size,
+                                  @RequestParam(required = false) Integer pageSize,
+                                  @RequestParam(required = false) Integer size,
                                   @RequestParam(required = false) String status,
-                                  @RequestParam(defaultValue = "createdAt,desc") String sort) {
-        return resourceManagementService.tasks(page, size, status, sort);
+                                  @RequestParam(required = false) String keyword,
+                                  @RequestParam(required = false) String q,
+                                  @RequestParam(required = false) String sortBy,
+                                  @RequestParam(required = false) String sortOrder,
+                                  @RequestParam(required = false) String sort) {
+        int resolvedPageSize = pageSize != null ? pageSize : (size != null ? size : 10);
+        String resolvedKeyword = firstNonBlank(keyword, q);
+        String[] sortValues = resolveSort(sortBy, sortOrder, sort);
+        return resourceManagementService.tasks(page, resolvedPageSize, status, resolvedKeyword, sortValues[0], sortValues[1]);
     }
 
     @GetMapping("/reports")
     public ReportListResponse reports(@RequestParam(defaultValue = "1") int page,
-                                      @RequestParam(defaultValue = "10") int size,
+                                      @RequestParam(required = false) Integer pageSize,
+                                      @RequestParam(required = false) Integer size,
                                       @RequestParam(required = false) String riskLevel,
                                       @RequestParam(required = false) String emotion,
-                                      @RequestParam(required = false) String q) {
-        return resourceManagementService.reports(page, size, riskLevel, emotion, q);
+                                      @RequestParam(required = false) String keyword,
+                                      @RequestParam(required = false) String q,
+                                      @RequestParam(required = false) String sortBy,
+                                      @RequestParam(required = false) String sortOrder) {
+        int resolvedPageSize = pageSize != null ? pageSize : (size != null ? size : 10);
+        String resolvedKeyword = firstNonBlank(keyword, q);
+        String resolvedSortBy = sortBy == null || sortBy.isBlank() ? "createdAt" : sortBy.trim();
+        String resolvedSortOrder = sortOrder == null || sortOrder.isBlank() ? "desc" : sortOrder.trim();
+        return resourceManagementService.reports(page, resolvedPageSize, riskLevel, emotion, resolvedKeyword, resolvedSortBy, resolvedSortOrder);
     }
 
     @GetMapping("/reports/{reportId}")
@@ -67,5 +83,34 @@ public class ResourceController {
     @GetMapping("/admin/metrics")
     public AdminMetricsResponse metrics() {
         return resourceManagementService.metrics();
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback.trim();
+        }
+        return null;
+    }
+
+    private String[] resolveSort(String sortBy, String sortOrder, String sort) {
+        String resolvedSortBy = sortBy;
+        String resolvedSortOrder = sortOrder;
+        if ((resolvedSortBy == null || resolvedSortBy.isBlank()) && sort != null && !sort.isBlank()) {
+            String[] pair = sort.split(",", 2);
+            resolvedSortBy = pair[0];
+            if (pair.length > 1) {
+                resolvedSortOrder = pair[1];
+            }
+        }
+        if (resolvedSortBy == null || resolvedSortBy.isBlank()) {
+            resolvedSortBy = "createdAt";
+        }
+        if (resolvedSortOrder == null || resolvedSortOrder.isBlank()) {
+            resolvedSortOrder = "desc";
+        }
+        return new String[]{resolvedSortBy.trim(), resolvedSortOrder.trim()};
     }
 }

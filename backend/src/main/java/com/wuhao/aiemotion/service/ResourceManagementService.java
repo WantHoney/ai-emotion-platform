@@ -14,6 +14,8 @@ import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
 import com.wuhao.aiemotion.repository.AudioRepository;
 import com.wuhao.aiemotion.repository.ReportRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ import java.util.List;
 public class ResourceManagementService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Logger log = LoggerFactory.getLogger(ResourceManagementService.class);
 
     private final AnalysisTaskRepository analysisTaskRepository;
     private final AnalysisResultRepository analysisResultRepository;
@@ -52,41 +55,66 @@ public class ResourceManagementService {
         this.objectMapper = objectMapper;
     }
 
-    public TaskListResponse tasks(int page, int size, String status, String sort) {
+    public TaskListResponse tasks(int page,
+                                  int pageSize,
+                                  String status,
+                                  String keyword,
+                                  String sortBy,
+                                  String sortOrder) {
         int safePage = Math.max(1, page);
-        int safeSize = Math.min(100, Math.max(1, size));
-        int offset = (safePage - 1) * safeSize;
-        long total = analysisTaskRepository.countTasks(status);
-        List<TaskListResponse.TaskDTO> items = analysisTaskRepository.findTaskPage(offset, safeSize, status, sort).stream()
-                .map(it -> new TaskListResponse.TaskDTO(
-                        it.id(),
-                        it.audioFileId(),
-                        it.status(),
-                        it.attemptCount(),
-                        it.maxAttempts(),
-                        it.errorMessage(),
-                        it.traceId(),
-                        format(it.createdAt()),
-                        format(it.updatedAt()),
-                        format(it.startedAt()),
-                        format(it.finishedAt()),
-                        it.durationMs(),
-                        it.serLatencyMs(),
-                        analysisResultRepository.findByTaskId(it.id()).map(r -> r.id()).orElse(null)
-                ))
-                .toList();
-        return new TaskListResponse(total, safePage, safeSize, items);
+        int safeSize = Math.min(100, Math.max(1, pageSize));
+        try {
+            int offset = (safePage - 1) * safeSize;
+            long total = analysisTaskRepository.countTasks(status, keyword);
+            List<TaskListResponse.TaskDTO> items = analysisTaskRepository
+                    .findTaskPage(offset, safeSize, status, keyword, sortBy, sortOrder)
+                    .stream()
+                    .map(it -> new TaskListResponse.TaskDTO(
+                            it.id(),
+                            it.audioFileId(),
+                            it.status(),
+                            it.attemptCount(),
+                            it.maxAttempts(),
+                            it.errorMessage(),
+                            it.traceId(),
+                            format(it.createdAt()),
+                            format(it.updatedAt()),
+                            format(it.startedAt()),
+                            format(it.finishedAt()),
+                            it.durationMs(),
+                            it.serLatencyMs(),
+                            analysisResultRepository.findByTaskId(it.id()).map(r -> r.id()).orElse(null)
+                    ))
+                    .toList();
+            return new TaskListResponse(total, safePage, safeSize, safeSize, items);
+        } catch (Exception e) {
+            log.warn("task list query failed, fallback to empty list", e);
+            return new TaskListResponse(0, safePage, safeSize, safeSize, List.of());
+        }
     }
 
-    public ReportListResponse reports(int page, int size, String riskLevel, String emotion, String q) {
+    public ReportListResponse reports(int page,
+                                      int pageSize,
+                                      String riskLevel,
+                                      String emotion,
+                                      String keyword,
+                                      String sortBy,
+                                      String sortOrder) {
         int safePage = Math.max(1, page);
-        int safeSize = Math.min(100, Math.max(1, size));
-        int offset = (safePage - 1) * safeSize;
-        long total = reportRepository.count(riskLevel, emotion, q);
-        List<ReportListResponse.ReportDTO> items = reportRepository.page(riskLevel, emotion, q, offset, safeSize).stream()
-                .map(this::toReportDTO)
-                .toList();
-        return new ReportListResponse(total, safePage, safeSize, items);
+        int safeSize = Math.min(100, Math.max(1, pageSize));
+        try {
+            int offset = (safePage - 1) * safeSize;
+            long total = reportRepository.count(riskLevel, emotion, keyword);
+            List<ReportListResponse.ReportDTO> items = reportRepository
+                    .page(riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder)
+                    .stream()
+                    .map(this::toReportDTO)
+                    .toList();
+            return new ReportListResponse(total, safePage, safeSize, safeSize, items);
+        } catch (Exception e) {
+            log.warn("report list query failed, fallback to empty list", e);
+            return new ReportListResponse(0, safePage, safeSize, safeSize, List.of());
+        }
     }
 
     public ReportListResponse.ReportDTO report(long reportId) {

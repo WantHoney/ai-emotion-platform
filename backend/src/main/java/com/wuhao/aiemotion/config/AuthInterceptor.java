@@ -57,7 +57,8 @@ public class AuthInterceptor implements HandlerInterceptor {
     private boolean isAdminPath(String path) {
         return path.startsWith("/api/admin")
                 || path.equals("/api/analysis/list")
-                || path.equals("/api/admin/metrics");
+                || path.equals("/api/admin/metrics")
+                || path.equals("/api/system/status");
     }
 
     public static String resolveAccessToken(HttpServletRequest request) {

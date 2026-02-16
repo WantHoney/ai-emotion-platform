@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 
 import type { AuthRole } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -38,7 +39,7 @@ const handleLogin = async () => {
     ElMessage.success(loginRole.value === 'ADMIN' ? '运营端登录成功' : '用户登录成功')
     await goAfterAuth()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '登录失败')
+    ElMessage.error(toErrorMessage(error, '登录失败'))
   } finally {
     loading.value = false
   }
@@ -56,7 +57,7 @@ const handleRegister = async () => {
     ElMessage.success('注册成功，已自动登录')
     await goAfterAuth()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '注册失败')
+    ElMessage.error(toErrorMessage(error, '注册失败'))
   } finally {
     loading.value = false
   }
@@ -75,7 +76,12 @@ const handleRegister = async () => {
 
       <el-tabs v-model="activeTab" stretch>
         <el-tab-pane label="登录" name="login">
-          <el-alert title="运营端请切换为“运营端登录”，默认账号 operator / operator123。" type="info" :closable="false" show-icon />
+          <el-alert
+            title="运营端请切换到“运营端登录”，默认账号 operator / operator123。"
+            type="info"
+            :closable="false"
+            show-icon
+          />
           <el-form label-position="top" class="mt-16" @submit.prevent="handleLogin">
             <el-form-item label="登录身份">
               <el-radio-group v-model="loginRole">

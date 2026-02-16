@@ -23,5 +23,5 @@ export interface SystemStatus {
 }
 
 export const getSystemStatus = () => {
-  return http.get<SystemStatus>('/system/status')
+  return http.get<SystemStatus>('/api/system/status')
 }

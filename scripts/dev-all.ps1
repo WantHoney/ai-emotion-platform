@@ -1,0 +1,11 @@
+$ErrorActionPreference = 'Stop'
+
+$root = Split-Path -Parent $PSScriptRoot
+
+Write-Host '[dev-all] Starting backend on 127.0.0.1:8080 ...'
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', "cd /d `"$root\backend`" && mvn spring-boot:run"
+
+Write-Host '[dev-all] Starting frontend on 127.0.0.1:5173 ...'
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', "cd /d `"$root\frontend`" && npm run dev -- --host 127.0.0.1 --port 5173"
+
+Write-Host '[dev-all] Done. Open http://127.0.0.1:5173'

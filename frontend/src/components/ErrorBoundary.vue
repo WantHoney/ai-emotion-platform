@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, onErrorCaptured } from 'vue'
+import { onErrorCaptured, ref } from 'vue'
+
+import { toErrorMessage } from '@/utils/errorMessage'
 
 const hasError = ref(false)
 const errorText = ref('页面渲染异常，请刷新重试。')
 
 onErrorCaptured((error) => {
   hasError.value = true
-  errorText.value = error instanceof Error ? error.message : String(error)
+  errorText.value = toErrorMessage(error, '页面渲染异常，请刷新重试。')
   return false
 })
 </script>

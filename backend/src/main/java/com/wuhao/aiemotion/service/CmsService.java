@@ -77,10 +77,26 @@ public class CmsService {
     }
 
     public Map<String, Object> lightDashboard() {
+        List<Map<String, Object>> clickStats = cmsRepository.clickByContentType();
+        long clickCount = clickStats.stream()
+                .map(it -> it.get("click_count"))
+                .filter(java.util.Objects::nonNull)
+                .mapToLong(value -> {
+                    if (value instanceof Number number) {
+                        return number.longValue();
+                    }
+                    try {
+                        return Long.parseLong(String.valueOf(value));
+                    } catch (NumberFormatException ignore) {
+                        return 0L;
+                    }
+                })
+                .sum();
         return Map.of(
                 "uploadCount", cmsRepository.totalUploads(),
                 "reportCount", cmsRepository.totalReports(),
-                "contentClickStats", cmsRepository.clickByContentType()
+                "contentClickCount", clickCount,
+                "contentClickStats", clickStats
         );
     }
 

@@ -42,25 +42,31 @@ public class ReportRepository {
                 """, taskId, audioId, reportJson, riskLevel, overallEmotion);
     }
 
-    public long count(String riskLevel, String emotion, String q) {
+    public long count(String riskLevel, String emotion, String keyword) {
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM report_resource rr JOIN audio_file af ON af.id=rr.audio_id WHERE rr.deleted_at IS NULL");
         List<Object> args = new ArrayList<>();
-        appendFilters(riskLevel, emotion, q, sql, args);
+        appendFilters(riskLevel, emotion, keyword, sql, args);
         Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
         return total == null ? 0 : total;
     }
 
-    public List<ReportResource> page(String riskLevel, String emotion, String q, int offset, int size) {
+    public List<ReportResource> page(String riskLevel,
+                                     String emotion,
+                                     String keyword,
+                                     int offset,
+                                     int size,
+                                     String sortBy,
+                                     String sortOrder) {
         StringBuilder sql = new StringBuilder("SELECT rr.* FROM report_resource rr JOIN audio_file af ON af.id=rr.audio_id WHERE rr.deleted_at IS NULL");
         List<Object> args = new ArrayList<>();
-        appendFilters(riskLevel, emotion, q, sql, args);
-        sql.append(" ORDER BY rr.created_at DESC LIMIT ? OFFSET ?");
+        appendFilters(riskLevel, emotion, keyword, sql, args);
+        sql.append(" ORDER BY ").append(resolveReportOrderBy(sortBy, sortOrder)).append(" LIMIT ? OFFSET ?");
         args.add(size);
         args.add(offset);
         return jdbcTemplate.query(sql.toString(), ROW_MAPPER, args.toArray());
     }
 
-    private void appendFilters(String riskLevel, String emotion, String q, StringBuilder sql, List<Object> args) {
+    private void appendFilters(String riskLevel, String emotion, String keyword, StringBuilder sql, List<Object> args) {
         String normalizedRiskLevel = normalizeFilterValue(riskLevel);
         if (normalizedRiskLevel != null) {
             sql.append(" AND UPPER(rr.risk_level)=UPPER(?)");
@@ -71,12 +77,25 @@ public class ReportRepository {
             sql.append(" AND UPPER(rr.overall_emotion)=UPPER(?)");
             args.add(normalizedEmotion);
         }
-        if (q != null && !q.isBlank()) {
-            sql.append(" AND (af.original_name LIKE ? OR rr.overall_emotion LIKE ?)");
-            String like = "%" + q + "%";
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim() + "%";
+            sql.append(" AND (CAST(rr.id AS CHAR) LIKE ? OR CAST(rr.task_id AS CHAR) LIKE ? OR af.original_name LIKE ? OR rr.overall_emotion LIKE ?)");
+            args.add(like);
+            args.add(like);
             args.add(like);
             args.add(like);
         }
+    }
+
+    private String resolveReportOrderBy(String sortBy, String sortOrder) {
+        String column = switch (sortBy == null ? "" : sortBy.trim()) {
+            case "createdAt" -> "rr.created_at";
+            case "riskLevel" -> "rr.risk_level";
+            case "overall" -> "rr.overall_emotion";
+            default -> "rr.created_at";
+        };
+        String direction = "asc".equalsIgnoreCase(sortOrder) ? "ASC" : "DESC";
+        return column + " " + direction;
     }
 
     static String normalizeFilterValue(String value) {

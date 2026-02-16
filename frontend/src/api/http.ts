@@ -5,6 +5,7 @@ import { h } from 'vue'
 import { REFRESH_TOKEN_KEY, TOKEN_KEY } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { pinia } from '@/stores'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 export interface ApiError {
   status?: number
@@ -21,7 +22,7 @@ const http = axios.create({
 
 const normalizeApiError = (error: unknown): ApiError => {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ message?: string; traceId?: string }>
+    const axiosError = error as AxiosError<{ message?: unknown; traceId?: string }>
 
     if (axiosError.code === 'ECONNABORTED') {
       return { code: 'TIMEOUT', message: '请求超时，请稍后重试。' }
@@ -43,7 +44,7 @@ const normalizeApiError = (error: unknown): ApiError => {
       return {
         status,
         code: 'SERVER',
-        message: axiosError.response.data?.message ?? '服务异常，请稍后重试。',
+        message: toErrorMessage(axiosError.response.data?.message, '服务异常，请稍后重试。'),
         traceId,
         details: axiosError.response.data,
       }
@@ -52,13 +53,18 @@ const normalizeApiError = (error: unknown): ApiError => {
     return {
       status,
       code: 'UNKNOWN',
-      message: axiosError.response.data?.message ?? '请求失败，请稍后重试。',
+      message: toErrorMessage(axiosError.response.data?.message, '请求失败，请稍后重试。'),
       traceId,
       details: axiosError.response.data,
     }
   }
 
-  return { code: 'UNKNOWN', message: '发生未知错误，请稍后重试。' }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const candidate = (error as { message?: unknown }).message
+    return { code: 'UNKNOWN', message: toErrorMessage(candidate, '发生未知错误，请稍后重试。') }
+  }
+
+  return { code: 'UNKNOWN', message: toErrorMessage(error, '发生未知错误，请稍后重试。') }
 }
 
 const showApiErrorToast = (apiError: ApiError) => {
@@ -72,7 +78,7 @@ const showApiErrorToast = (apiError: ApiError) => {
     type: 'error',
     duration: 8000,
     message: h('div', { class: 'api-error-toast' }, [
-      h('div', `${apiError.message}`),
+      h('div', apiError.message),
       h('div', { style: 'margin-top: 6px; display:flex; align-items:center; gap:8px;' }, [
         h('span', { style: 'font-size:12px;' }, `traceId: ${apiError.traceId}`),
         h(
@@ -81,7 +87,9 @@ const showApiErrorToast = (apiError: ApiError) => {
             size: 'small',
             text: true,
             onClick: async () => {
-              await navigator.clipboard.writeText(apiError.traceId ?? '')
+              if (apiError.traceId && navigator?.clipboard) {
+                await navigator.clipboard.writeText(apiError.traceId)
+              }
               ElMessage.success('traceId 已复制')
             },
           },

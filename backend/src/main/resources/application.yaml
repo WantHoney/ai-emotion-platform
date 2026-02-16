@@ -4,9 +4,9 @@ server:
 spring:
   datasource:
     # ✅ 添加了 allowPublicKeyRetrieval=true 解决 MySQL 8.0 连接问题
-    url: jdbc:mysql://localhost:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
-    username: root
-    password: 1029384756Wh
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:1029384756Wh}
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
@@ -14,8 +14,8 @@ spring:
       max-request-size: 50MB
   ai:
     openai:
-      enabled: ${SPRING_AI_OPENAI_ENABLED:true}
-      api-key: ${OPENROUTER_API_KEY:}
+      enabled: ${SPRING_AI_OPENAI_ENABLED:false}
+      api-key: ${OPENROUTER_API_KEY:mock-key}
       base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
       chat:
         options:
@@ -40,7 +40,7 @@ management:
         include: health,info
 
 ai:
-  mode: ${AI_MODE:spring}           # mock | spring
+  mode: ${AI_MODE:mock}             # mock | spring
   mock:
     enabled: false
   provider: spring

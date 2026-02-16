@@ -21,6 +21,7 @@ public class PsyCenterController {
 
     @GetMapping
     public List<PsyCenter> query(@RequestParam(required = false) String cityCode,
+                                 @RequestParam(name = "city_code", required = false) String cityCodeSnake,
                                  @RequestParam(required = false) Double latitude,
                                  @RequestParam(required = false) Double longitude,
                                  @RequestParam(defaultValue = "20") int limit,
@@ -28,6 +29,10 @@ public class PsyCenterController {
         if (latitude != null && longitude != null) {
             return psyCenterService.nearby(latitude, longitude, radiusKm, limit);
         }
-        return psyCenterService.findByCity(cityCode, limit);
+        String resolvedCityCode = (cityCode != null && !cityCode.isBlank()) ? cityCode : cityCodeSnake;
+        if (resolvedCityCode == null || resolvedCityCode.isBlank()) {
+            return List.of();
+        }
+        return psyCenterService.findByCity(resolvedCityCode, limit);
     }
 }

@@ -77,29 +77,56 @@ public class AnalysisTaskRepository {
     }
 
     public long countTasks(String status) {
-        if (status == null || status.isBlank()) {
-            Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM analysis_task", Long.class);
-            return total == null ? 0 : total;
-        }
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM analysis_task WHERE status=?", Long.class, status);
+        return countTasks(status, null);
+    }
+
+    public long countTasks(String status, String keyword) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM analysis_task WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        appendTaskFilters(status, keyword, sql, args);
+        Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
         return total == null ? 0 : total;
     }
 
-    public List<AnalysisTask> findTaskPage(int offset, int size, String status, String sort) {
-        String orderBy = "created_at DESC";
-        if ("createdAt,asc".equalsIgnoreCase(sort)) {
-            orderBy = "created_at ASC";
-        }
-        StringBuilder sql = new StringBuilder("SELECT * FROM analysis_task");
+    public List<AnalysisTask> findTaskPage(int offset,
+                                           int size,
+                                           String status,
+                                           String keyword,
+                                           String sortBy,
+                                           String sortOrder) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM analysis_task WHERE 1=1");
         List<Object> args = new ArrayList<>();
-        if (status != null && !status.isBlank()) {
-            sql.append(" WHERE status=?");
-            args.add(status);
-        }
+        appendTaskFilters(status, keyword, sql, args);
+        String orderBy = resolveTaskOrderBy(sortBy, sortOrder);
         sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ? OFFSET ?");
         args.add(size);
         args.add(offset);
         return jdbcTemplate.query(sql.toString(), TASK_ROW_MAPPER, args.toArray());
+    }
+
+    private void appendTaskFilters(String status, String keyword, StringBuilder sql, List<Object> args) {
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status=?");
+            args.add(status.trim().toUpperCase());
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String normalized = keyword.trim();
+            String like = "%" + normalized + "%";
+            sql.append(" AND (CAST(id AS CHAR) LIKE ? OR CAST(audio_file_id AS CHAR) LIKE ? OR trace_id LIKE ?)");
+            args.add(like);
+            args.add(like);
+            args.add(like);
+        }
+    }
+
+    private String resolveTaskOrderBy(String sortBy, String sortOrder) {
+        String column = switch (sortBy == null ? "" : sortBy.trim()) {
+            case "updatedAt" -> "updated_at";
+            case "status" -> "status";
+            default -> "created_at";
+        };
+        String direction = "asc".equalsIgnoreCase(sortOrder) ? "ASC" : "DESC";
+        return column + " " + direction;
     }
 
     public List<AnalysisTask> findRunnableCandidates(int batchSize) {
@@ -208,6 +235,14 @@ public class AnalysisTaskRepository {
 
     public Double avgDurationSinceSuccess(LocalDateTime since) {
         return jdbcTemplate.queryForObject("SELECT AVG(duration_ms) FROM analysis_task WHERE status='SUCCESS' AND finished_at>=?", Double.class, since);
+    }
+
+    public Double avgSerLatencySince(LocalDateTime since) {
+        return jdbcTemplate.queryForObject(
+                "SELECT AVG(ser_latency_ms) FROM analysis_task WHERE status='SUCCESS' AND ser_latency_ms IS NOT NULL AND updated_at>=?",
+                Double.class,
+                since
+        );
     }
 
     public long countSerTimeoutSince(LocalDateTime since) {

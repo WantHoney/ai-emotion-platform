@@ -14,8 +14,8 @@ spring:
       max-request-size: 50MB
   ai:
     openai:
-      enabled: ${SPRING_AI_OPENAI_ENABLED:false}
-      api-key: ${OPENROUTER_API_KEY:mock-key}
+      enabled: ${SPRING_AI_OPENAI_ENABLED:true}
+      api-key: ${OPENROUTER_API_KEY:}
       base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
       chat:
         options:
@@ -40,7 +40,7 @@ management:
         include: health,info
 
 ai:
-  mode: ${AI_MODE:mock}             # mock | spring
+  mode: ${AI_MODE:spring}           # mock | spring
   mock:
     enabled: false
   provider: spring

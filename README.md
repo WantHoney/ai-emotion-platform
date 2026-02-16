@@ -114,10 +114,9 @@ curl "http://127.0.0.1:5173/api/psy-centers?cityCode=310100"
 
 ### 6.2 后端启动提示 OpenAI API key
 
-- 默认已经可在 mock 模式启动（无真实 key）
-- 若你要启用真实模型，设置环境变量：
-  - `AI_MODE=spring`
-  - `OPENROUTER_API_KEY=<your_key>`
+- 默认走 `spring` 模式，需要可用的 `OPENROUTER_API_KEY`
+- 若你只做本地联调、不依赖真实模型，可临时切换：
+  - `AI_MODE=mock`
 
 ### 6.3 MySQL 连接问题
 

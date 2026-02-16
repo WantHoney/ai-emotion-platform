@@ -1,0 +1,148 @@
+{
+  "groups": [
+    {
+      "name": "ai",
+      "type": "com.wuhao.aiemotion.integration.ai.AiProperties",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.mock",
+      "type": "com.wuhao.aiemotion.integration.ai.AiProperties$Mock",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties",
+      "sourceMethod": "getMock()"
+    },
+    {
+      "name": "analysis.worker",
+      "type": "com.wuhao.aiemotion.service.AnalysisWorkerProperties",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "ser",
+      "type": "com.wuhao.aiemotion.integration.ser.SerProperties",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "ai.api-key",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.language",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.mock.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties$Mock"
+    },
+    {
+      "name": "ai.mode",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.model",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.provider",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "ai.sample-rate",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.integration.ai.AiProperties"
+    },
+    {
+      "name": "analysis.worker.asr-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.backoff-base-seconds",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.backoff-max-seconds",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.max-attempts",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.poll-interval-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "analysis.worker.ser-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.service.AnalysisWorkerProperties"
+    },
+    {
+      "name": "ser.base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.connect-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.health-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.llm-summary-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.overlap-ms",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.read-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    },
+    {
+      "name": "ser.segment-ms",
+      "type": "java.lang.Integer",
+      "sourceType": "com.wuhao.aiemotion.integration.ser.SerProperties"
+    }
+  ],
+  "hints": []
+}

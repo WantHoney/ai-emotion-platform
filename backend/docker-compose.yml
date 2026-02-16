@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ai_emotion
+    ports:
+      - "3307:3306"
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docs/db/schema_v1.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+
+  ser-service:
+    build:
+      context: ./ser-service
+      dockerfile: Dockerfile
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+    ports:
+      - "8001:8001"
+
+  backend:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - ser-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      APP_UPLOAD_DIR: /data/uploads
+      SER_ENABLED: "true"
+      SER_BASE_URL: http://ser-service:8001
+    volumes:
+      - ./uploads:/data/uploads
+
+volumes:
+  db_data:

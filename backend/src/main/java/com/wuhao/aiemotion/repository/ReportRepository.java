@@ -1,0 +1,109 @@
+package com.wuhao.aiemotion.repository;
+
+import com.wuhao.aiemotion.domain.ReportResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public class ReportRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public ReportRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    private static final RowMapper<ReportResource> ROW_MAPPER = (rs, rowNum) -> new ReportResource(
+            rs.getLong("id"),
+            rs.getLong("task_id"),
+            rs.getLong("audio_id"),
+            rs.getString("report_json"),
+            rs.getString("risk_level"),
+            rs.getString("overall_emotion"),
+            rs.getTimestamp("created_at").toLocalDateTime(),
+            rs.getTimestamp("deleted_at") == null ? null : rs.getTimestamp("deleted_at").toLocalDateTime()
+    );
+
+    public void upsert(long taskId, long audioId, String reportJson, String riskLevel, String overallEmotion) {
+        jdbcTemplate.update("""
+                INSERT INTO report_resource (task_id, audio_id, report_json, risk_level, overall_emotion)
+                VALUES (?, ?, CAST(? AS JSON), ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    report_json = VALUES(report_json),
+                    risk_level = VALUES(risk_level),
+                    overall_emotion = VALUES(overall_emotion),
+                    deleted_at = NULL,
+                    created_at = CURRENT_TIMESTAMP
+                """, taskId, audioId, reportJson, riskLevel, overallEmotion);
+    }
+
+    public long count(String riskLevel, String emotion, String q) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM report_resource rr JOIN audio_file af ON af.id=rr.audio_id WHERE rr.deleted_at IS NULL");
+        List<Object> args = new ArrayList<>();
+        appendFilters(riskLevel, emotion, q, sql, args);
+        Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
+    public List<ReportResource> page(String riskLevel, String emotion, String q, int offset, int size) {
+        StringBuilder sql = new StringBuilder("SELECT rr.* FROM report_resource rr JOIN audio_file af ON af.id=rr.audio_id WHERE rr.deleted_at IS NULL");
+        List<Object> args = new ArrayList<>();
+        appendFilters(riskLevel, emotion, q, sql, args);
+        sql.append(" ORDER BY rr.created_at DESC LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add(offset);
+        return jdbcTemplate.query(sql.toString(), ROW_MAPPER, args.toArray());
+    }
+
+    private void appendFilters(String riskLevel, String emotion, String q, StringBuilder sql, List<Object> args) {
+        String normalizedRiskLevel = normalizeFilterValue(riskLevel);
+        if (normalizedRiskLevel != null) {
+            sql.append(" AND UPPER(rr.risk_level)=UPPER(?)");
+            args.add(normalizedRiskLevel);
+        }
+        String normalizedEmotion = normalizeFilterValue(emotion);
+        if (normalizedEmotion != null) {
+            sql.append(" AND UPPER(rr.overall_emotion)=UPPER(?)");
+            args.add(normalizedEmotion);
+        }
+        if (q != null && !q.isBlank()) {
+            sql.append(" AND (af.original_name LIKE ? OR rr.overall_emotion LIKE ?)");
+            String like = "%" + q + "%";
+            args.add(like);
+            args.add(like);
+        }
+    }
+
+    static String normalizeFilterValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        String upper = normalized.toUpperCase();
+        if ("ALL".equals(upper) || "ANY".equals(upper) || "*".equals(normalized) || "全部".equals(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    public Optional<ReportResource> findById(long reportId) {
+        List<ReportResource> list = jdbcTemplate.query("SELECT * FROM report_resource WHERE id=? AND deleted_at IS NULL", ROW_MAPPER, reportId);
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
+    public int softDelete(long reportId) {
+        return jdbcTemplate.update("UPDATE report_resource SET deleted_at = NOW() WHERE id=? AND deleted_at IS NULL", reportId);
+    }
+
+    public void softDeleteByAudioId(long audioId) {
+        jdbcTemplate.update("UPDATE report_resource SET deleted_at = NOW() WHERE audio_id=? AND deleted_at IS NULL", audioId);
+    }
+}

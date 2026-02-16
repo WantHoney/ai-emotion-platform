@@ -1,0 +1,80 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    # ✅ 添加了 allowPublicKeyRetrieval=true 解决 MySQL 8.0 连接问题
+    url: jdbc:mysql://localhost:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: root
+    password: 1029384756Wh
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  ai:
+    openai:
+      enabled: ${SPRING_AI_OPENAI_ENABLED:true}
+      api-key: ${OPENROUTER_API_KEY:}
+      base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
+      chat:
+        options:
+          model: ${OPENROUTER_MODEL:openrouter/free}
+
+upload:
+  base-dir: ${UPLOAD_BASE_DIR:${user.home}/ai-emotion/uploads}
+
+app:
+  upload:
+    public-path: /uploads
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allow-credentials: ${APP_CORS_ALLOW_CREDENTIALS:true}
+    allowed-methods: ${APP_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allowed-headers: ${APP_CORS_ALLOWED_HEADERS:Authorization,Content-Type}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+ai:
+  mode: ${AI_MODE:spring}           # mock | spring
+  mock:
+    enabled: false
+  provider: spring
+  model: ${OPENROUTER_MODEL:openrouter/free}
+  apiKey: ${OPENROUTER_API_KEY:}
+  baseUrl: ${OPENROUTER_BASE_URL:https://openrouter.ai/api}
+  language: zh
+  sampleRate: 16000
+
+ser:
+  enabled: ${SER_ENABLED:false}
+  base-url: ${SER_BASE_URL:http://localhost:8001}
+  segment-ms: ${SER_SEGMENT_MS:8000}
+  overlap-ms: ${SER_OVERLAP_MS:0}
+  llm-summary-enabled: ${SER_LLM_SUMMARY_ENABLED:false}
+  connect-timeout-ms: ${SER_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${SER_READ_TIMEOUT_MS:180000}
+  health-timeout-ms: ${SER_HEALTH_TIMEOUT_MS:1500}
+
+analysis:
+  worker:
+    enabled: ${ANALYSIS_WORKER_ENABLED:true}
+    poll-interval-ms: ${ANALYSIS_WORKER_POLL_INTERVAL_MS:1000}
+    batch-size: ${ANALYSIS_WORKER_BATCH_SIZE:20}
+    max-attempts: ${ANALYSIS_TASK_MAX_ATTEMPTS:4}
+    ser-timeout-ms: ${ANALYSIS_WORKER_SER_TIMEOUT_MS:180000}
+    asr-timeout-ms: ${ANALYSIS_WORKER_ASR_TIMEOUT_MS:90000}
+    backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
+    backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}
+
+
+auth:
+  access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:7200}
+  refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:604800}
+  seed-admin:
+    username: ${AUTH_SEED_ADMIN_USERNAME:operator}
+    password: ${AUTH_SEED_ADMIN_PASSWORD:operator123}

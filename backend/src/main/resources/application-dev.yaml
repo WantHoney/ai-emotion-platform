@@ -1,0 +1,29 @@
+ai:
+  diag:
+    enabled: true
+
+debug: true
+
+logging:
+  level:
+    org.springframework.boot.autoconfigure: DEBUG
+
+ser:
+  enabled: ${SER_ENABLED:false}
+  base-url: ${SER_BASE_URL:http://localhost:8001}
+  segment-ms: ${SER_SEGMENT_MS:8000}
+  overlap-ms: ${SER_OVERLAP_MS:0}
+  llm-summary-enabled: ${SER_LLM_SUMMARY_ENABLED:false}
+  connect-timeout-ms: ${SER_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${SER_READ_TIMEOUT_MS:180000}
+  health-timeout-ms: ${SER_HEALTH_TIMEOUT_MS:1500}
+
+analysis:
+  worker:
+    enabled: ${ANALYSIS_WORKER_ENABLED:true}
+    poll-interval-ms: ${ANALYSIS_WORKER_POLL_INTERVAL_MS:1000}
+    batch-size: ${ANALYSIS_WORKER_BATCH_SIZE:20}
+    max-attempts: ${ANALYSIS_TASK_MAX_ATTEMPTS:4}
+    ser-timeout-ms: ${ANALYSIS_WORKER_SER_TIMEOUT_MS:180000}
+    backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
+    backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}

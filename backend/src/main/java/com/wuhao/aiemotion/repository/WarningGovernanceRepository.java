@@ -7,6 +7,8 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,10 @@ public class WarningGovernanceRepository {
 
     public List<Map<String, Object>> listRules() {
         return jdbcTemplate.queryForList("SELECT * FROM warning_rule ORDER BY priority ASC, id DESC");
+    }
+
+    public List<Map<String, Object>> listEnabledRules() {
+        return jdbcTemplate.queryForList("SELECT * FROM warning_rule WHERE enabled=1 ORDER BY priority ASC, id ASC");
     }
 
     public Optional<Map<String, Object>> findRuleById(long id) {
@@ -50,8 +56,23 @@ public class WarningGovernanceRepository {
                            int trendWindowDays,
                            int triggerCount,
                            String suggestTemplateCode,
+                           int slaLowMinutes,
+                           int slaMediumMinutes,
+                           int slaHighMinutes,
                            Long operatorId) {
-        String sql = """
+        boolean hasSlaColumns = hasColumn("warning_rule", "sla_low_minutes")
+                && hasColumn("warning_rule", "sla_medium_minutes")
+                && hasColumn("warning_rule", "sla_high_minutes");
+        String sql = hasSlaColumns
+                ? """
+                INSERT INTO warning_rule
+                (rule_code, rule_name, description, enabled, priority,
+                 low_threshold, medium_threshold, high_threshold,
+                 emotion_combo_json, trend_window_days, trigger_count, suggest_template_code,
+                 sla_low_minutes, sla_medium_minutes, sla_high_minutes, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?)
+                """
+                : """
                 INSERT INTO warning_rule
                 (rule_code, rule_name, description, enabled, priority,
                  low_threshold, medium_threshold, high_threshold,
@@ -73,7 +94,14 @@ public class WarningGovernanceRepository {
             ps.setInt(10, trendWindowDays);
             ps.setInt(11, triggerCount);
             ps.setString(12, suggestTemplateCode);
-            ps.setObject(13, operatorId);
+            if (hasSlaColumns) {
+                ps.setInt(13, slaLowMinutes);
+                ps.setInt(14, slaMediumMinutes);
+                ps.setInt(15, slaHighMinutes);
+                ps.setObject(16, operatorId);
+            } else {
+                ps.setObject(13, operatorId);
+            }
             return ps;
         }, keyHolder);
         Number key = Objects.requireNonNull(keyHolder.getKey(), "createRule generated key is null");
@@ -91,7 +119,40 @@ public class WarningGovernanceRepository {
                           String emotionComboJson,
                           int trendWindowDays,
                           int triggerCount,
-                          String suggestTemplateCode) {
+                          String suggestTemplateCode,
+                          int slaLowMinutes,
+                          int slaMediumMinutes,
+                          int slaHighMinutes) {
+        boolean hasSlaColumns = hasColumn("warning_rule", "sla_low_minutes")
+                && hasColumn("warning_rule", "sla_medium_minutes")
+                && hasColumn("warning_rule", "sla_high_minutes");
+        if (hasSlaColumns) {
+            return jdbcTemplate.update(
+                    """
+                    UPDATE warning_rule
+                    SET rule_name=?, description=?, enabled=?, priority=?,
+                        low_threshold=?, medium_threshold=?, high_threshold=?,
+                        emotion_combo_json=CAST(? AS JSON), trend_window_days=?, trigger_count=?,
+                        suggest_template_code=?, sla_low_minutes=?, sla_medium_minutes=?, sla_high_minutes=?, updated_at=NOW()
+                    WHERE id=?
+                    """,
+                    ruleName,
+                    description,
+                    enabled,
+                    priority,
+                    lowThreshold,
+                    mediumThreshold,
+                    highThreshold,
+                    emotionComboJson,
+                    trendWindowDays,
+                    triggerCount,
+                    suggestTemplateCode,
+                    slaLowMinutes,
+                    slaMediumMinutes,
+                    slaHighMinutes,
+                    id
+            );
+        }
         return jdbcTemplate.update(
                 """
                 UPDATE warning_rule
@@ -167,10 +228,20 @@ public class WarningGovernanceRepository {
                                    String riskLevel,
                                    String topEmotion,
                                    Long triggerRuleId,
-                                   String triggerSnapshotJson) {
-        String sql = """
+                                   String triggerSnapshotJson,
+                                   LocalDateTime slaDeadlineAt) {
+        boolean hasSlaColumns = hasColumn("warning_event", "sla_deadline_at");
+        String sql = hasSlaColumns
+                ? """
                 INSERT INTO warning_event
-                (report_id, task_id, user_id, user_mask, risk_score, risk_level, top_emotion, trigger_rule_id, trigger_snapshot)
+                (report_id, task_id, user_id, user_mask, risk_score, risk_level, top_emotion,
+                 trigger_rule_id, trigger_snapshot, sla_deadline_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?)
+                """
+                : """
+                INSERT INTO warning_event
+                (report_id, task_id, user_id, user_mask, risk_score, risk_level, top_emotion,
+                 trigger_rule_id, trigger_snapshot)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON))
                 """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -185,6 +256,9 @@ public class WarningGovernanceRepository {
             ps.setString(7, topEmotion);
             ps.setObject(8, triggerRuleId);
             ps.setString(9, triggerSnapshotJson);
+            if (hasSlaColumns) {
+                ps.setTimestamp(10, slaDeadlineAt == null ? null : Timestamp.valueOf(slaDeadlineAt));
+            }
             return ps;
         }, keyHolder);
         Number key = Objects.requireNonNull(keyHolder.getKey(), "createWarningEvent generated key is null");
@@ -210,6 +284,18 @@ public class WarningGovernanceRepository {
         );
     }
 
+    public List<Map<String, Object>> listWarningActions(long warningId) {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT id, warning_event_id, action_type, action_note, template_code, operator_id, created_at
+                FROM warning_action_log
+                WHERE warning_event_id=?
+                ORDER BY created_at ASC, id ASC
+                """,
+                warningId
+        );
+    }
+
     public int updateWarningStatus(long warningEventId, String nextStatus) {
         if ("RESOLVED".equalsIgnoreCase(nextStatus)) {
             return jdbcTemplate.update(
@@ -223,6 +309,95 @@ public class WarningGovernanceRepository {
                 nextStatus.toUpperCase(),
                 warningEventId
         );
+    }
+
+    public void touchWarningWorkflow(long warningId, String actionType, String nextStatus) {
+        if (!hasColumn("warning_event", "first_acked_at")) {
+            return;
+        }
+        String normalizedAction = actionType == null ? "" : actionType.trim().toUpperCase();
+        String normalizedStatus = nextStatus == null ? "" : nextStatus.trim().toUpperCase();
+
+        if ("MARK_FOLLOWED".equals(normalizedAction) || "ACK".equals(normalizedAction) || "ACKED".equals(normalizedStatus)) {
+            jdbcTemplate.update(
+                    "UPDATE warning_event SET first_acked_at=COALESCE(first_acked_at, NOW()), updated_at=NOW() WHERE id=?",
+                    warningId
+            );
+        }
+
+        if ("FOLLOWING".equals(normalizedStatus)
+                || "MARK_CALLBACK".equals(normalizedAction)
+                || "PUSH_SUGGESTION".equals(normalizedAction)
+                || "ADD_NOTE".equals(normalizedAction)) {
+            jdbcTemplate.update(
+                    "UPDATE warning_event SET first_followed_at=COALESCE(first_followed_at, NOW()), updated_at=NOW() WHERE id=?",
+                    warningId
+            );
+        }
+
+        if ("CLOSE".equals(normalizedAction) || "CLOSED".equals(normalizedStatus)) {
+            jdbcTemplate.update(
+                    "UPDATE warning_event SET status='CLOSED', updated_at=NOW() WHERE id=?",
+                    warningId
+            );
+        }
+    }
+
+    public int markOverdueWarningsBreached() {
+        if (!hasColumn("warning_event", "breached") || !hasColumn("warning_event", "sla_deadline_at")) {
+            return 0;
+        }
+        return jdbcTemplate.update(
+                """
+                UPDATE warning_event
+                SET breached=1, updated_at=NOW()
+                WHERE breached=0
+                  AND sla_deadline_at IS NOT NULL
+                  AND status IN ('NEW','ACKED','FOLLOWING')
+                  AND NOW() > sla_deadline_at
+                """
+        );
+    }
+
+    public long countUserRiskReportsWithinWindow(long userId, int trendWindowDays, double thresholdScore) {
+        String riskExpr = riskScoreExpr("rr");
+        Long total = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.deleted_at IS NULL
+                  AND af.user_id=?
+                  AND rr.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                  AND %s >= ?
+                """.formatted(riskExpr),
+                Long.class,
+                userId,
+                trendWindowDays,
+                thresholdScore
+        );
+        return total == null ? 0 : total;
+    }
+
+    public long countUserEmotionWithinWindow(long userId, int trendWindowDays, String emotionCode) {
+        Long total = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE rr.deleted_at IS NULL
+                  AND af.user_id=?
+                  AND rr.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                  AND UPPER(COALESCE(NULLIF(rr.overall_emotion, ''),
+                                     JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.ser.overall.emotionCode')),
+                                     'UNKNOWN'))=UPPER(?)
+                """,
+                Long.class,
+                userId,
+                trendWindowDays,
+                emotionCode
+        );
+        return total == null ? 0 : total;
     }
 
     public List<Map<String, Object>> listDailySummary(int days) {
@@ -285,6 +460,141 @@ public class WarningGovernanceRepository {
         );
     }
 
+    public List<Map<String, Object>> listEmotionDistributionLastDays(int days) {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT UPPER(COALESCE(NULLIF(rr.overall_emotion, ''),
+                                      JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.ser.overall.emotionCode')),
+                                      'UNKNOWN')) AS emotion,
+                       COUNT(*) AS count
+                FROM report_resource rr
+                WHERE rr.deleted_at IS NULL
+                  AND rr.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                GROUP BY emotion
+                ORDER BY count DESC
+                """,
+                days
+        );
+    }
+
+    public List<Map<String, Object>> listEmotionDistributionBeforeDays(int fromDaysAgo, int toDaysAgo) {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT UPPER(COALESCE(NULLIF(rr.overall_emotion, ''),
+                                      JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.ser.overall.emotionCode')),
+                                      'UNKNOWN')) AS emotion,
+                       COUNT(*) AS count
+                FROM report_resource rr
+                WHERE rr.deleted_at IS NULL
+                  AND rr.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                  AND rr.created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+                GROUP BY emotion
+                ORDER BY count DESC
+                """,
+                fromDaysAgo,
+                toDaysAgo
+        );
+    }
+
+    public List<Map<String, Object>> listFailedTaskCategoryStats(int days) {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT CASE
+                         WHEN error_message IS NULL OR error_message = '' THEN 'UNKNOWN'
+                         WHEN error_message LIKE 'TIMEOUT:%' THEN 'TIMEOUT'
+                         WHEN error_message LIKE '%429%' OR error_message LIKE '%rate%' THEN 'RATE_LIMIT'
+                         WHEN error_message LIKE '%401%' OR error_message LIKE '%403%' THEN 'AUTH'
+                         ELSE 'OTHER'
+                       END AS category,
+                       COUNT(*) AS count
+                FROM analysis_task
+                WHERE status='FAILED'
+                  AND updated_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                GROUP BY category
+                ORDER BY count DESC
+                """,
+                days
+        );
+    }
+
+    public List<Map<String, Object>> listFailedTaskSamples(int days, int limit) {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT id, audio_file_id, error_message, updated_at
+                FROM analysis_task
+                WHERE status='FAILED'
+                  AND updated_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                ORDER BY updated_at DESC, id DESC
+                LIMIT ?
+                """,
+                days,
+                Math.max(1, Math.min(limit, 100))
+        );
+    }
+
+    public Map<String, Object> slaOverview(int days) {
+        if (!hasColumn("warning_event", "breached")) {
+            return jdbcTemplate.queryForMap(
+                    """
+                    SELECT COUNT(*) AS total,
+                           SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+                           0 AS breached,
+                           0 AS acked,
+                           NULL AS avg_ack_minutes,
+                           AVG(CASE WHEN resolved_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, resolved_at) END) AS avg_resolve_minutes
+                    FROM warning_event
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                    """,
+                    days
+            );
+        }
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+                       SUM(CASE WHEN breached=1 THEN 1 ELSE 0 END) AS breached,
+                       SUM(CASE WHEN first_acked_at IS NOT NULL THEN 1 ELSE 0 END) AS acked,
+                       AVG(CASE WHEN first_acked_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, first_acked_at) END) AS avg_ack_minutes,
+                       AVG(CASE WHEN resolved_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, resolved_at) END) AS avg_resolve_minutes
+                FROM warning_event
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                """,
+                days
+        );
+        return row;
+    }
+
+    public List<Map<String, Object>> listSlaTrend(int days) {
+        if (!hasColumn("warning_event", "breached")) {
+            return jdbcTemplate.queryForList(
+                    """
+                    SELECT DATE(created_at) AS stat_date,
+                           COUNT(*) AS total,
+                           SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+                           0 AS breached
+                    FROM warning_event
+                    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                    GROUP BY DATE(created_at)
+                    ORDER BY stat_date DESC
+                    """,
+                    days
+            );
+        }
+        return jdbcTemplate.queryForList(
+                """
+                SELECT DATE(created_at) AS stat_date,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+                       SUM(CASE WHEN breached=1 THEN 1 ELSE 0 END) AS breached
+                FROM warning_event
+                WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY stat_date DESC
+                """,
+                days
+        );
+    }
+
     private void appendWarningFilters(String status, String riskLevel, StringBuilder sql, List<Object> args) {
         if (status != null && !status.isBlank()) {
             sql.append(" AND status=?");
@@ -293,6 +603,33 @@ public class WarningGovernanceRepository {
         if (riskLevel != null && !riskLevel.isBlank()) {
             sql.append(" AND risk_level=?");
             args.add(riskLevel.trim().toUpperCase());
+        }
+    }
+
+    private String riskScoreExpr(String alias) {
+        String jsonPrimary = "CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(%s.report_json, '$.riskAssessment.risk_score')), '0') AS DECIMAL(10,4))".formatted(alias);
+        String jsonFallback = "CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(%s.report_json, '$.analysis_result.risk_assessment.risk_score')), '0') AS DECIMAL(10,4))".formatted(alias);
+        String merged = "COALESCE(NULLIF(%s, 0), %s)".formatted(jsonPrimary, jsonFallback);
+        return "CASE WHEN %s <= 1 THEN %s * 100 ELSE %s END".formatted(merged, merged, merged);
+    }
+
+    private boolean hasColumn(String tableName, String columnName) {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = ?
+                      AND COLUMN_NAME = ?
+                    """,
+                    Integer.class,
+                    tableName,
+                    columnName
+            );
+            return count != null && count > 0;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 }

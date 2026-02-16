@@ -31,10 +31,13 @@ const form = reactive({
   lowThreshold: 40,
   mediumThreshold: 60,
   highThreshold: 80,
-  emotionComboText: '{"required":["SAD"],"optional":["ANGRY"]}',
+  emotionComboText: '{"required":["SAD"],"forbidden":[],"minHits":{"SAD":1}}',
   trendWindowDays: 7,
   triggerCount: 1,
   suggestTemplateCode: 'WARN_HIGH_FOLLOWUP',
+  slaLowMinutes: 1440,
+  slaMediumMinutes: 720,
+  slaHighMinutes: 240,
 })
 
 const safeParseJson = (value: string) => {
@@ -57,10 +60,13 @@ const resetForm = () => {
   form.lowThreshold = 40
   form.mediumThreshold = 60
   form.highThreshold = 80
-  form.emotionComboText = '{"required":["SAD"],"optional":["ANGRY"]}'
+  form.emotionComboText = '{"required":["SAD"],"forbidden":[],"minHits":{"SAD":1}}'
   form.trendWindowDays = 7
   form.triggerCount = 1
   form.suggestTemplateCode = 'WARN_HIGH_FOLLOWUP'
+  form.slaLowMinutes = 1440
+  form.slaMediumMinutes = 720
+  form.slaHighMinutes = 240
 }
 
 const loadRules = async () => {
@@ -97,6 +103,9 @@ const openEdit = (row: WarningRuleItem) => {
   form.trendWindowDays = row.trend_window_days
   form.triggerCount = row.trigger_count
   form.suggestTemplateCode = row.suggest_template_code ?? ''
+  form.slaLowMinutes = row.sla_low_minutes ?? 1440
+  form.slaMediumMinutes = row.sla_medium_minutes ?? 720
+  form.slaHighMinutes = row.sla_high_minutes ?? 240
   dialogVisible.value = true
 }
 
@@ -107,6 +116,10 @@ const saveRule = async () => {
   }
   if (!(form.lowThreshold <= form.mediumThreshold && form.mediumThreshold <= form.highThreshold)) {
     ElMessage.warning('Thresholds must satisfy low <= medium <= high')
+    return
+  }
+  if (!(form.slaLowMinutes > 0 && form.slaMediumMinutes > 0 && form.slaHighMinutes > 0)) {
+    ElMessage.warning('SLA minutes must be positive')
     return
   }
 
@@ -133,6 +146,9 @@ const saveRule = async () => {
         trendWindowDays: form.trendWindowDays,
         triggerCount: form.triggerCount,
         suggestTemplateCode: form.suggestTemplateCode || undefined,
+        slaLowMinutes: form.slaLowMinutes,
+        slaMediumMinutes: form.slaMediumMinutes,
+        slaHighMinutes: form.slaHighMinutes,
       })
       ElMessage.success('Warning rule created')
     } else if (currentRuleId.value != null) {
@@ -148,6 +164,9 @@ const saveRule = async () => {
         trendWindowDays: form.trendWindowDays,
         triggerCount: form.triggerCount,
         suggestTemplateCode: form.suggestTemplateCode || undefined,
+        slaLowMinutes: form.slaLowMinutes,
+        slaMediumMinutes: form.slaMediumMinutes,
+        slaHighMinutes: form.slaHighMinutes,
       })
       ElMessage.success('Warning rule updated')
     }
@@ -213,11 +232,17 @@ onMounted(async () => {
           low={{ scope.row.low_threshold }}, medium={{ scope.row.medium_threshold }}, high={{ scope.row.high_threshold }}
         </template>
       </el-table-column>
+      <el-table-column label="SLA(min)" min-width="180">
+        <template #default="scope">
+          L={{ scope.row.sla_low_minutes ?? 1440 }}, M={{ scope.row.sla_medium_minutes ?? 720 }},
+          H={{ scope.row.sla_high_minutes ?? 240 }}
+        </template>
+      </el-table-column>
       <el-table-column prop="trend_window_days" label="Window(D)" width="100" />
       <el-table-column prop="trigger_count" label="Trigger N" width="90" />
       <el-table-column label="Enabled" width="90">
         <template #default="scope">
-          <el-tag :type="(scope.row.enabled === true || scope.row.enabled === 1) ? 'success' : 'info'">
+          <el-tag :type="scope.row.enabled === true || scope.row.enabled === 1 ? 'success' : 'info'">
             {{ scope.row.enabled === true || scope.row.enabled === 1 ? 'Yes' : 'No' }}
           </el-tag>
         </template>
@@ -270,6 +295,15 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="Trigger Count">
           <el-input-number v-model="form.triggerCount" :min="1" :max="100" />
+        </el-form-item>
+        <el-form-item label="SLA Low Minutes">
+          <el-input-number v-model="form.slaLowMinutes" :min="1" :max="20160" />
+        </el-form-item>
+        <el-form-item label="SLA Medium Minutes">
+          <el-input-number v-model="form.slaMediumMinutes" :min="1" :max="20160" />
+        </el-form-item>
+        <el-form-item label="SLA High Minutes">
+          <el-input-number v-model="form.slaHighMinutes" :min="1" :max="20160" />
         </el-form-item>
         <el-form-item label="Template Code">
           <el-input v-model="form.suggestTemplateCode" />

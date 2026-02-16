@@ -81,6 +81,9 @@ public class AdminGovernanceController {
                 request.trendWindowDays(),
                 request.triggerCount(),
                 request.suggestTemplateCode(),
+                request.slaLowMinutesOrDefault(),
+                request.slaMediumMinutesOrDefault(),
+                request.slaHighMinutesOrDefault(),
                 user.userId()
         );
         return Map.of("id", id);
@@ -101,7 +104,10 @@ public class AdminGovernanceController {
                 request.emotionCombo(),
                 request.trendWindowDays(),
                 request.triggerCount(),
-                request.suggestTemplateCode()
+                request.suggestTemplateCode(),
+                request.slaLowMinutesOrDefault(),
+                request.slaMediumMinutesOrDefault(),
+                request.slaHighMinutesOrDefault()
         );
         return Map.of("success", true);
     }
@@ -136,9 +142,20 @@ public class AdminGovernanceController {
         return Map.of("success", true);
     }
 
+    @GetMapping("/warnings/{warningId}/actions")
+    public List<Map<String, Object>> warningActions(@PathVariable long warningId) {
+        return adminGovernanceService.listWarningActions(warningId);
+    }
+
     @GetMapping("/analytics/daily")
     public Map<String, Object> analyticsDaily(@RequestParam(required = false) Integer days) {
         return adminGovernanceService.listAnalyticsDaily(days);
+    }
+
+    @GetMapping("/analytics/quality")
+    public Map<String, Object> analyticsQuality(@RequestParam(required = false) Integer windowDays,
+                                                @RequestParam(required = false) Integer baselineDays) {
+        return adminGovernanceService.analyticsQuality(windowDays, baselineDays);
     }
 
     @GetMapping("/governance/summary")
@@ -174,8 +191,22 @@ public class AdminGovernanceController {
             Object emotionCombo,
             @NotNull Integer trendWindowDays,
             @NotNull Integer triggerCount,
-            String suggestTemplateCode
+            String suggestTemplateCode,
+            Integer slaLowMinutes,
+            Integer slaMediumMinutes,
+            Integer slaHighMinutes
     ) {
+        public int slaLowMinutesOrDefault() {
+            return slaLowMinutes == null ? 24 * 60 : slaLowMinutes;
+        }
+
+        public int slaMediumMinutesOrDefault() {
+            return slaMediumMinutes == null ? 12 * 60 : slaMediumMinutes;
+        }
+
+        public int slaHighMinutesOrDefault() {
+            return slaHighMinutes == null ? 4 * 60 : slaHighMinutes;
+        }
     }
 
     public record UpdateWarningRuleRequest(
@@ -189,8 +220,22 @@ public class AdminGovernanceController {
             Object emotionCombo,
             @NotNull Integer trendWindowDays,
             @NotNull Integer triggerCount,
-            String suggestTemplateCode
+            String suggestTemplateCode,
+            Integer slaLowMinutes,
+            Integer slaMediumMinutes,
+            Integer slaHighMinutes
     ) {
+        public int slaLowMinutesOrDefault() {
+            return slaLowMinutes == null ? 24 * 60 : slaLowMinutes;
+        }
+
+        public int slaMediumMinutesOrDefault() {
+            return slaMediumMinutes == null ? 12 * 60 : slaMediumMinutes;
+        }
+
+        public int slaHighMinutesOrDefault() {
+            return slaHighMinutes == null ? 4 * 60 : slaHighMinutes;
+        }
     }
 
     public record WarningActionRequest(

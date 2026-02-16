@@ -41,6 +41,9 @@ export interface WarningRuleItem {
   trend_window_days: number
   trigger_count: number
   suggest_template_code?: string
+  sla_low_minutes?: number
+  sla_medium_minutes?: number
+  sla_high_minutes?: number
   created_at?: string
   updated_at?: string
 }
@@ -56,7 +59,21 @@ export interface WarningEventItem {
   top_emotion?: string
   status: string
   assigned_to?: number
+  sla_deadline_at?: string
+  first_acked_at?: string
+  first_followed_at?: string
+  breached?: number | boolean
   resolved_at?: string
+  created_at?: string
+}
+
+export interface WarningActionItem {
+  id: number
+  warning_event_id: number
+  action_type: string
+  action_note?: string
+  template_code?: string
+  operator_id?: number
   created_at?: string
 }
 
@@ -79,6 +96,51 @@ export interface GovernanceSummary {
   ruleCount: number
   enabledRuleCount: number
   warningCount: number
+}
+
+export interface EmotionDriftItem {
+  emotion: string
+  currentCount: number
+  baselineCount: number
+  currentRatio: number
+  baselineRatio: number
+  drift: number
+}
+
+export interface ErrorCategoryItem {
+  category: string
+  count: number
+}
+
+export interface ErrorSampleItem {
+  id: number
+  audio_file_id?: number
+  error_message?: string
+  updated_at?: string
+}
+
+export interface SlaTrendItem {
+  stat_date: string
+  total: number
+  resolved: number
+  breached: number
+}
+
+export interface AnalyticsQualityResponse {
+  windowDays: number
+  baselineDays: number
+  emotionDrift: EmotionDriftItem[]
+  errorCategoryStats: ErrorCategoryItem[]
+  errorSamples: ErrorSampleItem[]
+  slaOverview: {
+    total?: number
+    resolved?: number
+    breached?: number
+    acked?: number
+    avg_ack_minutes?: number
+    avg_resolve_minutes?: number
+  }
+  slaTrend: SlaTrendItem[]
 }
 
 export const getAdminModels = async (params?: { modelType?: string; env?: string; status?: string }) => {
@@ -133,6 +195,9 @@ export const createWarningRule = async (payload: {
   trendWindowDays: number
   triggerCount: number
   suggestTemplateCode?: string
+  slaLowMinutes?: number
+  slaMediumMinutes?: number
+  slaHighMinutes?: number
 }) => {
   const response = await http.post<{ id: number }>('/api/admin/warning-rules', payload)
   return response.data
@@ -152,6 +217,9 @@ export const updateWarningRule = async (
     trendWindowDays: number
     triggerCount: number
     suggestTemplateCode?: string
+    slaLowMinutes?: number
+    slaMediumMinutes?: number
+    slaHighMinutes?: number
   },
 ) => {
   const response = await http.put(`/api/admin/warning-rules/${ruleId}`, payload)
@@ -190,10 +258,20 @@ export const postWarningAction = async (
   return response.data
 }
 
+export const getWarningActions = async (warningId: number) => {
+  const response = await http.get<WarningActionItem[]>(`/api/admin/warnings/${warningId}/actions`)
+  return response.data
+}
+
 export const getDailyAnalytics = async (days = 14) => {
   const response = await http.get<{ items: DailyAnalyticsItem[]; days: number }>('/api/admin/analytics/daily', {
     params: { days },
   })
+  return response.data
+}
+
+export const getAnalyticsQuality = async (params?: { windowDays?: number; baselineDays?: number }) => {
+  const response = await http.get<AnalyticsQualityResponse>('/api/admin/analytics/quality', { params })
   return response.data
 }
 

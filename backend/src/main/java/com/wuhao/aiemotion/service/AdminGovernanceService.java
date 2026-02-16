@@ -9,9 +9,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class AdminGovernanceService {
@@ -92,7 +96,11 @@ public class AdminGovernanceService {
                                   int trendWindowDays,
                                   int triggerCount,
                                   String suggestTemplateCode,
+                                  int slaLowMinutes,
+                                  int slaMediumMinutes,
+                                  int slaHighMinutes,
                                   Long operatorId) {
+        validateThresholds(lowThreshold, mediumThreshold, highThreshold);
         return warningGovernanceRepository.createRule(
                 normalizeCode(ruleCode, "ruleCode"),
                 normalizeRequired(ruleName, "ruleName"),
@@ -103,9 +111,12 @@ public class AdminGovernanceService {
                 mediumThreshold,
                 highThreshold,
                 toJson(emotionCombo),
-                trendWindowDays,
-                triggerCount,
+                Math.max(1, trendWindowDays),
+                Math.max(1, triggerCount),
                 normalizeOptional(suggestTemplateCode),
+                normalizeSlaMinutes(slaLowMinutes, 24 * 60),
+                normalizeSlaMinutes(slaMediumMinutes, 12 * 60),
+                normalizeSlaMinutes(slaHighMinutes, 4 * 60),
                 operatorId
         );
     }
@@ -121,7 +132,11 @@ public class AdminGovernanceService {
                                   Object emotionCombo,
                                   int trendWindowDays,
                                   int triggerCount,
-                                  String suggestTemplateCode) {
+                                  String suggestTemplateCode,
+                                  int slaLowMinutes,
+                                  int slaMediumMinutes,
+                                  int slaHighMinutes) {
+        validateThresholds(lowThreshold, mediumThreshold, highThreshold);
         int updated = warningGovernanceRepository.updateRule(
                 id,
                 normalizeRequired(ruleName, "ruleName"),
@@ -132,9 +147,12 @@ public class AdminGovernanceService {
                 mediumThreshold,
                 highThreshold,
                 toJson(emotionCombo),
-                trendWindowDays,
-                triggerCount,
-                normalizeOptional(suggestTemplateCode)
+                Math.max(1, trendWindowDays),
+                Math.max(1, triggerCount),
+                normalizeOptional(suggestTemplateCode),
+                normalizeSlaMinutes(slaLowMinutes, 24 * 60),
+                normalizeSlaMinutes(slaMediumMinutes, 12 * 60),
+                normalizeSlaMinutes(slaHighMinutes, 4 * 60)
         );
         if (updated == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "warning rule not found: " + id);
@@ -149,6 +167,7 @@ public class AdminGovernanceService {
     }
 
     public Map<String, Object> listWarnings(int page, int pageSize, String status, String riskLevel) {
+        warningGovernanceRepository.markOverdueWarningsBreached();
         int safePage = Math.max(1, page);
         int safePageSize = Math.min(100, Math.max(1, pageSize));
         int offset = (safePage - 1) * safePageSize;
@@ -162,6 +181,12 @@ public class AdminGovernanceService {
         );
     }
 
+    public List<Map<String, Object>> listWarningActions(long warningId) {
+        warningGovernanceRepository.findWarningById(warningId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "warning event not found: " + warningId));
+        return warningGovernanceRepository.listWarningActions(warningId);
+    }
+
     @Transactional
     public void handleWarning(long warningId,
                               String actionType,
@@ -171,16 +196,22 @@ public class AdminGovernanceService {
                               Long operatorId) {
         warningGovernanceRepository.findWarningById(warningId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "warning event not found: " + warningId));
+
+        String normalizedAction = normalizeCode(actionType, "actionType");
+        String normalizedStatus = nextStatus == null || nextStatus.isBlank() ? null : normalizeCode(nextStatus, "nextStatus");
+
         warningGovernanceRepository.createWarningAction(
                 warningId,
-                normalizeCode(actionType, "actionType"),
+                normalizedAction,
                 normalizeOptional(actionNote),
                 normalizeOptional(templateCode),
                 operatorId
         );
-        if (nextStatus != null && !nextStatus.isBlank()) {
-            warningGovernanceRepository.updateWarningStatus(warningId, nextStatus);
+        warningGovernanceRepository.touchWarningWorkflow(warningId, normalizedAction, normalizedStatus);
+        if (normalizedStatus != null) {
+            warningGovernanceRepository.updateWarningStatus(warningId, normalizedStatus);
         }
+        warningGovernanceRepository.markOverdueWarningsBreached();
     }
 
     public Map<String, Object> listAnalyticsDaily(Integer days) {
@@ -195,13 +226,71 @@ public class AdminGovernanceService {
         );
     }
 
+    public Map<String, Object> analyticsQuality(Integer windowDays, Integer baselineDays) {
+        warningGovernanceRepository.markOverdueWarningsBreached();
+
+        int safeWindow = Math.max(1, Math.min(windowDays == null ? 7 : windowDays, 30));
+        int safeBaseline = Math.max(1, Math.min(baselineDays == null ? 7 : baselineDays, 30));
+
+        List<Map<String, Object>> currentRows = warningGovernanceRepository.listEmotionDistributionLastDays(safeWindow);
+        List<Map<String, Object>> baselineRows = warningGovernanceRepository.listEmotionDistributionBeforeDays(safeWindow + safeBaseline, safeWindow);
+        Map<String, Long> currentMap = toDistributionMap(currentRows);
+        Map<String, Long> baselineMap = toDistributionMap(baselineRows);
+
+        long currentTotal = currentMap.values().stream().mapToLong(Long::longValue).sum();
+        long baselineTotal = baselineMap.values().stream().mapToLong(Long::longValue).sum();
+
+        Set<String> emotions = new HashSet<>();
+        emotions.addAll(currentMap.keySet());
+        emotions.addAll(baselineMap.keySet());
+
+        List<Map<String, Object>> driftItems = new ArrayList<>();
+        for (String emotion : emotions) {
+            long currentCount = currentMap.getOrDefault(emotion, 0L);
+            long baselineCount = baselineMap.getOrDefault(emotion, 0L);
+            double currentRatio = currentTotal == 0 ? 0D : (double) currentCount / currentTotal;
+            double baselineRatio = baselineTotal == 0 ? 0D : (double) baselineCount / baselineTotal;
+            driftItems.add(Map.of(
+                    "emotion", emotion,
+                    "currentCount", currentCount,
+                    "baselineCount", baselineCount,
+                    "currentRatio", currentRatio,
+                    "baselineRatio", baselineRatio,
+                    "drift", currentRatio - baselineRatio
+            ));
+        }
+        driftItems.sort(Comparator.comparingDouble(item -> -Math.abs(toDouble(item.get("drift"), 0D))));
+
+        List<Map<String, Object>> errorCategories = warningGovernanceRepository.listFailedTaskCategoryStats(safeWindow);
+        List<Map<String, Object>> errorSamples = warningGovernanceRepository.listFailedTaskSamples(safeWindow, 20);
+        Map<String, Object> slaOverview = warningGovernanceRepository.slaOverview(safeWindow);
+        List<Map<String, Object>> slaTrend = warningGovernanceRepository.listSlaTrend(safeWindow);
+
+        return Map.of(
+                "windowDays", safeWindow,
+                "baselineDays", safeBaseline,
+                "emotionDrift", driftItems,
+                "errorCategoryStats", errorCategories,
+                "errorSamples", errorSamples,
+                "slaOverview", slaOverview,
+                "slaTrend", slaTrend
+        );
+    }
+
     public Map<String, Object> summary() {
+        warningGovernanceRepository.markOverdueWarningsBreached();
         Map<String, Object> summary = new HashMap<>();
         List<Map<String, Object>> rules = warningGovernanceRepository.listRules();
         summary.put("ruleCount", rules.size());
         summary.put("enabledRuleCount", rules.stream().filter(it -> toInt(it.get("enabled"), 0) == 1).count());
         summary.put("warningCount", warningGovernanceRepository.countWarnings(null, null));
         return summary;
+    }
+
+    private void validateThresholds(double low, double medium, double high) {
+        if (low > medium || medium > high) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "thresholds must satisfy low <= medium <= high");
+        }
     }
 
     private String normalizeRequired(String value, String fieldName) {
@@ -232,6 +321,13 @@ public class AdminGovernanceService {
         return status == null ? defaultValue : status.toUpperCase();
     }
 
+    private int normalizeSlaMinutes(int value, int defaultValue) {
+        if (value <= 0) {
+            return defaultValue;
+        }
+        return Math.min(value, 14 * 24 * 60);
+    }
+
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value == null ? Map.of() : value);
@@ -255,5 +351,29 @@ public class AdminGovernanceService {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    private double toDouble(Object value, double defaultValue) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private Map<String, Long> toDistributionMap(List<Map<String, Object>> rows) {
+        Map<String, Long> result = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            String emotion = String.valueOf(row.getOrDefault("emotion", "UNKNOWN")).toUpperCase();
+            long count = row.get("count") instanceof Number number ? number.longValue() : 0L;
+            result.put(emotion, count);
+        }
+        return result;
     }
 }

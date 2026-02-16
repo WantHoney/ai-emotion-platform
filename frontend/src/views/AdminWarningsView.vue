@@ -1,17 +1,29 @@
 ﻿<script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import { getWarnings, postWarningAction, type WarningEventItem } from '@/api/governance'
+import {
+  getWarningActions,
+  getWarnings,
+  postWarningAction,
+  type WarningActionItem,
+  type WarningEventItem,
+} from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const loading = ref(false)
 const rows = ref<WarningEventItem[]>([])
 const total = ref(0)
 const errorState = ref<ErrorStatePayload | null>(null)
+
+const actionsLoading = ref(false)
+const actionsError = ref<ErrorStatePayload | null>(null)
+const actionsDrawer = ref(false)
+const currentWarning = ref<WarningEventItem | null>(null)
+const actionRows = ref<WarningActionItem[]>([])
 
 const query = reactive({
   page: 1,
@@ -39,12 +51,42 @@ const loadWarnings = async () => {
   }
 }
 
+const loadActions = async (warningId: number) => {
+  actionsLoading.value = true
+  actionsError.value = null
+  try {
+    actionRows.value = await getWarningActions(warningId)
+  } catch (error) {
+    actionsError.value = parseError(error, 'Failed to load warning action timeline')
+  } finally {
+    actionsLoading.value = false
+  }
+}
+
 const riskType = (riskLevel: string) => {
   const value = riskLevel.toUpperCase()
   if (value === 'HIGH') return 'danger'
   if (value === 'MEDIUM') return 'warning'
   if (value === 'LOW') return 'success'
   return 'info'
+}
+
+const breachedType = (row: WarningEventItem) => {
+  const breached = row.breached === true || row.breached === 1
+  if (breached) return 'danger'
+  if (row.status === 'RESOLVED' || row.status === 'CLOSED') return 'success'
+  return 'info'
+}
+
+const formatDeadlineGap = (deadline?: string) => {
+  if (!deadline) return '-'
+  const time = new Date(deadline).getTime()
+  if (Number.isNaN(time)) return '-'
+  const diff = time - Date.now()
+  const absMin = Math.round(Math.abs(diff) / 60000)
+  const h = Math.floor(absMin / 60)
+  const m = absMin % 60
+  return diff >= 0 ? `T-${h}h ${m}m` : `T+${h}h ${m}m`
 }
 
 const submitAction = async (
@@ -74,6 +116,9 @@ const submitAction = async (
     })
     ElMessage.success('Action submitted')
     await loadWarnings()
+    if (currentWarning.value?.id === row.id) {
+      await loadActions(row.id)
+    }
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -94,6 +139,17 @@ const markFollowing = async (row: WarningEventItem) => {
 const markResolved = async (row: WarningEventItem) => {
   await submitAction(row, 'RESOLVE', 'RESOLVED', 'Mark As RESOLVED', 'e.g. callback completed')
 }
+
+const openTimeline = async (row: WarningEventItem) => {
+  currentWarning.value = row
+  actionsDrawer.value = true
+  await loadActions(row.id)
+}
+
+const currentSummary = computed(() => {
+  if (!currentWarning.value) return '-'
+  return `Risk=${currentWarning.value.risk_level}, Score=${currentWarning.value.risk_score}, Status=${currentWarning.value.status}`
+})
 
 onMounted(async () => {
   await loadWarnings()
@@ -158,9 +214,18 @@ onMounted(async () => {
         </el-table-column>
         <el-table-column prop="risk_score" label="Risk Score" width="100" />
         <el-table-column prop="status" label="Status" width="110" />
-        <el-table-column prop="created_at" label="Created At" min-width="180" />
-        <el-table-column label="Actions" min-width="260">
+        <el-table-column label="SLA" min-width="180">
           <template #default="scope">
+            <el-tag :type="breachedType(scope.row)">
+              {{ scope.row.breached === true || scope.row.breached === 1 ? 'BREACHED' : 'IN SLA' }}
+            </el-tag>
+            <div class="sla-gap">{{ formatDeadlineGap(scope.row.sla_deadline_at) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="Created At" min-width="170" />
+        <el-table-column label="Actions" min-width="320">
+          <template #default="scope">
+            <el-button type="primary" link @click="openTimeline(scope.row)">Timeline</el-button>
             <el-button
               type="primary"
               link
@@ -199,6 +264,41 @@ onMounted(async () => {
         />
       </div>
     </template>
+
+    <el-drawer v-model="actionsDrawer" title="Warning Timeline" size="40%">
+      <p class="timeline-summary">{{ currentSummary }}</p>
+
+      <LoadingState v-if="actionsLoading" />
+      <ErrorState
+        v-else-if="actionsError"
+        :title="actionsError.title"
+        :detail="actionsError.detail"
+        :trace-id="actionsError.traceId"
+        @retry="currentWarning && loadActions(currentWarning.id)"
+      />
+      <EmptyState
+        v-else-if="actionRows.length === 0"
+        title="No action records"
+        description="No disposal timeline yet for this warning event."
+        action-text="Reload"
+        @action="currentWarning && loadActions(currentWarning.id)"
+      />
+      <el-timeline v-else>
+        <el-timeline-item
+          v-for="item in actionRows"
+          :key="item.id"
+          :timestamp="item.created_at"
+          placement="top"
+        >
+          <el-card>
+            <p><strong>{{ item.action_type }}</strong></p>
+            <p v-if="item.action_note">{{ item.action_note }}</p>
+            <p v-if="item.template_code">template={{ item.template_code }}</p>
+            <p v-if="item.operator_id">operator={{ item.operator_id }}</p>
+          </el-card>
+        </el-timeline-item>
+      </el-timeline>
+    </el-drawer>
   </el-card>
 </template>
 
@@ -209,9 +309,20 @@ onMounted(async () => {
   justify-content: space-between;
 }
 
+.sla-gap {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .pager {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+.timeline-summary {
+  margin: 0 0 12px;
+  color: #334155;
 }
 </style>

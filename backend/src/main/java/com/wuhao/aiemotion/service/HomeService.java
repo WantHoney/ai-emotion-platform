@@ -1,4 +1,4 @@
-﻿package com.wuhao.aiemotion.service;
+package com.wuhao.aiemotion.service;
 
 import com.wuhao.aiemotion.domain.Quote;
 import com.wuhao.aiemotion.repository.HomeContentRepository;

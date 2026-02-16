@@ -26,7 +26,11 @@ public class PsyCenterService {
             throw new IllegalArgumentException("cityCode cannot be empty");
         }
         try {
-            return psyCenterRepository.findByCityCode(cityCode, Math.max(limit, 1));
+            List<PsyCenter> rows = psyCenterRepository.findByCityCode(cityCode, Math.max(limit, 1));
+            if (rows == null || rows.isEmpty()) {
+                return placeholderByCity(cityCode);
+            }
+            return rows;
         } catch (Exception e) {
             log.warn("psy center query by city failed, fallback to placeholder list", e);
             return placeholderByCity(cityCode);
@@ -38,7 +42,11 @@ public class PsyCenterService {
             throw new IllegalArgumentException("radiusKm must be in (0,100]");
         }
         try {
-            return psyCenterRepository.findNearby(latitude, longitude, radiusKm, Math.max(limit, 1));
+            List<PsyCenter> rows = psyCenterRepository.findNearby(latitude, longitude, radiusKm, Math.max(limit, 1));
+            if (rows == null || rows.isEmpty()) {
+                return placeholderNearby(latitude, longitude);
+            }
+            return rows;
         } catch (Exception e) {
             log.warn("psy center nearby query failed, fallback to placeholder list", e);
             return placeholderNearby(latitude, longitude);

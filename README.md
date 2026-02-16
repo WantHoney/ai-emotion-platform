@@ -150,11 +150,38 @@ Error response shape:
 - Warning events:
   - `GET /api/admin/warnings?page=1&pageSize=10`
   - `POST /api/admin/warnings/{id}/actions`
+  - `GET /api/admin/warnings/{id}/actions`
 - Analytics:
   - `GET /api/admin/analytics/daily?days=14`
+  - `GET /api/admin/analytics/quality?windowDays=7&baselineDays=7`
   - `GET /api/admin/governance/summary`
 
-## 8. Troubleshooting
+## 8. Chunk Upload API
+
+- Init upload session:
+  - `POST /api/audio/upload-sessions/init`
+  - body: `{fileName, contentType, fileSize, totalChunks}`
+- Upload chunk:
+  - `PUT /api/audio/upload-sessions/{uploadId}/chunks/{chunkIndex}`
+  - form-data: `file=<chunk>`
+- Session status:
+  - `GET /api/audio/upload-sessions/{uploadId}`
+- Complete merge:
+  - `POST /api/audio/upload-sessions/{uploadId}/complete`
+  - body: `{autoStartTask:true}`
+- Cancel session:
+  - `DELETE /api/audio/upload-sessions/{uploadId}`
+
+Frontend upload page (`/upload`) already uses chunk mode with realtime progress.
+
+## 9. DB migration notes
+
+- Previous governance schema: `backend/docs/db/migrations/V5__model_warning_ops.sql`
+- New SLA/quality extension: `backend/docs/db/migrations/V6__warning_sla_and_quality.sql`
+
+If `V6` is not applied yet, backend still runs in backward-compatible mode (SLA fields degrade gracefully).
+
+## 10. Troubleshooting
 
 ### `ECONNREFUSED` on frontend `/api/*`
 

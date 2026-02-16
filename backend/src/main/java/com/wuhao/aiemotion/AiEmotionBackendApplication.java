@@ -24,9 +24,18 @@ public class AiEmotionBackendApplication {
             ConfigurableEnvironment env = context.getEnvironment();
             String aiMode = env.getProperty("ai.mode", env.getProperty("AI_MODE", "spring"));
             boolean mockEnabled = Boolean.parseBoolean(env.getProperty("ai.mock.enabled", "false"));
-            if ("mock".equalsIgnoreCase(aiMode) || mockEnabled) {
+            String springAiApiKey = env.getProperty("spring.ai.openai.api-key", "");
+            String openRouterApiKey = env.getProperty("OPENROUTER_API_KEY", "");
+            boolean apiKeyMissing = (springAiApiKey == null || springAiApiKey.isBlank())
+                    && (openRouterApiKey == null || openRouterApiKey.isBlank());
+            if ("mock".equalsIgnoreCase(aiMode) || mockEnabled || apiKeyMissing) {
                 context.getEnvironment().getPropertySources().addFirst(
-                        new MapPropertySource("aiModeOverrides", Map.of("spring.ai.openai.enabled", "false"))
+                        new MapPropertySource("aiModeOverrides", Map.of(
+                                "spring.ai.openai.enabled", "false",
+                                "spring.autoconfigure.exclude",
+                                "org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration,"
+                                        + "org.springframework.ai.autoconfigure.chat.client.ChatClientAutoConfiguration"
+                        ))
                 );
             }
         });

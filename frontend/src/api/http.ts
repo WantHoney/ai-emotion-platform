@@ -2,7 +2,16 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ElButton, ElMessage, ElNotification } from 'element-plus'
 import { h } from 'vue'
 
-import { REFRESH_TOKEN_KEY, TOKEN_KEY } from '@/stores/auth'
+import {
+  ADMIN_PROFILE_KEY,
+  ADMIN_REFRESH_TOKEN_KEY,
+  ADMIN_TOKEN_KEY,
+} from '@/stores/adminAuth'
+import {
+  USER_PROFILE_KEY,
+  USER_REFRESH_TOKEN_KEY,
+  USER_TOKEN_KEY,
+} from '@/stores/userAuth'
 import { useUiStore } from '@/stores/ui'
 import { pinia } from '@/stores'
 import { toErrorMessage } from '@/utils/errorMessage'
@@ -19,6 +28,26 @@ const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/',
   timeout: 12000,
 })
+
+const isAdminRequest = (url?: string) => {
+  if (!url) return false
+  return (
+    url.startsWith('/api/admin') ||
+    url.startsWith('api/admin') ||
+    url.startsWith('/api/system') ||
+    url.startsWith('api/system')
+  )
+}
+
+const isAuthRequest = (url?: string) => {
+  if (!url) return false
+  return url.startsWith('/api/auth') || url.startsWith('api/auth')
+}
+
+const isLogoutRequest = (url?: string) => {
+  if (!url) return false
+  return url.endsWith('/api/auth/logout') || url.endsWith('api/auth/logout')
+}
 
 const normalizeApiError = (error: unknown): ApiError => {
   if (axios.isAxiosError(error)) {
@@ -104,8 +133,14 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const uiStore = useUiStore(pinia)
   uiStore.startLoading()
 
-  const token = localStorage.getItem(TOKEN_KEY)
+  if (isAuthRequest(config.url) && !isLogoutRequest(config.url)) {
+    return config
+  }
+
+  const tokenKey = isAdminRequest(config.url) ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY
+  const token = localStorage.getItem(tokenKey)
   if (token) {
+    config.headers = config.headers ?? {}
     config.headers.Authorization = `Bearer ${token}`
   }
 
@@ -123,12 +158,21 @@ http.interceptors.response.use(
     uiStore.stopLoading()
 
     const apiError = normalizeApiError(error)
+    const requestUrl = (error as AxiosError)?.config?.url
+    const adminRequest = isAdminRequest(requestUrl)
 
     if (apiError.code === 'UNAUTHORIZED') {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(REFRESH_TOKEN_KEY)
-      localStorage.removeItem('emotion-user-profile')
-      ElMessage.warning('登录已过期，请重新登录。')
+      if (adminRequest) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY)
+        localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY)
+        localStorage.removeItem(ADMIN_PROFILE_KEY)
+        ElMessage.warning('管理员登录已过期，请重新登录。')
+      } else {
+        localStorage.removeItem(USER_TOKEN_KEY)
+        localStorage.removeItem(USER_REFRESH_TOKEN_KEY)
+        localStorage.removeItem(USER_PROFILE_KEY)
+        ElMessage.warning('用户登录已过期，请重新登录。')
+      }
     } else {
       showApiErrorToast(apiError)
     }

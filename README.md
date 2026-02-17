@@ -40,6 +40,13 @@ $env:SPRING_DATASOURCE_PASSWORD="your_password"
 - SER service: `http://127.0.0.1:8001`
 - Vite proxy: `http://127.0.0.1:5173/api/*` -> `http://127.0.0.1:8080/api/*`
 
+Frontend entry routes:
+
+- User Portal: `http://127.0.0.1:5173/app/home`
+- User login/register: `http://127.0.0.1:5173/app/login`
+- Admin Console login: `http://127.0.0.1:5173/admin/login`
+- Admin Console: `http://127.0.0.1:5173/admin/dashboard`
+
 ## 4. Start
 
 ### 4.1 Start separately
@@ -204,7 +211,7 @@ Error response shape:
 - Cancel session:
   - `DELETE /api/audio/upload-sessions/{uploadId}`
 
-Frontend upload page (`/upload`) already uses chunk mode with realtime progress.
+Frontend upload page (`/app/upload`) already uses chunk mode with realtime progress.
 
 ## 9. DB migration notes
 

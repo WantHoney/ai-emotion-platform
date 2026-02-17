@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { useAuthStore } from '@/stores/auth'
+import { useUserAuthStore } from '@/stores/userAuth'
 import { getReportTrend } from '@/api/report'
 import SectionBlock from '@/components/ui/SectionBlock.vue'
 import KpiGrid from '@/components/ui/KpiGrid.vue'
@@ -10,7 +10,7 @@ import LoadingState from '@/components/states/LoadingState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
-const authStore = useAuthStore()
+const authStore = useUserAuthStore()
 const loading = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
 const trendRows = ref<
@@ -47,7 +47,7 @@ const loadProfileSummary = async () => {
     const trend = await getReportTrend(30)
     trendRows.value = trend.items ?? []
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load profile summary')
+    errorState.value = parseError(error, '个人概览加载失败')
   } finally {
     loading.value = false
   }
@@ -61,9 +61,9 @@ onMounted(() => {
 <template>
   <div class="profile-page user-layout">
     <SectionBlock
-      eyebrow="Account"
-      title="Personal Profile"
-      description="Account identity and 30-day emotional activity snapshot."
+      eyebrow="账户信息"
+      title="个人中心"
+      description="账号身份信息与近 30 天情绪活动快照。"
     >
       <LoadingState v-if="loading" />
       <ErrorState
@@ -76,36 +76,36 @@ onMounted(() => {
       <template v-else>
         <div class="identity-card">
           <div>
-            <p class="label">Username</p>
+            <p class="label">用户名</p>
             <strong>{{ authStore.currentUser?.username || '-' }}</strong>
           </div>
           <div>
-            <p class="label">Role</p>
+            <p class="label">角色</p>
             <strong>{{ authStore.userRole || '-' }}</strong>
           </div>
         </div>
 
         <KpiGrid
           :items="[
-            { label: 'Reports (30D)', value: summary.totalReports },
-            { label: 'Avg Risk Score', value: summary.avgScore },
-            { label: 'High Risk Days', value: summary.highDays },
-            { label: 'Trend Rows', value: trendRows.length },
+            { label: '报告数（30天）', value: summary.totalReports },
+            { label: '平均风险分', value: summary.avgScore },
+            { label: '高风险天数', value: summary.highDays },
+            { label: '趋势记录条数', value: trendRows.length },
           ]"
         />
 
         <EmptyState
           v-if="trendRows.length === 0"
-          title="No trend yet"
-          description="Upload audio and generate reports to build your timeline."
-          action-text="Refresh"
+          title="暂无趋势数据"
+          description="请先上传语音生成报告，再逐步形成趋势。"
+          action-text="刷新"
           @action="loadProfileSummary"
         />
         <el-table v-else :data="trendRows.slice(-7).reverse()" border>
-          <el-table-column prop="date" label="Date" min-width="140" />
-          <el-table-column prop="reportCount" label="Reports" width="100" />
-          <el-table-column prop="avgRiskScore" label="Avg Score" width="120" />
-          <el-table-column prop="highCount" label="High Risk" width="110" />
+          <el-table-column prop="date" label="日期" min-width="140" />
+          <el-table-column prop="reportCount" label="报告数" width="100" />
+          <el-table-column prop="avgRiskScore" label="平均分" width="120" />
+          <el-table-column prop="highCount" label="高风险" width="110" />
         </el-table>
       </template>
     </SectionBlock>

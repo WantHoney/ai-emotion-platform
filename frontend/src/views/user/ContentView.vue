@@ -24,7 +24,7 @@ const loadContent = async () => {
   try {
     content.value = await getHomeContent()
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load content atlas')
+    errorState.value = parseError(error, '内容专栏加载失败')
   } finally {
     loading.value = false
   }
@@ -37,7 +37,7 @@ onMounted(() => {
 
 <template>
   <div class="content-page user-layout">
-    <SectionBlock eyebrow="Atlas" title="Content Archive" description="Curated knowledge cards for emotional self-help and mental awareness.">
+    <SectionBlock eyebrow="内容库" title="内容专栏" description="聚合心理自助与情绪认知相关内容，支持长期学习。">
       <LoadingState v-if="loading" />
       <ErrorState
         v-else-if="errorState"
@@ -48,38 +48,38 @@ onMounted(() => {
       />
       <EmptyState
         v-else-if="!content"
-        title="No content data"
-        description="Please retry later."
-        action-text="Reload"
+        title="暂无内容数据"
+        description="请稍后重试。"
+        action-text="重新加载"
         @action="loadContent"
       />
       <template v-else>
         <div class="columns">
           <div>
-            <h3 class="title">Featured Articles</h3>
+            <h3 class="title">精选文章</h3>
             <div class="grid">
               <LoreCard
                 v-for="item in content.recommendedArticles"
                 :key="`a-${item.id}`"
                 :title="item.title"
-                :subtitle="item.summary || 'Read article detail'"
+                :subtitle="item.summary || '点击阅读文章详情'"
                 interactive
                 @click="openUrl(item.contentUrl)"
               />
             </div>
           </div>
           <div>
-            <h3 class="title">Recommended Books</h3>
+            <h3 class="title">推荐书籍</h3>
             <div class="grid">
               <LoreCard
                 v-for="item in content.recommendedBooks"
                 :key="`b-${item.id}`"
                 :title="item.title"
-                :subtitle="item.author || 'Open detail page'"
+                :subtitle="item.author || '点击查看详情页'"
                 interactive
                 @click="openUrl(item.purchaseUrl)"
               >
-                {{ item.description || 'Book recommendation from content operations.' }}
+                {{ item.description || '来自内容运营的精选书籍推荐。' }}
               </LoreCard>
             </div>
           </div>

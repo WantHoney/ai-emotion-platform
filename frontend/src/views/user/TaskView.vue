@@ -111,16 +111,16 @@ onMounted(() => {
       <el-card shadow="hover">
         <template #header>任务详情</template>
         <el-descriptions border :column="2">
-          <el-descriptions-item label="status">{{ task.status ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="errorMessage">{{ task.errorMessage ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="traceId">{{ task.traceId ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="serLatency">{{ task.serLatencyMs ?? '-' }}ms</el-descriptions-item>
+          <el-descriptions-item label="任务状态">{{ task.status ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="错误信息">{{ task.errorMessage ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="Trace ID">{{ task.traceId ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="SER 延迟">{{ task.serLatencyMs ?? '-' }}ms</el-descriptions-item>
           <el-descriptions-item label="建议" :span="2">{{ task.result?.advice_text ?? '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <div class="actions">
-          <el-button @click="router.push('/tasks')">返回列表</el-button>
-          <el-button type="primary" @click="router.push('/reports')">前往报告中心</el-button>
+          <el-button @click="router.push('/app/tasks')">返回列表</el-button>
+          <el-button type="primary" @click="router.push('/app/reports')">前往报告中心</el-button>
         </div>
       </el-card>
     </template>

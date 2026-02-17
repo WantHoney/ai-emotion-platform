@@ -16,7 +16,7 @@ const expanded = ref(false)
 
 const copyTraceId = async (traceId: string) => {
   await navigator.clipboard.writeText(traceId)
-  ElMessage.success('Trace ID copied')
+  ElMessage.success('Trace ID 已复制')
 }
 </script>
 
@@ -25,16 +25,16 @@ const copyTraceId = async (traceId: string) => {
     <h3>{{ title }}</h3>
 
     <el-button link type="danger" @click="expanded = !expanded">
-      {{ expanded ? 'Hide error detail' : 'Show error detail' }}
+      {{ expanded ? '收起错误详情' : '查看错误详情' }}
     </el-button>
     <el-alert v-if="expanded && detail" :title="detail" type="error" :closable="false" show-icon class="mt-8" />
 
     <div class="trace" v-if="traceId">
       <span>Trace ID: {{ traceId }}</span>
-      <el-button text type="primary" @click="copyTraceId(traceId)">Copy</el-button>
+      <el-button text type="primary" @click="copyTraceId(traceId)">复制</el-button>
     </div>
 
-    <el-button type="danger" plain @click="emit('retry')">Retry</el-button>
+    <el-button type="danger" plain @click="emit('retry')">重试</el-button>
   </div>
 </template>
 

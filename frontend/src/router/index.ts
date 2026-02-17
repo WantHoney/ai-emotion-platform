@@ -1,259 +1,321 @@
-﻿import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { createRouter, createWebHistory } from 'vue-router'
 
-import MainLayout from '@/layouts/MainLayout.vue'
+import AdminLayout from '@/layouts/AdminLayout.vue'
+import UserLayout from '@/layouts/UserLayout.vue'
 import { pinia } from '@/stores'
-import { useAuthStore } from '@/stores/auth'
+import { useAdminAuthStore } from '@/stores/adminAuth'
+import { useUserAuthStore } from '@/stores/userAuth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/login',
-      name: 'login',
-      component: () => import('@/views/LoginView.vue'),
-      meta: { public: true, title: 'Login / Register' },
+      path: '/',
+      redirect: '/app/home',
     },
     {
-      path: '/',
-      component: MainLayout,
-      redirect: '/home',
+      path: '/app/login',
+      name: 'userLogin',
+      component: () => import('@/views/user/UserLoginView.vue'),
+      meta: { publicUser: true, title: '用户登录 / 注册' },
+    },
+    {
+      path: '/app',
+      component: UserLayout,
+      redirect: '/app/home',
       children: [
         {
-          path: '/home',
-          name: 'home',
-          component: () => import('@/views/HomeView.vue'),
+          path: 'home',
+          name: 'userHome',
+          component: () => import('@/views/user/HomeView.vue'),
           meta: {
-            public: true,
-            title: 'Home',
-            description: 'Immersive content portal for emotion analysis and support',
-            breadcrumb: ['Workspace', 'Home'],
+            publicUser: true,
+            title: '首页',
+            description: '沉浸式情绪分析与心理支持门户',
+            breadcrumb: ['用户端', '首页'],
             hidePageHeader: true,
           },
         },
         {
-          path: '/content',
-          name: 'content',
-          component: () => import('@/views/ContentView.vue'),
+          path: 'content',
+          name: 'userContent',
+          component: () => import('@/views/user/ContentView.vue'),
           meta: {
-            public: true,
-            title: 'Content Atlas',
-            description: 'Curated articles, books and quotes',
-            breadcrumb: ['Workspace', 'Content Atlas'],
+            publicUser: true,
+            title: '内容专栏',
+            description: '精选文章、书籍与语录',
+            breadcrumb: ['用户端', '内容专栏'],
             hidePageHeader: true,
           },
         },
         {
-          path: '/upload',
-          name: 'upload',
-          component: () => import('@/views/UploadView.vue'),
+          path: 'about',
+          name: 'userAbout',
+          component: () => import('@/views/user/AboutView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Upload Audio',
-            description: 'Upload audio and create analysis task',
-            breadcrumb: ['Workspace', 'Upload Audio'],
+            publicUser: true,
+            title: '关于',
+            description: '项目背景与架构说明',
+            breadcrumb: ['用户端', '关于'],
+          },
+        },
+        {
+          path: 'upload',
+          name: 'userUpload',
+          component: () => import('@/views/user/UploadView.vue'),
+          meta: {
+            requiresUserAuth: true,
+            title: '语音上传',
+            description: '上传或录制语音并创建分析任务',
+            breadcrumb: ['用户端', '语音上传'],
             hidePageHeader: true,
           },
         },
         {
-          path: '/tasks',
-          name: 'tasks',
-          component: () => import('@/views/TasksView.vue'),
+          path: 'tasks',
+          name: 'userTasks',
+          component: () => import('@/views/user/TasksView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Tasks',
-            description: 'Monitor task status and processing pipeline',
-            breadcrumb: ['Workspace', 'Tasks'],
+            requiresUserAuth: true,
+            title: '任务中心',
+            description: '查看任务状态与处理流程',
+            breadcrumb: ['用户端', '任务中心'],
           },
         },
         {
-          path: '/tasks/:id',
-          name: 'taskDetail',
-          component: () => import('@/views/TaskView.vue'),
+          path: 'tasks/:id',
+          name: 'userTaskDetail',
+          component: () => import('@/views/user/TaskView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Task Detail',
-            description: 'Task result, risk score and suggestion detail',
-            breadcrumb: ['Workspace', 'Tasks', 'Task Detail'],
+            requiresUserAuth: true,
+            title: '任务详情',
+            description: '任务结果、风险分与建议详情',
+            breadcrumb: ['用户端', '任务中心', '任务详情'],
           },
         },
         {
-          path: '/reports',
-          name: 'reports',
-          component: () => import('@/views/ReportsView.vue'),
+          path: 'reports',
+          name: 'userReports',
+          component: () => import('@/views/user/ReportsView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Reports',
-            description: 'Browse and filter emotional analysis reports',
-            breadcrumb: ['Workspace', 'Reports'],
+            requiresUserAuth: true,
+            title: '报告中心',
+            description: '浏览与筛选情绪分析报告',
+            breadcrumb: ['用户端', '报告中心'],
             hidePageHeader: true,
           },
         },
         {
-          path: '/trends',
-          name: 'trends',
-          component: () => import('@/views/TrendsView.vue'),
+          path: 'reports/:id',
+          name: 'userReportDetail',
+          component: () => import('@/views/user/ReportView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Trends',
-            description: 'Timeline and score trend of personal reports',
-            breadcrumb: ['Workspace', 'Trends'],
-          },
-        },
-        {
-          path: '/reports/:id',
-          name: 'reportDetail',
-          component: () => import('@/views/ReportView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Report Detail',
-            description: 'Composed emotion, risk level and recommendations',
-            breadcrumb: ['Workspace', 'Reports', 'Report Detail'],
+            requiresUserAuth: true,
+            title: '报告详情',
+            description: '综合情绪、风险等级与建议',
+            breadcrumb: ['用户端', '报告中心', '报告详情'],
             hidePageHeader: true,
           },
         },
         {
-          path: '/psy-centers',
-          name: 'psyCenters',
-          component: () => import('@/views/PsyCentersView.vue'),
+          path: 'trends',
+          name: 'userTrends',
+          component: () => import('@/views/user/TrendsView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Psy Centers',
-            description: 'Find psychology and support centers',
-            breadcrumb: ['Workspace', 'Psy Centers'],
+            requiresUserAuth: true,
+            title: '趋势分析',
+            description: '个人报告时间轴与评分趋势',
+            breadcrumb: ['用户端', '趋势分析'],
           },
         },
         {
-          path: '/profile',
-          name: 'profile',
-          component: () => import('@/views/ProfileView.vue'),
+          path: 'psy-centers',
+          name: 'userPsyCenters',
+          component: () => import('@/views/user/PsyCentersView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresRole: 'USER',
-            title: 'Profile',
-            description: 'Personal account and activity summary',
-            breadcrumb: ['Workspace', 'Profile'],
+            requiresUserAuth: true,
+            title: '心理中心',
+            description: '查找心理咨询与支持机构',
+            breadcrumb: ['用户端', '心理中心'],
+          },
+        },
+        {
+          path: 'profile',
+          name: 'userProfile',
+          component: () => import('@/views/user/ProfileView.vue'),
+          meta: {
+            requiresUserAuth: true,
+            title: '个人中心',
+            description: '账号信息与活动概览',
+            breadcrumb: ['用户端', '个人中心'],
             hidePageHeader: true,
-          },
-        },
-        {
-          path: '/system',
-          name: 'system',
-          component: () => import('@/views/SystemView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'System Status',
-            description: 'Service health, latency and runtime metrics',
-            breadcrumb: ['Admin', 'System Status'],
-          },
-        },
-        {
-          path: '/admin/models',
-          name: 'adminModels',
-          component: () => import('@/views/AdminModelsView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'Model Governance',
-            description: 'Version registry and model switch management',
-            breadcrumb: ['Admin', 'Model Governance'],
-          },
-        },
-        {
-          path: '/admin/rules',
-          name: 'adminRules',
-          component: () => import('@/views/AdminRulesView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'Warning Rules',
-            description: 'Thresholds and trigger rule management',
-            breadcrumb: ['Admin', 'Warning Rules'],
-          },
-        },
-        {
-          path: '/admin/warnings',
-          name: 'adminWarnings',
-          component: () => import('@/views/AdminWarningsView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'Warning Desk',
-            description: 'Warning event triage and disposal',
-            breadcrumb: ['Admin', 'Warning Desk'],
-          },
-        },
-        {
-          path: '/admin/content',
-          name: 'adminContent',
-          component: () => import('@/views/AdminContentView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'Content Operations',
-            description: 'Manage banners, quotes, articles and books',
-            breadcrumb: ['Admin', 'Content Operations'],
-          },
-        },
-        {
-          path: '/admin/analytics',
-          name: 'adminAnalytics',
-          component: () => import('@/views/AdminAnalyticsView.vue'),
-          meta: {
-            requiresAuth: true,
-            requiresRole: 'ADMIN',
-            title: 'Analytics',
-            description: 'Daily active users, uploads, reports and warnings',
-            breadcrumb: ['Admin', 'Analytics'],
-          },
-        },
-        {
-          path: '/about',
-          name: 'about',
-          component: () => import('@/views/AboutView.vue'),
-          meta: {
-            public: true,
-            title: 'About',
-            description: 'Project context and architecture',
-            breadcrumb: ['Workspace', 'About'],
           },
         },
       ],
+    },
+    {
+      path: '/admin/login',
+      name: 'adminLogin',
+      component: () => import('@/views/admin/AdminLoginView.vue'),
+      meta: { publicAdmin: true, title: '管理员登录' },
+    },
+    {
+      path: '/admin',
+      component: AdminLayout,
+      redirect: '/admin/dashboard',
+      children: [
+        {
+          path: 'dashboard',
+          name: 'adminDashboard',
+          component: () => import('@/views/admin/AdminAnalyticsView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '管理看板',
+            description: '上传、报告、预警与质量统计',
+            breadcrumb: ['管理端', '看板'],
+          },
+        },
+        {
+          path: 'content/banners',
+          name: 'adminBanners',
+          component: () => import('@/views/admin/AdminBannersView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '轮播图管理',
+            description: 'Banner 内容运营 CRUD',
+            breadcrumb: ['管理端', '内容运营', '轮播图管理'],
+          },
+        },
+        {
+          path: 'content/quotes',
+          name: 'adminQuotes',
+          component: () => import('@/views/admin/AdminQuotesView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '语录管理',
+            description: '语录内容 CRUD',
+            breadcrumb: ['管理端', '内容运营', '语录管理'],
+          },
+        },
+        {
+          path: 'content/articles',
+          name: 'adminArticles',
+          component: () => import('@/views/admin/AdminArticlesView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '文章管理',
+            description: '文章内容 CRUD',
+            breadcrumb: ['管理端', '内容运营', '文章管理'],
+          },
+        },
+        {
+          path: 'psy-centers',
+          name: 'adminPsyCenters',
+          component: () => import('@/views/admin/AdminPsyCentersView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '心理中心管理',
+            description: '心理中心资源 CRUD（按 cityCode 管理）',
+            breadcrumb: ['管理端', '资源管理', '心理中心管理'],
+          },
+        },
+        {
+          path: 'warnings',
+          name: 'adminWarnings',
+          component: () => import('@/views/admin/AdminWarningsView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '预警处置台',
+            description: '预警事件列表与处置流转',
+            breadcrumb: ['管理端', '预警处置台'],
+          },
+        },
+        {
+          path: 'settings',
+          name: 'adminSettings',
+          component: () => import('@/views/admin/AdminSettingsView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '系统设置',
+            description: '预警阈值、规则参数与模型信息',
+            breadcrumb: ['管理端', '系统设置'],
+          },
+        },
+        {
+          path: 'models',
+          name: 'adminModels',
+          component: () => import('@/views/admin/AdminModelsView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '模型治理',
+            description: '版本注册与模型切换管理',
+            breadcrumb: ['管理端', '模型治理'],
+          },
+        },
+        {
+          path: 'rules',
+          name: 'adminRules',
+          component: () => import('@/views/admin/AdminRulesView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '预警规则',
+            description: '阈值与触发规则管理',
+            breadcrumb: ['管理端', '预警规则'],
+          },
+        },
+        {
+          path: 'system',
+          name: 'adminSystem',
+          component: () => import('@/views/admin/SystemView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '系统状态',
+            description: '服务健康、延迟与运行指标',
+            breadcrumb: ['管理端', '系统状态'],
+          },
+        },
+      ],
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/app/home',
     },
   ],
 })
 
 router.beforeEach((to) => {
-  const authStore = useAuthStore(pinia)
-  const defaultPath = authStore.userRole === 'ADMIN' ? '/admin/analytics' : '/home'
+  const userAuthStore = useUserAuthStore(pinia)
+  const adminAuthStore = useAdminAuthStore(pinia)
 
-  if (to.meta.public) {
-    if (to.name === 'login' && authStore.isAuthenticated) {
-      return defaultPath
+  if (to.meta.publicUser) {
+    if (to.name === 'userLogin' && userAuthStore.isAuthenticated) {
+      return '/app/home'
     }
     return true
   }
 
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    ElMessage.warning('Please login first.')
+  if (to.meta.publicAdmin) {
+    if (to.name === 'adminLogin' && adminAuthStore.isAuthenticated) {
+      return '/admin/dashboard'
+    }
+    return true
+  }
+
+  if (to.meta.requiresUserAuth && !userAuthStore.isAuthenticated) {
+    ElMessage.warning('请先登录用户账号。')
     return {
-      path: '/login',
+      path: '/app/login',
       query: { redirect: to.fullPath },
     }
   }
 
-  const requiredRole = to.meta.requiresRole
-  if (requiredRole && authStore.userRole !== requiredRole) {
-    ElMessage.error('Current account has no permission to access this page.')
-    return defaultPath
+  if (to.meta.requiresAdminAuth && !adminAuthStore.isAuthenticated) {
+    ElMessage.warning('请先登录管理员账号。')
+    return {
+      path: '/admin/login',
+      query: { redirect: to.fullPath },
+    }
   }
 
   return true

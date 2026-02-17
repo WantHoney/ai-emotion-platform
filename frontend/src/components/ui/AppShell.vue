@@ -25,7 +25,13 @@ const activeGroup = computed(() => {
   const found = props.navItems.find(
     (item) => props.activePath === item.path || props.activePath.startsWith(`${item.path}/`),
   )
-  return found?.path ?? '/home'
+  return found?.path ?? '/app/home'
+})
+
+const roleText = computed(() => {
+  if (props.role === 'ADMIN') return '管理员'
+  if (props.role === 'USER') return '用户'
+  return props.role ?? ''
 })
 </script>
 
@@ -33,9 +39,9 @@ const activeGroup = computed(() => {
   <div class="app-shell">
     <div class="shell-bg"></div>
     <header class="shell-header">
-      <button class="brand" @click="emit('navigate', '/home')">
+      <button class="brand" @click="emit('navigate', '/app/home')">
         <span class="brand-dot"></span>
-        <span class="brand-text">Emotion Atlas</span>
+        <span class="brand-text">情绪档案库</span>
       </button>
 
       <nav class="shell-nav">
@@ -56,16 +62,16 @@ const activeGroup = computed(() => {
             <button class="user-pill">
               <el-icon><UserFilled /></el-icon>
               <span>{{ username }}</span>
-              <span class="role-tag">{{ role }}</span>
+              <span class="role-tag">{{ roleText }}</span>
             </button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="emit('logout')">Logout</el-dropdown-item>
+                <el-dropdown-item @click="emit('logout')">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </template>
-        <button v-else class="auth-button" @click="emit('login')">Login</button>
+        <button v-else class="auth-button" @click="emit('login')">登录</button>
       </div>
     </header>
 
@@ -73,7 +79,7 @@ const activeGroup = computed(() => {
       <slot />
     </main>
 
-    <footer class="shell-footer">AI Voice Emotion Analysis and Mental Risk Warning Platform</footer>
+    <footer class="shell-footer">AI 语音情绪分析与心理状态预警平台</footer>
   </div>
 </template>
 

@@ -29,7 +29,7 @@ const searchCenters = async () => {
         ? await getPsyCentersByCity(cityCode.value)
         : await getNearbyPsyCenters(Number(latitude.value), Number(longitude.value), radiusKm.value)
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load psychology centers')
+    errorState.value = parseError(error, '心理中心数据加载失败')
   } finally {
     loading.value = false
   }
@@ -37,7 +37,7 @@ const searchCenters = async () => {
 
 const locateAndSearch = () => {
   if (!navigator.geolocation) {
-    ElMessage.warning('Current browser does not support geolocation')
+    ElMessage.warning('当前浏览器不支持定位')
     return
   }
   mode.value = 'nearby'
@@ -50,7 +50,7 @@ const locateAndSearch = () => {
     },
     () => {
       loading.value = false
-      ElMessage.warning('Unable to fetch location, please input coordinates manually')
+      ElMessage.warning('定位失败，请手动输入坐标')
     },
     { enableHighAccuracy: true, timeout: 6000 },
   )
@@ -62,20 +62,20 @@ void searchCenters()
 <template>
   <div class="centers-page user-layout">
     <SectionBlock
-      eyebrow="Resource Network"
-      title="Psychological Support Centers"
-      description="Search support institutions by city code or nearby coordinates. This page remains stable even if API fails."
+      eyebrow="资源网络"
+      title="心理支持中心"
+      description="支持按城市编码或附近坐标查询；即使 API 异常页面也不会白屏。"
     >
       <div class="toolbar">
         <el-radio-group v-model="mode">
-          <el-radio-button value="city">By City</el-radio-button>
-          <el-radio-button value="nearby">By Nearby</el-radio-button>
+          <el-radio-button value="city">按城市</el-radio-button>
+          <el-radio-button value="nearby">按附近</el-radio-button>
         </el-radio-group>
 
         <el-input
           v-if="mode === 'city'"
           v-model="cityCode"
-          placeholder="City code, e.g. 310100"
+          placeholder="城市编码，例如 310100"
           style="max-width: 220px"
         />
 
@@ -85,8 +85,8 @@ void searchCenters()
           <el-input-number v-model="radiusKm" :min="1" :max="100" controls-position="right" />
         </template>
 
-        <el-button type="primary" @click="searchCenters">Search</el-button>
-        <el-button @click="locateAndSearch">Locate Me</el-button>
+        <el-button type="primary" @click="searchCenters">查询</el-button>
+        <el-button @click="locateAndSearch">定位我</el-button>
       </div>
 
       <LoadingState v-if="loading" />
@@ -99,9 +99,9 @@ void searchCenters()
       />
       <EmptyState
         v-else-if="centers.length === 0"
-        title="No center data"
-        description="No institution found under current filter. Try another city or radius."
-        action-text="Retry"
+        title="暂无心理中心数据"
+        description="当前筛选条件下未找到机构，请尝试其他城市或半径。"
+        action-text="重试"
         @action="searchCenters"
       />
       <template v-else>
@@ -110,12 +110,12 @@ void searchCenters()
             v-for="center in centers"
             :key="`${center.id}-${center.name}`"
             :title="center.name"
-            :subtitle="`${center.cityName || ''} ${center.district || ''}`.trim() || 'Unknown district'"
+            :subtitle="`${center.cityName || ''} ${center.district || ''}`.trim() || '地区未知'"
           >
-            <p class="line"><strong>Address:</strong> {{ center.address || 'N/A' }}</p>
-            <p class="line"><strong>Phone:</strong> {{ center.phone || 'N/A' }}</p>
+            <p class="line"><strong>地址：</strong> {{ center.address || '暂无' }}</p>
+            <p class="line"><strong>电话：</strong> {{ center.phone || '暂无' }}</p>
             <p class="line">
-              <strong>Coordinate:</strong>
+              <strong>坐标：</strong>
               {{ center.latitude ?? '-' }}, {{ center.longitude ?? '-' }}
             </p>
           </LoreCard>

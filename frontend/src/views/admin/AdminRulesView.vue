@@ -75,7 +75,7 @@ const loadRules = async () => {
   try {
     rows.value = await getWarningRules()
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load warning rules')
+    errorState.value = parseError(error, '预警规则加载失败')
   } finally {
     loading.value = false
   }
@@ -111,15 +111,15 @@ const openEdit = (row: WarningRuleItem) => {
 
 const saveRule = async () => {
   if (!form.ruleName || (editMode.value === 'create' && !form.ruleCode)) {
-    ElMessage.warning('ruleCode/ruleName are required')
+    ElMessage.warning('ruleCode/ruleName 为必填项')
     return
   }
   if (!(form.lowThreshold <= form.mediumThreshold && form.mediumThreshold <= form.highThreshold)) {
-    ElMessage.warning('Thresholds must satisfy low <= medium <= high')
+    ElMessage.warning('阈值需满足 low <= medium <= high')
     return
   }
   if (!(form.slaLowMinutes > 0 && form.slaMediumMinutes > 0 && form.slaHighMinutes > 0)) {
-    ElMessage.warning('SLA minutes must be positive')
+    ElMessage.warning('SLA 分钟值必须为正数')
     return
   }
 
@@ -127,7 +127,7 @@ const saveRule = async () => {
   try {
     emotionCombo = safeParseJson(form.emotionComboText)
   } catch {
-    ElMessage.warning('emotionCombo must be valid JSON')
+    ElMessage.warning('emotionCombo 必须是合法 JSON')
     return
   }
 
@@ -150,7 +150,7 @@ const saveRule = async () => {
         slaMediumMinutes: form.slaMediumMinutes,
         slaHighMinutes: form.slaHighMinutes,
       })
-      ElMessage.success('Warning rule created')
+      ElMessage.success('预警规则创建成功')
     } else if (currentRuleId.value != null) {
       await updateWarningRule(currentRuleId.value, {
         ruleName: form.ruleName,
@@ -168,13 +168,13 @@ const saveRule = async () => {
         slaMediumMinutes: form.slaMediumMinutes,
         slaHighMinutes: form.slaHighMinutes,
       })
-      ElMessage.success('Warning rule updated')
+      ElMessage.success('预警规则更新成功')
     }
 
     dialogVisible.value = false
     await loadRules()
   } catch (error) {
-    const parsed = parseError(error, 'Failed to save warning rule')
+    const parsed = parseError(error, '保存预警规则失败')
     ElMessage.error(parsed.detail)
   }
 }
@@ -182,10 +182,10 @@ const saveRule = async () => {
 const toggleRule = async (row: WarningRuleItem, enabled: boolean) => {
   try {
     await toggleWarningRule(row.id, enabled)
-    ElMessage.success(enabled ? 'Rule enabled' : 'Rule disabled')
+    ElMessage.success(enabled ? '规则已启用' : '规则已停用')
     await loadRules()
   } catch (error) {
-    const parsed = parseError(error, 'Failed to toggle warning rule')
+    const parsed = parseError(error, '切换规则状态失败')
     ElMessage.error(parsed.detail)
   }
 }
@@ -199,10 +199,10 @@ onMounted(async () => {
   <el-card>
     <template #header>
       <div class="header-row">
-        <span>Warning Rule Management</span>
+        <span>预警规则管理</span>
         <div class="header-actions">
-          <el-button @click="loadRules">Refresh</el-button>
-          <el-button type="primary" @click="openCreate">Create Rule</el-button>
+          <el-button @click="loadRules">刷新</el-button>
+          <el-button type="primary" @click="openCreate">新增规则</el-button>
         </div>
       </div>
     </template>
@@ -217,102 +217,102 @@ onMounted(async () => {
     />
     <EmptyState
       v-else-if="rows.length === 0"
-      title="No warning rules"
-      description="Create at least one rule so warning events can be generated."
-      action-text="Reload"
+      title="暂无预警规则"
+      description="请至少创建一条规则，系统才能生成预警事件。"
+      action-text="重新加载"
       @action="loadRules"
     />
     <el-table v-else :data="rows" border>
       <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="rule_code" label="Rule Code" min-width="150" />
-      <el-table-column prop="rule_name" label="Rule Name" min-width="170" />
-      <el-table-column prop="priority" label="Priority" width="90" />
-      <el-table-column label="Thresholds" min-width="200">
+      <el-table-column prop="rule_code" label="规则编码" min-width="150" />
+      <el-table-column prop="rule_name" label="规则名称" min-width="170" />
+      <el-table-column prop="priority" label="优先级" width="90" />
+      <el-table-column label="阈值" min-width="200">
         <template #default="scope">
           low={{ scope.row.low_threshold }}, medium={{ scope.row.medium_threshold }}, high={{ scope.row.high_threshold }}
         </template>
       </el-table-column>
-      <el-table-column label="SLA(min)" min-width="180">
+      <el-table-column label="SLA(分钟)" min-width="180">
         <template #default="scope">
           L={{ scope.row.sla_low_minutes ?? 1440 }}, M={{ scope.row.sla_medium_minutes ?? 720 }},
           H={{ scope.row.sla_high_minutes ?? 240 }}
         </template>
       </el-table-column>
-      <el-table-column prop="trend_window_days" label="Window(D)" width="100" />
-      <el-table-column prop="trigger_count" label="Trigger N" width="90" />
-      <el-table-column label="Enabled" width="90">
+      <el-table-column prop="trend_window_days" label="窗口天数" width="100" />
+      <el-table-column prop="trigger_count" label="触发次数" width="90" />
+      <el-table-column label="启用" width="90">
         <template #default="scope">
           <el-tag :type="scope.row.enabled === true || scope.row.enabled === 1 ? 'success' : 'info'">
-            {{ scope.row.enabled === true || scope.row.enabled === 1 ? 'Yes' : 'No' }}
+            {{ scope.row.enabled === true || scope.row.enabled === 1 ? '是' : '否' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Action" width="220">
+      <el-table-column label="操作" width="220">
         <template #default="scope">
-          <el-button type="primary" link @click="openEdit(scope.row)">Edit</el-button>
+          <el-button type="primary" link @click="openEdit(scope.row)">编辑</el-button>
           <el-button
             type="warning"
             link
             v-if="scope.row.enabled === true || scope.row.enabled === 1"
             @click="toggleRule(scope.row, false)"
           >
-            Disable
+            停用
           </el-button>
-          <el-button type="success" link v-else @click="toggleRule(scope.row, true)">Enable</el-button>
+          <el-button type="success" link v-else @click="toggleRule(scope.row, true)">启用</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <el-dialog
       v-model="dialogVisible"
-      :title="editMode === 'create' ? 'Create Warning Rule' : 'Edit Warning Rule'"
+      :title="editMode === 'create' ? '新增预警规则' : '编辑预警规则'"
       width="760"
     >
       <el-form label-width="160px">
-        <el-form-item label="Rule Code">
+        <el-form-item label="规则编码">
           <el-input v-model="form.ruleCode" :disabled="editMode === 'edit'" />
         </el-form-item>
-        <el-form-item label="Rule Name"><el-input v-model="form.ruleName" /></el-form-item>
-        <el-form-item label="Description"><el-input v-model="form.description" type="textarea" /></el-form-item>
-        <el-form-item label="Enabled"><el-switch v-model="form.enabled" /></el-form-item>
-        <el-form-item label="Priority">
+        <el-form-item label="规则名称"><el-input v-model="form.ruleName" /></el-form-item>
+        <el-form-item label="规则描述"><el-input v-model="form.description" type="textarea" /></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
+        <el-form-item label="优先级">
           <el-input-number v-model="form.priority" :min="1" :max="1000" />
         </el-form-item>
-        <el-form-item label="Low Threshold">
+        <el-form-item label="低风险阈值">
           <el-input-number v-model="form.lowThreshold" :min="0" :max="100" :step="1" />
         </el-form-item>
-        <el-form-item label="Medium Threshold">
+        <el-form-item label="中风险阈值">
           <el-input-number v-model="form.mediumThreshold" :min="0" :max="100" :step="1" />
         </el-form-item>
-        <el-form-item label="High Threshold">
+        <el-form-item label="高风险阈值">
           <el-input-number v-model="form.highThreshold" :min="0" :max="100" :step="1" />
         </el-form-item>
-        <el-form-item label="Emotion Combo JSON">
+        <el-form-item label="情绪组合 JSON">
           <el-input v-model="form.emotionComboText" type="textarea" :rows="4" />
         </el-form-item>
-        <el-form-item label="Trend Window Days">
+        <el-form-item label="趋势窗口（天）">
           <el-input-number v-model="form.trendWindowDays" :min="1" :max="180" />
         </el-form-item>
-        <el-form-item label="Trigger Count">
+        <el-form-item label="触发次数">
           <el-input-number v-model="form.triggerCount" :min="1" :max="100" />
         </el-form-item>
-        <el-form-item label="SLA Low Minutes">
+        <el-form-item label="低风险 SLA（分钟）">
           <el-input-number v-model="form.slaLowMinutes" :min="1" :max="20160" />
         </el-form-item>
-        <el-form-item label="SLA Medium Minutes">
+        <el-form-item label="中风险 SLA（分钟）">
           <el-input-number v-model="form.slaMediumMinutes" :min="1" :max="20160" />
         </el-form-item>
-        <el-form-item label="SLA High Minutes">
+        <el-form-item label="高风险 SLA（分钟）">
           <el-input-number v-model="form.slaHighMinutes" :min="1" :max="20160" />
         </el-form-item>
-        <el-form-item label="Template Code">
+        <el-form-item label="建议模板编码">
           <el-input v-model="form.suggestTemplateCode" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="saveRule">Save</el-button>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveRule">保存</el-button>
       </template>
     </el-dialog>
   </el-card>

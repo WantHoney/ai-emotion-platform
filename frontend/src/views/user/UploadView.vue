@@ -22,7 +22,7 @@ const router = useRouter()
 const uploading = ref(false)
 const hasUploaded = ref(false)
 const uploadPercent = ref(0)
-const uploadHint = ref('Waiting for upload')
+const uploadHint = ref('等待上传')
 const currentUploadId = ref<string | null>(null)
 const errorState = ref<ErrorStatePayload | null>(null)
 
@@ -79,7 +79,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   const isAudioType = type.startsWith('audio/')
   const isAudioName = /\.(wav|mp3|m4a|ogg|webm|aac|flac)$/i.test(name)
   if (!isAudioType && !isAudioName) {
-    ElMessage.warning('Only audio files are supported')
+    ElMessage.warning('仅支持音频文件')
     return false
   }
   return true
@@ -88,7 +88,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 const uploadInChunks = async (file: File) => {
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
 
-  uploadHint.value = 'Initializing upload session'
+  uploadHint.value = '正在初始化上传会话'
   const init = await initUploadSession({
     fileName: file.name,
     contentType: file.type,
@@ -104,7 +104,7 @@ const uploadInChunks = async (file: File) => {
     const end = Math.min(file.size, start + CHUNK_SIZE)
     const chunk = file.slice(start, end)
 
-    uploadHint.value = `Uploading chunk ${chunkIndex + 1}/${totalChunks}`
+    uploadHint.value = `正在上传分片 ${chunkIndex + 1}/${totalChunks}`
 
     await uploadSessionChunk({
       uploadId: init.uploadId,
@@ -118,10 +118,10 @@ const uploadInChunks = async (file: File) => {
     })
   }
 
-  uploadHint.value = 'Merging chunks and creating task'
+  uploadHint.value = '正在合并分片并创建任务'
   const complete = await completeUploadSession(init.uploadId, true)
   uploadPercent.value = 100
-  uploadHint.value = 'Upload completed'
+  uploadHint.value = '上传完成'
   currentUploadId.value = null
   return complete
 }
@@ -137,14 +137,14 @@ const submitFile = async (file: File) => {
     hasUploaded.value = true
 
     if (result.taskId) {
-      ElMessage.success('Upload completed and analysis task started')
-      await router.push(`/tasks/${result.taskId}`)
+      ElMessage.success('上传完成，分析任务已启动')
+      await router.push(`/app/tasks/${result.taskId}`)
       return
     }
 
-    ElMessage.success('Upload completed')
+    ElMessage.success('上传完成')
   } catch (error) {
-    errorState.value = parseError(error, 'Chunk upload failed')
+    errorState.value = parseError(error, '分片上传失败')
   } finally {
     uploading.value = false
   }
@@ -159,7 +159,7 @@ const startRecording = async () => {
     return
   }
   if (!recorderSupported.value) {
-    recordingError.value = 'Current browser does not support in-browser recording'
+    recordingError.value = '当前浏览器不支持网页录音'
     return
   }
 
@@ -186,20 +186,20 @@ const startRecording = async () => {
         type: mediaRecorder?.mimeType || recorderMimeType.value,
       })
       recordedFile.value = buildRecordFile(blob)
-      uploadHint.value = 'Recording finished, ready to upload'
+      uploadHint.value = '录音完成，可上传'
       releaseRecorderResources()
     }
 
     mediaRecorder.start(1000)
     isRecording.value = true
     recordingSeconds.value = 0
-    uploadHint.value = 'Recording in progress'
+    uploadHint.value = '录音中'
 
     timerHandle = window.setInterval(() => {
       recordingSeconds.value += 1
     }, 1000)
   } catch (error) {
-    recordingError.value = parseError(error, 'Failed to start recording').detail
+    recordingError.value = parseError(error, '启动录音失败').detail
     releaseRecorderResources()
   }
 }
@@ -213,7 +213,7 @@ const stopRecording = () => {
 
 const uploadRecorded = async () => {
   if (!recordedFile.value) {
-    ElMessage.warning('No recorded audio found')
+    ElMessage.warning('未检测到可上传的录音文件')
     return
   }
   await submitFile(recordedFile.value)
@@ -226,10 +226,10 @@ const cancelCurrentUpload = async () => {
   try {
     await cancelUploadSession(currentUploadId.value)
     currentUploadId.value = null
-    uploadHint.value = 'Upload canceled'
-    ElMessage.warning('Upload canceled')
+    uploadHint.value = '上传已取消'
+    ElMessage.warning('上传已取消')
   } catch (error) {
-    const parsed = parseError(error, 'Cancel upload failed')
+    const parsed = parseError(error, '取消上传失败')
     ElMessage.error(parsed.detail)
   }
 }
@@ -242,9 +242,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="upload-page user-layout">
     <SectionBlock
-      eyebrow="Acquisition"
-      title="Voice Upload Studio"
-      description="Record in-browser or upload local audio. Large files are uploaded in chunks with session progress."
+      eyebrow="语音采集"
+      title="语音上传工作台"
+      description="支持网页录音或本地音频上传，大文件走分片会话并显示实时进度。"
     >
       <ErrorState
         v-if="errorState"
@@ -255,10 +255,10 @@ onBeforeUnmount(() => {
       />
       <template v-else>
         <div class="layout-grid">
-          <LoreCard title="Realtime Recording" subtitle="Capture voice directly from browser microphone.">
+          <LoreCard title="实时录音" subtitle="直接调用浏览器麦克风进行采集。">
             <el-alert
               v-if="!recorderSupported"
-              title="Current browser does not support MediaRecorder. Use file upload mode."
+              title="当前浏览器不支持 MediaRecorder，请改用文件上传模式。"
               type="warning"
               :closable="false"
               show-icon
@@ -275,7 +275,7 @@ onBeforeUnmount(() => {
 
             <div class="recording-row">
               <el-tag :type="isRecording ? 'danger' : 'info'">
-                {{ isRecording ? `Recording ${recordingSeconds}s` : 'Not recording' }}
+                {{ isRecording ? `录音中 ${recordingSeconds}s` : '未开始录音' }}
               </el-tag>
               <div class="recording-actions">
                 <el-button
@@ -283,20 +283,20 @@ onBeforeUnmount(() => {
                   :disabled="!recorderSupported || isRecording || uploading"
                   @click="startRecording"
                 >
-                  Start
+                  开始
                 </el-button>
-                <el-button type="warning" :disabled="!isRecording" @click="stopRecording">Stop</el-button>
+                <el-button type="warning" :disabled="!isRecording" @click="stopRecording">停止</el-button>
                 <el-button type="primary" :disabled="!recordedFile || uploading" @click="uploadRecorded">
-                  Upload Record
+                  上传录音
                 </el-button>
               </div>
             </div>
             <p v-if="recordedFile" class="recording-file">
-              Ready: {{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})
+              已就绪：{{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})
             </p>
           </LoreCard>
 
-          <LoreCard title="File Upload" subtitle="Drag and drop audio files (mp3/wav/m4a/webm).">
+          <LoreCard title="文件上传" subtitle="拖拽或选择音频文件（mp3/wav/m4a/webm）。">
             <LoadingState v-if="uploading && uploadPercent < 5" />
             <el-upload
               drag
@@ -307,32 +307,32 @@ onBeforeUnmount(() => {
               :disabled="uploading"
               :limit="1"
             >
-              <div class="el-upload__text">Drop audio file here, or <em>click to upload</em></div>
+              <div class="el-upload__text">将音频文件拖拽到这里，或 <em>点击上传</em></div>
               <template #tip>
-                <div class="el-upload__tip">Chunk upload with real-time progress and cancel support.</div>
+                <div class="el-upload__tip">支持分片上传、实时进度与上传取消。</div>
               </template>
             </el-upload>
           </LoreCard>
         </div>
 
-        <LoreCard title="Upload Session Progress">
+        <LoreCard title="上传会话进度">
           <el-progress :percentage="uploadPercent" :stroke-width="14" />
           <p class="hint">{{ uploadHint }}</p>
           <el-button v-if="currentUploadId" type="danger" text @click="cancelCurrentUpload">
-            Cancel Current Upload
+            取消当前上传
           </el-button>
         </LoreCard>
 
         <EmptyState
           v-if="!hasUploaded"
-          title="No upload yet"
-          description="Record or select an audio file to start chunk upload and analysis workflow."
-          action-text="Refresh"
+          title="尚未上传语音"
+          description="请先录音或选择音频文件，启动分片上传与分析流程。"
+          action-text="刷新"
           @action="$router.go(0)"
         />
 
         <div class="actions">
-          <el-button @click="$router.back()">Back</el-button>
+          <el-button @click="$router.back()">返回</el-button>
         </div>
       </template>
     </SectionBlock>

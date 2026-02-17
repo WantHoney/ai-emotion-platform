@@ -13,6 +13,14 @@ interface UseTaskPollingOptions {
 }
 
 const FINAL_STATES = ['SUCCESS', 'FAILED', 'CANCELED'] as const
+const STATUS_TEXT_MAP: Record<string, string> = {
+  PENDING: '待处理',
+  RUNNING: '处理中',
+  RETRY_WAIT: '重试等待',
+  SUCCESS: '处理成功',
+  FAILED: '处理失败',
+  CANCELED: '已取消',
+}
 
 const classifyPollingError = (error: ApiError) => {
   switch (error.code) {
@@ -137,7 +145,9 @@ export const useTaskPolling = (taskIdRef: Ref<number>, options: UseTaskPollingOp
 
   const statusText = computed(() => {
     if (!task.value) return '等待任务启动'
-    return task.value.status
+    const code = task.value.status || '-'
+    const localized = STATUS_TEXT_MAP[code] ?? '处理中'
+    return `${localized} (${code})`
   })
 
   return {

@@ -96,7 +96,7 @@ void loadTasks()
         <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
         <el-table-column label="操作" width="120">
           <template #default="scope">
-            <el-button link type="primary" @click="router.push(`/tasks/${scope.row.id}`)">详情</el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>

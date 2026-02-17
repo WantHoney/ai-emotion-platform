@@ -41,7 +41,7 @@ const loadReports = async () => {
     rows.value = data.items ?? []
     total.value = Number(data.total ?? 0)
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load reports')
+    errorState.value = parseError(error, '报告列表加载失败')
   } finally {
     loading.value = false
   }
@@ -53,19 +53,19 @@ void loadReports()
 <template>
   <div class="reports-page user-layout">
     <SectionBlock
-      eyebrow="Archive"
-      title="Report Atlas"
-      description="Browse historical records with filters instead of dense tables."
+      eyebrow="历史归档"
+      title="报告中心"
+      description="按条件筛选历史报告，避免信息拥挤。"
     >
       <div class="filters">
-        <el-input v-model="query.keyword" placeholder="Search by report/task id" clearable />
-        <el-input v-model="query.emotion" placeholder="Emotion e.g. SAD" clearable />
-        <el-select v-model="query.riskLevel" clearable placeholder="Risk" style="width: 140px">
-          <el-option label="low" value="low" />
-          <el-option label="medium" value="medium" />
-          <el-option label="high" value="high" />
+        <el-input v-model="query.keyword" placeholder="按报告ID/任务ID搜索" clearable />
+        <el-input v-model="query.emotion" placeholder="按情绪筛选，例如 SAD" clearable />
+        <el-select v-model="query.riskLevel" clearable placeholder="风险等级" style="width: 140px">
+          <el-option label="低风险" value="low" />
+          <el-option label="中风险" value="medium" />
+          <el-option label="高风险" value="high" />
         </el-select>
-        <el-button type="primary" @click="loadReports">Apply</el-button>
+        <el-button type="primary" @click="loadReports">查询</el-button>
       </div>
 
       <LoadingState v-if="loading" />
@@ -78,9 +78,9 @@ void loadReports()
       />
       <EmptyState
         v-else-if="rows.length === 0"
-        title="No reports found"
-        description="Try adjusting filters or upload more audio samples."
-        action-text="Reload"
+        title="暂无报告"
+        description="请调整筛选条件，或先上传语音生成报告。"
+        action-text="重新加载"
         @action="loadReports"
       />
       <template v-else>
@@ -88,18 +88,18 @@ void loadReports()
           <LoreCard
             v-for="item in rows"
             :key="item.id"
-            :title="`Report #${item.id}`"
-            :subtitle="`Task #${item.taskId}`"
+            :title="`报告 #${item.id}`"
+            :subtitle="`任务 #${item.taskId}`"
             interactive
-            @click="router.push(`/reports/${item.id}`)"
+            @click="router.push(`/app/reports/${item.id}`)"
           >
             <div class="card-meta">
-              <BadgeTag :tone="toTone(item.riskLevel)" :text="item.riskLevel || 'Unknown risk'" />
-              <span>{{ item.overall || 'Unknown emotion' }}</span>
+              <BadgeTag :tone="toTone(item.riskLevel)" :text="item.riskLevel || '风险未知'" />
+              <span>{{ item.overall || '情绪未知' }}</span>
             </div>
-            <p class="created-at">{{ item.createdAt || 'Unknown time' }}</p>
+            <p class="created-at">{{ item.createdAt || '时间未知' }}</p>
             <template #footer>
-              <el-button type="primary" text @click.stop="router.push(`/reports/${item.id}`)">Open Detail</el-button>
+              <el-button type="primary" text @click.stop="router.push(`/app/reports/${item.id}`)">查看详情</el-button>
             </template>
           </LoreCard>
         </div>

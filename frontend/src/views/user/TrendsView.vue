@@ -76,7 +76,7 @@ const loadTrend = async () => {
     const data = await getReportTrend(days.value)
     rows.value = Array.isArray(data.items) ? data.items : []
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load report trends')
+    errorState.value = parseError(error, '趋势数据加载失败')
   } finally {
     loading.value = false
   }
@@ -90,17 +90,17 @@ onMounted(() => {
 <template>
   <div class="trend-page user-layout">
     <SectionBlock
-      eyebrow="Timeline"
-      title="Personal Mood Trend"
-      description="View report frequency and risk score trajectory over selected time windows."
+      eyebrow="时间趋势"
+      title="个人情绪趋势"
+      description="按时间窗口查看报告数量与风险分走势。"
     >
       <div class="toolbar">
         <el-select v-model="days" style="width: 146px">
-          <el-option :value="7" label="Last 7 days" />
-          <el-option :value="30" label="Last 30 days" />
-          <el-option :value="90" label="Last 90 days" />
+          <el-option :value="7" label="近 7 天" />
+          <el-option :value="30" label="近 30 天" />
+          <el-option :value="90" label="近 90 天" />
         </el-select>
-        <el-button type="primary" @click="loadTrend">Refresh</el-button>
+        <el-button type="primary" @click="loadTrend">刷新</el-button>
       </div>
 
       <LoadingState v-if="loading" />
@@ -113,19 +113,19 @@ onMounted(() => {
       />
       <EmptyState
         v-else-if="rows.length === 0"
-        title="No trend data"
-        description="Upload and analyze audio first, then your trend will be shown here."
-        action-text="Reload"
+        title="暂无趋势数据"
+        description="请先上传并完成语音分析，随后即可查看趋势。"
+        action-text="重新加载"
         @action="loadTrend"
       />
       <template v-else>
         <div class="summary-grid">
-          <LoreCard title="Total Reports" :subtitle="`Within ${days} days`">{{ totalReports }}</LoreCard>
-          <LoreCard title="Average Risk Score" subtitle="0-100 normalized">{{ avgRisk }}</LoreCard>
-          <LoreCard title="Days with High Risk" subtitle="At least one HIGH report">{{ highRiskDays }}</LoreCard>
+          <LoreCard title="报告总数" :subtitle="`统计周期：近 ${days} 天`">{{ totalReports }}</LoreCard>
+          <LoreCard title="平均风险分" subtitle="0-100 标准化">{{ avgRisk }}</LoreCard>
+          <LoreCard title="高风险天数" subtitle="当天至少有 1 条高风险（HIGH）报告">{{ highRiskDays }}</LoreCard>
         </div>
 
-        <LoreCard title="Risk Line and Report Volume" subtitle="Line = avg risk score, bars = report count">
+        <LoreCard title="风险曲线与报告数量" subtitle="折线=平均风险分，柱状=报告数">
           <div class="chart-wrap">
             <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none" class="chart">
               <line
@@ -165,12 +165,12 @@ onMounted(() => {
         </LoreCard>
 
         <el-table :data="rows" border size="small">
-          <el-table-column prop="date" label="Date" min-width="140" />
-          <el-table-column prop="reportCount" label="Reports" width="110" />
-          <el-table-column prop="avgRiskScore" label="Avg Risk Score" width="140" />
-          <el-table-column prop="lowCount" label="Low" width="90" />
-          <el-table-column prop="mediumCount" label="Medium" width="90" />
-          <el-table-column prop="highCount" label="High" width="90" />
+          <el-table-column prop="date" label="日期" min-width="140" />
+          <el-table-column prop="reportCount" label="报告数" width="110" />
+          <el-table-column prop="avgRiskScore" label="平均风险分" width="140" />
+          <el-table-column prop="lowCount" label="低风险" width="90" />
+          <el-table-column prop="mediumCount" label="中风险" width="90" />
+          <el-table-column prop="highCount" label="高风险" width="90" />
         </el-table>
       </template>
     </SectionBlock>

@@ -31,11 +31,21 @@ import {
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 type CmsRow = CmsBanner | CmsQuote | CmsArticle | CmsBook
+const props = withDefaults(
+  defineProps<{
+    fixedTab?: CmsContentType
+    title?: string
+  }>(),
+  {
+    fixedTab: undefined,
+    title: '内容运营管理',
+  },
+)
 
 const loading = ref(false)
 const saving = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
-const activeTab = ref<CmsContentType>('banner')
+const activeTab = ref<CmsContentType>(props.fixedTab ?? 'banner')
 
 const banners = ref<CmsBanner[]>([])
 const quotes = ref<CmsQuote[]>([])
@@ -82,7 +92,7 @@ const currentRows = computed<CmsRow[]>(() => {
 const dialogTitle = computed(() => {
   const action = dialogMode.value === 'create' ? '新增' : '编辑'
   const nameMap: Record<CmsContentType, string> = {
-    banner: 'Banner',
+    banner: '轮播图',
     quote: '语录',
     article: '文章',
     book: '书籍',
@@ -281,11 +291,15 @@ const removeContent = async (row: CmsRow) => {
 }
 
 const onTabChange = async (name: string | number) => {
+  if (props.fixedTab) return
   activeTab.value = name as CmsContentType
   await loadTabData(activeTab.value)
 }
 
 onMounted(async () => {
+  if (props.fixedTab) {
+    activeTab.value = props.fixedTab
+  }
   await loadTabData(activeTab.value)
 })
 </script>
@@ -294,7 +308,7 @@ onMounted(async () => {
   <el-card shadow="hover">
     <template #header>
       <div class="header-row">
-        <span>内容运营管理</span>
+        <span>{{ props.title }}</span>
         <div class="header-actions">
           <el-button @click="loadTabData(activeTab)">刷新</el-button>
           <el-button type="primary" @click="openCreate">新增内容</el-button>
@@ -311,8 +325,8 @@ onMounted(async () => {
       @retry="loadTabData(activeTab)"
     />
     <template v-else>
-      <el-tabs :model-value="activeTab" @tab-change="onTabChange">
-        <el-tab-pane label="Banner" name="banner" />
+      <el-tabs v-if="!props.fixedTab" :model-value="activeTab" @tab-change="onTabChange">
+        <el-tab-pane label="轮播图" name="banner" />
         <el-tab-pane label="语录" name="quote" />
         <el-tab-pane label="文章" name="article" />
         <el-tab-pane label="书籍" name="book" />
@@ -459,4 +473,3 @@ onMounted(async () => {
   gap: 8px;
 }
 </style>
-

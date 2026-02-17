@@ -30,7 +30,7 @@ const normalizedRiskScore = computed(() => {
 
 const confidencePercent = computed(() => {
   const confidence = report.value?.confidence
-  if (confidence == null || Number.isNaN(confidence)) return 'N/A'
+  if (confidence == null || Number.isNaN(confidence)) return '--'
   const normalized = confidence <= 1 ? confidence * 100 : confidence
   return `${normalized.toFixed(2)}%`
 })
@@ -45,27 +45,27 @@ const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
 
 const formattedCreatedAt = computed(() => {
   const value = report.value?.createdAt
-  if (!value) return 'Unknown'
+  if (!value) return '未知'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('en-US', { hour12: false })
+  return date.toLocaleString('zh-CN', { hour12: false })
 })
 
 const kpiItems = computed<KpiItem[]>(() => {
   if (!report.value) return []
   return [
-    { label: 'Emotion', value: report.value.overall || '-' },
-    { label: 'Confidence', value: confidencePercent.value },
-    { label: 'Risk Score', value: `${normalizedRiskScore.value.toFixed(0)}/100` },
-    { label: 'Task ID', value: `#${report.value.taskId}` },
+    { label: '综合情绪', value: report.value.overall || '-' },
+    { label: '置信度', value: confidencePercent.value },
+    { label: '风险分数', value: `${normalizedRiskScore.value.toFixed(0)}/100` },
+    { label: '任务 ID', value: `#${report.value.taskId}` },
   ]
 })
 
 const adviceBuckets = computed(() => {
   const fallbackByRisk = {
-    instant: ['Take a short breathing break and avoid continuous overload.'],
-    longTerm: ['Maintain sleep rhythm and weekly emotional self-check.'],
-    resource: ['If needed, consult local psychological support resources.'],
+    instant: ['先做 2-3 分钟呼吸放松，避免持续高负荷。'],
+    longTerm: ['保持规律作息，并进行每周情绪自检。'],
+    resource: ['如有需要，请联系本地心理支持资源。'],
   }
 
   const source = report.value?.adviceText?.trim()
@@ -89,8 +89,8 @@ const contributionFactors = computed(() => {
   const factors: string[] = []
   if (!report.value) return factors
 
-  factors.push(`Overall emotion judged as ${report.value.overall ?? 'unknown'}.`)
-  factors.push(`Risk score normalized to ${normalizedRiskScore.value.toFixed(1)}.`)
+  factors.push(`综合情绪判定为 ${report.value.overall ?? '未知'}。`)
+  factors.push(`风险分标准化后为 ${normalizedRiskScore.value.toFixed(1)}。`)
 
   const topSegments = [...(report.value.segments ?? [])]
     .sort((a, b) => b.confidence - a.confidence)
@@ -98,8 +98,8 @@ const contributionFactors = computed(() => {
 
   topSegments.forEach((segment, index) => {
     factors.push(
-      `Factor ${index + 1}: ${segment.emotion} at ${(segment.confidence * 100).toFixed(1)}% confidence, ` +
-        `window ${segment.start}ms-${segment.end}ms.`,
+      `因子 ${index + 1}：${segment.emotion}，置信度 ${(segment.confidence * 100).toFixed(1)}%，` +
+        `时间窗 ${segment.start}ms-${segment.end}ms。`,
     )
   })
 
@@ -127,7 +127,7 @@ const loadReport = async () => {
     report.value = detailResp.data
     homeContent.value = homeResp
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load report detail')
+    errorState.value = parseError(error, '报告详情加载失败')
   } finally {
     loading.value = false
   }
@@ -150,39 +150,39 @@ onMounted(() => {
     />
     <EmptyState
       v-else-if="!report"
-      title="Report unavailable"
-      description="The report cannot be displayed currently."
-      action-text="Reload"
+      title="报告暂不可用"
+      description="当前无法展示该报告内容。"
+      action-text="重新加载"
       @action="loadReport"
     />
     <template v-else>
       <SectionBlock
-        eyebrow="Case File"
-        :title="`Report #${report.id}`"
-        description="Structured output from multimodal emotion analysis."
+        eyebrow="报告卷宗"
+        :title="`报告 #${report.id}`"
+        description="多模态情绪分析的结构化输出。"
       >
         <div class="top-meta">
-          <p>Created at: {{ formattedCreatedAt }}</p>
-          <BadgeTag :tone="riskTone" :text="report.riskLevel || 'Unknown Risk'" />
+          <p>生成时间：{{ formattedCreatedAt }}</p>
+          <BadgeTag :tone="riskTone" :text="report.riskLevel || '风险未知'" />
         </div>
 
         <KpiGrid :items="kpiItems" />
       </SectionBlock>
 
       <div class="report-grid">
-        <SectionBlock title="Recommendation Bundle" description="Actionable suggestions grouped by intervention timeline.">
+        <SectionBlock title="建议方案" description="按干预时序组织的可执行建议。">
           <div class="bucket-grid">
-            <LoreCard title="Immediate Actions">
+            <LoreCard title="即时建议">
               <ul>
                 <li v-for="item in adviceBuckets.instant" :key="`instant-${item}`">{{ item }}</li>
               </ul>
             </LoreCard>
-            <LoreCard title="Long-term Plan">
+            <LoreCard title="长期建议">
               <ul>
                 <li v-for="item in adviceBuckets.longTerm" :key="`long-${item}`">{{ item }}</li>
               </ul>
             </LoreCard>
-            <LoreCard title="Resource Guidance">
+            <LoreCard title="资源引导">
               <ul>
                 <li v-for="item in adviceBuckets.resource" :key="`res-${item}`">{{ item }}</li>
               </ul>
@@ -190,37 +190,41 @@ onMounted(() => {
           </div>
         </SectionBlock>
 
-        <SectionBlock title="Explainability" description="Transparent factors that contribute to this score.">
-          <LoreCard title="Score Contribution Factors">
+        <SectionBlock title="可解释性" description="展示本次评分的关键贡献因子。">
+          <LoreCard title="评分贡献因子">
             <ul>
               <li v-for="item in contributionFactors" :key="item">{{ item }}</li>
             </ul>
           </LoreCard>
 
-          <LoreCard title="Emotion Segments" subtitle="High confidence windows from this record">
+          <LoreCard title="情绪片段" subtitle="本次记录中的高置信窗口">
             <div v-if="report.segments?.length" class="segment-grid">
-              <article v-for="(segment, index) in report.segments" :key="`${segment.start}-${segment.end}-${index}`" class="segment-item">
+              <article
+                v-for="(segment, index) in report.segments"
+                :key="`${segment.start}-${segment.end}-${index}`"
+                class="segment-item"
+              >
                 <strong>{{ segment.emotion }}</strong>
                 <span>{{ (segment.confidence * 100).toFixed(1) }}%</span>
                 <span>{{ segment.start }}ms - {{ segment.end }}ms</span>
               </article>
             </div>
-            <p v-else class="muted">No segment details available.</p>
+            <p v-else class="muted">暂无片段明细。</p>
           </LoreCard>
         </SectionBlock>
       </div>
 
       <SectionBlock
-        eyebrow="Related Content"
-        title="Recommended Reading and Practice"
-        description="Continue with educational resources to build emotional resilience."
+        eyebrow="相关推荐"
+        title="延伸阅读与练习"
+        description="结合内容资源，帮助持续提升情绪韧性。"
       >
         <div class="recommend-grid">
           <LoreCard
             v-for="item in homeContent?.recommendedArticles ?? []"
             :key="`article-${item.id}`"
             :title="item.title"
-            :subtitle="item.summary || 'Open article'"
+            :subtitle="item.summary || '点击查看文章'"
             interactive
             @click="openArticle(item.contentUrl)"
           />
@@ -228,7 +232,7 @@ onMounted(() => {
             v-for="item in homeContent?.recommendedBooks ?? []"
             :key="`book-${item.id}`"
             :title="item.title"
-            :subtitle="item.author || 'Open book detail'"
+            :subtitle="item.author || '点击查看书籍详情'"
             interactive
             @click="openBook(item.purchaseUrl)"
           />
@@ -236,8 +240,8 @@ onMounted(() => {
       </SectionBlock>
 
       <div class="footer-actions">
-        <el-button @click="router.push('/reports')">Back to Reports</el-button>
-        <el-button type="primary" plain @click="router.push(`/tasks/${report.taskId}`)">Go to Task</el-button>
+        <el-button @click="router.push('/app/reports')">返回报告中心</el-button>
+        <el-button type="primary" plain @click="router.push(`/app/tasks/${report.taskId}`)">查看任务</el-button>
       </div>
     </template>
   </div>

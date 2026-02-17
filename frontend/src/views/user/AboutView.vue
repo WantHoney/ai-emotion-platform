@@ -1,8 +1,8 @@
 <template>
   <el-card>
     <template #header>关于系统</template>
-    <h2 class="about-title">AI Emotion Frontend</h2>
-    <p class="about-text">AI Emotion Frontend 已重构为资源型系统控制台，支持任务中心、报告中心与系统状态总览。</p>
+    <h2 class="about-title">AI 语音情绪分析平台</h2>
+    <p class="about-text">前端已重构为“用户端 + 管理端”双端体系，覆盖任务、报告、趋势、预警与内容运营闭环。</p>
   </el-card>
 </template>
 

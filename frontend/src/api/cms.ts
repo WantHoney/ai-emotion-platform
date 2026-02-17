@@ -45,7 +45,60 @@ export interface CmsBook {
   enabled: boolean
 }
 
+export interface AdminPsyCenter {
+  id: number
+  name: string
+  cityCode: string
+  cityName: string
+  district?: string
+  address: string
+  phone?: string
+  latitude?: number
+  longitude?: number
+  recommended: boolean
+  enabled: boolean
+}
+
 export type CmsContentType = 'banner' | 'quote' | 'article' | 'book'
+
+interface AdminPsyCenterRaw {
+  id?: number
+  name?: string
+  cityCode?: string
+  city_code?: string
+  cityName?: string
+  city_name?: string
+  district?: string
+  address?: string
+  phone?: string
+  latitude?: number | string
+  longitude?: number | string
+  recommended?: boolean | number
+  is_recommended?: boolean | number
+  enabled?: boolean | number
+  is_enabled?: boolean | number
+}
+
+const toBool = (value: unknown) => value === true || value === 1 || value === '1'
+const toNumber = (value: unknown) => {
+  if (value == null || value === '') return undefined
+  const num = Number(value)
+  return Number.isFinite(num) ? num : undefined
+}
+
+const normalizeAdminPsyCenter = (row: AdminPsyCenterRaw): AdminPsyCenter => ({
+  id: Number(row.id ?? 0),
+  name: String(row.name ?? ''),
+  cityCode: String(row.cityCode ?? row.city_code ?? ''),
+  cityName: String(row.cityName ?? row.city_name ?? ''),
+  district: row.district ?? undefined,
+  address: String(row.address ?? ''),
+  phone: row.phone ?? undefined,
+  latitude: toNumber(row.latitude),
+  longitude: toNumber(row.longitude),
+  recommended: toBool(row.recommended ?? row.is_recommended),
+  enabled: toBool(row.enabled ?? row.is_enabled),
+})
 
 export const getBanners = async () => {
   const response = await http.get<CmsBanner[]>('/api/admin/banners')
@@ -115,3 +168,19 @@ export const deleteBook = async (id: number) => {
   await http.delete(`/api/admin/books/${id}`)
 }
 
+export const getAdminPsyCenters = async () => {
+  const response = await http.get<AdminPsyCenterRaw[]>('/api/admin/psy-centers')
+  return Array.isArray(response.data) ? response.data.map(normalizeAdminPsyCenter) : []
+}
+
+export const createAdminPsyCenter = async (payload: Omit<AdminPsyCenter, 'id'>) => {
+  await http.post('/api/admin/psy-centers', payload)
+}
+
+export const updateAdminPsyCenter = async (id: number, payload: Omit<AdminPsyCenter, 'id'>) => {
+  await http.put(`/api/admin/psy-centers/${id}`, payload)
+}
+
+export const deleteAdminPsyCenter = async (id: number) => {
+  await http.delete(`/api/admin/psy-centers/${id}`)
+}

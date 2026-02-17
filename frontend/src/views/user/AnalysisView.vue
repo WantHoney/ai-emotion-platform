@@ -55,16 +55,16 @@ onUnmounted(() => {
 
 <template>
   <div class="page-wrap">
-    <el-card class="card" shadow="hover" v-loading="loading">
+  <el-card class="card" shadow="hover" v-loading="loading">
       <template #header>任务详情 #{{ taskId }}</template>
 
       <el-descriptions :column="1" border>
         <el-descriptions-item label="任务状态">{{ task?.status ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Overall 情绪">{{ task?.result?.overall ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Confidence">{{ task?.result?.confidence ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Risk Score">{{ task?.result?.risk_score ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Risk Level">{{ task?.result?.risk_level ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Advice">{{ task?.result?.advice_text ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="综合情绪">{{ task?.result?.overall ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="置信度">{{ task?.result?.confidence ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="风险分">{{ task?.result?.risk_score ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="风险等级">{{ task?.result?.risk_level ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="建议">{{ task?.result?.advice_text ?? '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
   </div>

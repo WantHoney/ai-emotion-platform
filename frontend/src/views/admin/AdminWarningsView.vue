@@ -45,7 +45,7 @@ const loadWarnings = async () => {
     rows.value = response.items ?? []
     total.value = response.total ?? 0
   } catch (error) {
-    errorState.value = parseError(error, 'Failed to load warning events')
+    errorState.value = parseError(error, '预警事件加载失败')
   } finally {
     loading.value = false
   }
@@ -57,7 +57,7 @@ const loadActions = async (warningId: number) => {
   try {
     actionRows.value = await getWarningActions(warningId)
   } catch (error) {
-    actionsError.value = parseError(error, 'Failed to load warning action timeline')
+    actionsError.value = parseError(error, '预警处置时间线加载失败')
   } finally {
     actionsLoading.value = false
   }
@@ -97,11 +97,11 @@ const submitAction = async (
   notePlaceholder: string,
 ) => {
   try {
-    const promptRes = await ElMessageBox.prompt('Input action note (optional)', title, {
+    const promptRes = await ElMessageBox.prompt('请输入处置备注（可选）', title, {
       inputType: 'textarea',
       inputPlaceholder: notePlaceholder,
-      confirmButtonText: 'Submit',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
       showInput: true,
     })
     if (typeof promptRes === 'string') {
@@ -114,7 +114,7 @@ const submitAction = async (
       templateCode: row.risk_level === 'HIGH' ? 'WARN_HIGH_FOLLOWUP' : undefined,
       nextStatus,
     })
-    ElMessage.success('Action submitted')
+    ElMessage.success('处置动作已提交')
     await loadWarnings()
     if (currentWarning.value?.id === row.id) {
       await loadActions(row.id)
@@ -123,21 +123,21 @@ const submitAction = async (
     if (error === 'cancel' || error === 'close') {
       return
     }
-    const parsed = parseError(error, 'Failed to submit warning action')
+    const parsed = parseError(error, '提交处置动作失败')
     ElMessage.error(parsed.detail)
   }
 }
 
 const markAcked = async (row: WarningEventItem) => {
-  await submitAction(row, 'MARK_FOLLOWED', 'ACKED', 'Mark As ACKED', 'e.g. operator acknowledged')
+  await submitAction(row, 'MARK_FOLLOWED', 'ACKED', '标记为 ACKED', '例如：值班人员已确认')
 }
 
 const markFollowing = async (row: WarningEventItem) => {
-  await submitAction(row, 'ADD_NOTE', 'FOLLOWING', 'Mark As FOLLOWING', 'e.g. follow-up in progress')
+  await submitAction(row, 'ADD_NOTE', 'FOLLOWING', '标记为 FOLLOWING', '例如：正在跟进回访')
 }
 
 const markResolved = async (row: WarningEventItem) => {
-  await submitAction(row, 'RESOLVE', 'RESOLVED', 'Mark As RESOLVED', 'e.g. callback completed')
+  await submitAction(row, 'RESOLVE', 'RESOLVED', '标记为 RESOLVED', '例如：回访完成并结案')
 }
 
 const openTimeline = async (row: WarningEventItem) => {
@@ -148,7 +148,7 @@ const openTimeline = async (row: WarningEventItem) => {
 
 const currentSummary = computed(() => {
   if (!currentWarning.value) return '-'
-  return `Risk=${currentWarning.value.risk_level}, Score=${currentWarning.value.risk_score}, Status=${currentWarning.value.status}`
+  return `风险=${currentWarning.value.risk_level}，评分=${currentWarning.value.risk_score}，状态=${currentWarning.value.status}`
 })
 
 onMounted(async () => {
@@ -160,13 +160,13 @@ onMounted(async () => {
   <el-card>
     <template #header>
       <div class="header-row">
-        <span>Warning Disposal Desk</span>
-        <el-button @click="loadWarnings">Refresh</el-button>
+        <span>预警处置台</span>
+        <el-button @click="loadWarnings">刷新</el-button>
       </div>
     </template>
 
     <el-form inline>
-      <el-form-item label="Status">
+      <el-form-item label="状态">
         <el-select v-model="query.status" clearable style="width: 130px">
           <el-option label="NEW" value="NEW" />
           <el-option label="ACKED" value="ACKED" />
@@ -175,14 +175,14 @@ onMounted(async () => {
           <el-option label="CLOSED" value="CLOSED" />
         </el-select>
       </el-form-item>
-      <el-form-item label="Risk Level">
+      <el-form-item label="风险等级">
         <el-select v-model="query.riskLevel" clearable style="width: 130px">
           <el-option label="LOW" value="LOW" />
           <el-option label="MEDIUM" value="MEDIUM" />
           <el-option label="HIGH" value="HIGH" />
         </el-select>
       </el-form-item>
-      <el-button type="primary" @click="loadWarnings">Search</el-button>
+      <el-button type="primary" @click="loadWarnings">查询</el-button>
     </el-form>
 
     <LoadingState v-if="loading" />
@@ -195,44 +195,44 @@ onMounted(async () => {
     />
     <EmptyState
       v-else-if="rows.length === 0"
-      title="No warning events"
-      description="No warning event matches the selected filters."
-      action-text="Reload"
+      title="暂无预警事件"
+      description="当前筛选条件下未匹配到预警事件。"
+      action-text="重新加载"
       @action="loadWarnings"
     />
     <template v-else>
       <el-table :data="rows" border>
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="user_mask" label="User Mask" width="120" />
-        <el-table-column prop="task_id" label="Task" width="100" />
-        <el-table-column prop="report_id" label="Report" width="100" />
-        <el-table-column prop="top_emotion" label="Top Emotion" width="120" />
-        <el-table-column label="Risk" width="120">
+        <el-table-column prop="user_mask" label="用户脱敏标识" width="120" />
+        <el-table-column prop="task_id" label="任务" width="100" />
+        <el-table-column prop="report_id" label="报告" width="100" />
+        <el-table-column prop="top_emotion" label="主情绪" width="120" />
+        <el-table-column label="风险" width="120">
           <template #default="scope">
             <el-tag :type="riskType(scope.row.risk_level)">{{ scope.row.risk_level }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="risk_score" label="Risk Score" width="100" />
-        <el-table-column prop="status" label="Status" width="110" />
+        <el-table-column prop="risk_score" label="风险分" width="100" />
+        <el-table-column prop="status" label="状态" width="110" />
         <el-table-column label="SLA" min-width="180">
           <template #default="scope">
             <el-tag :type="breachedType(scope.row)">
-              {{ scope.row.breached === true || scope.row.breached === 1 ? 'BREACHED' : 'IN SLA' }}
+              {{ scope.row.breached === true || scope.row.breached === 1 ? '已超时' : 'SLA 内' }}
             </el-tag>
             <div class="sla-gap">{{ formatDeadlineGap(scope.row.sla_deadline_at) }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="Created At" min-width="170" />
-        <el-table-column label="Actions" min-width="320">
+        <el-table-column prop="created_at" label="创建时间" min-width="170" />
+        <el-table-column label="操作" min-width="320">
           <template #default="scope">
-            <el-button type="primary" link @click="openTimeline(scope.row)">Timeline</el-button>
+            <el-button type="primary" link @click="openTimeline(scope.row)">时间线</el-button>
             <el-button
               type="primary"
               link
               :disabled="scope.row.status !== 'NEW'"
               @click="markAcked(scope.row)"
             >
-              ACK
+              确认
             </el-button>
             <el-button
               type="warning"
@@ -240,7 +240,7 @@ onMounted(async () => {
               :disabled="scope.row.status === 'RESOLVED' || scope.row.status === 'CLOSED'"
               @click="markFollowing(scope.row)"
             >
-              Follow
+              跟进
             </el-button>
             <el-button
               type="success"
@@ -248,7 +248,7 @@ onMounted(async () => {
               :disabled="scope.row.status === 'RESOLVED' || scope.row.status === 'CLOSED'"
               @click="markResolved(scope.row)"
             >
-              Resolve
+              结案
             </el-button>
           </template>
         </el-table-column>
@@ -265,7 +265,7 @@ onMounted(async () => {
       </div>
     </template>
 
-    <el-drawer v-model="actionsDrawer" title="Warning Timeline" size="40%">
+    <el-drawer v-model="actionsDrawer" title="预警处置时间线" size="40%">
       <p class="timeline-summary">{{ currentSummary }}</p>
 
       <LoadingState v-if="actionsLoading" />
@@ -278,9 +278,9 @@ onMounted(async () => {
       />
       <EmptyState
         v-else-if="actionRows.length === 0"
-        title="No action records"
-        description="No disposal timeline yet for this warning event."
-        action-text="Reload"
+        title="暂无处置记录"
+        description="该预警事件尚未产生处置时间线。"
+        action-text="重新加载"
         @action="currentWarning && loadActions(currentWarning.id)"
       />
       <el-timeline v-else>
@@ -293,8 +293,8 @@ onMounted(async () => {
           <el-card>
             <p><strong>{{ item.action_type }}</strong></p>
             <p v-if="item.action_note">{{ item.action_note }}</p>
-            <p v-if="item.template_code">template={{ item.template_code }}</p>
-            <p v-if="item.operator_id">operator={{ item.operator_id }}</p>
+            <p v-if="item.template_code">模板编码：{{ item.template_code }}</p>
+            <p v-if="item.operator_id">操作人：{{ item.operator_id }}</p>
           </el-card>
         </el-timeline-item>
       </el-timeline>

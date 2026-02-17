@@ -4,16 +4,16 @@ import { onErrorCaptured, ref } from 'vue'
 import { toErrorMessage } from '@/utils/errorMessage'
 
 const hasError = ref(false)
-const errorText = ref('Page rendering failed. Please refresh and retry.')
+const errorText = ref('页面渲染失败，请刷新后重试。')
 
 onErrorCaptured((error) => {
   hasError.value = true
-  errorText.value = toErrorMessage(error, 'Page rendering failed. Please refresh and retry.')
+  errorText.value = toErrorMessage(error, '页面渲染失败，请刷新后重试。')
   return false
 })
 </script>
 
 <template>
-  <el-result v-if="hasError" icon="error" title="Page Error" :sub-title="errorText" />
+  <el-result v-if="hasError" icon="error" title="页面异常" :sub-title="errorText" />
   <slot v-else />
 </template>

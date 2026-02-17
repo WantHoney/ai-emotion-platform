@@ -108,6 +108,14 @@ curl http://127.0.0.1:5173/api/home
 curl "http://127.0.0.1:5173/api/psy-centers?cityCode=310100"
 ```
 
+One-command smoke test (Windows PowerShell):
+
+```powershell
+./scripts/smoke-api.ps1
+```
+
+The script validates public APIs, user upload->analysis flow, and admin governance endpoints.
+
 Authenticated checks (register first, then pass Bearer token):
 
 ```bash

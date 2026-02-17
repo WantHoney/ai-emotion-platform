@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+echo "[dev-all] Starting SER service on 127.0.0.1:8001 ..."
+bash "$ROOT_DIR/scripts/start-ser.sh"
+
 echo "[dev-all] Starting backend on 127.0.0.1:8080 ..."
 (cd "$ROOT_DIR/backend" && mvn spring-boot:run) &
 BACK_PID=$!

@@ -15,7 +15,12 @@ backend/uploads/
 
 # IDE
 .vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Python virtualenv and runtime logs for SER local service
+backend/ser-service/venv/
+backend/ser-service/logs/

@@ -35,11 +35,24 @@ $env:SPRING_DATASOURCE_PASSWORD="your_password"
 
 - Backend: `http://127.0.0.1:8080`
 - Frontend dev: `http://127.0.0.1:5173`
+- SER service: `http://127.0.0.1:8001`
 - Vite proxy: `http://127.0.0.1:5173/api/*` -> `http://127.0.0.1:8080/api/*`
 
 ## 4. Start
 
 ### 4.1 Start separately
+
+SER service (required for `/api/health` ser status = `UP`):
+
+```powershell
+./scripts/start-ser.ps1
+```
+
+or on macOS/Linux:
+
+```bash
+bash ./scripts/start-ser.sh
+```
 
 Backend:
 
@@ -70,11 +83,14 @@ macOS/Linux:
 bash ./scripts/dev-all.sh
 ```
 
+Both commands now start `SER -> backend -> frontend` in order.
+
 ## 5. Runtime Check
 
 Backend direct checks:
 
 ```bash
+curl http://127.0.0.1:8001/health
 curl http://127.0.0.1:8080/api/health
 curl http://127.0.0.1:8080/api/home
 curl "http://127.0.0.1:8080/api/psy-centers?cityCode=310100"
@@ -196,3 +212,11 @@ Set `OPENROUTER_API_KEY` in your shell before running backend.
 ### Backend startup fails with `Port 8080 was already in use`
 
 Stop the process using port `8080`, or change `server.port` in backend config.
+
+### `/api/health` shows `"ser":"DOWN"`
+
+1. Run `./scripts/start-ser.ps1` (Windows) or `bash ./scripts/start-ser.sh` (macOS/Linux).
+2. Verify `http://127.0.0.1:8001/health` returns JSON with `"status":"ok"`.
+3. If still failing, check logs:
+   - `backend/ser-service/logs/ser-stdout.log`
+   - `backend/ser-service/logs/ser-stderr.log`

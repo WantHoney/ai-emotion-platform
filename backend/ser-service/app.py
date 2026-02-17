@@ -12,7 +12,6 @@ import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from faster_whisper import WhisperModel
-from speechbrain.inference.interfaces import foreign_class
 
 app = FastAPI(title="SER Service", version="1.0.0")
 
@@ -51,10 +50,36 @@ EMOTION_MAP = {
 
 _model = None
 _asr_model = None
+_speechbrain_import_error = None
+
+# speechbrain 1.0 expects torchaudio.list_audio_backends on torchaudio>=2
+# Newer torchaudio may remove this symbol; provide a minimal compatibility shim.
+try:
+    import torchaudio as _ta
+
+    if not hasattr(_ta, "list_audio_backends"):
+        def _list_audio_backends_compat():
+            return ["soundfile"]
+
+        _ta.list_audio_backends = _list_audio_backends_compat
+except Exception:
+    pass
+
+try:
+    from speechbrain.inference.interfaces import foreign_class
+except Exception as exc:  # pragma: no cover - environment dependent
+    foreign_class = None
+    _speechbrain_import_error = str(exc)
 
 
 def get_model():
     global _model
+    if foreign_class is None:
+        raise RuntimeError(
+            "speechbrain import failed. "
+            "Please reinstall ser-service dependencies. "
+            f"reason={_speechbrain_import_error}"
+        )
     if _model is None:
         _model = foreign_class(
             source=MODEL_NAME,
@@ -183,6 +208,8 @@ def health():
     return {
         "status": "ok",
         "serModel": MODEL_NAME,
+        "serModelReady": foreign_class is not None,
+        "serModelImportError": _speechbrain_import_error,
         "asrModel": WHISPER_MODEL,
         "asrDevice": WHISPER_DEVICE,
         "asrComputeType": WHISPER_COMPUTE_TYPE,
@@ -201,7 +228,10 @@ async def analyze(
     if overlap_ms < 0 or overlap_ms >= segment_ms:
         raise HTTPException(status_code=400, detail="overlap_ms must be >= 0 and < segment_ms")
 
-    model = get_model()
+    try:
+        model = get_model()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
     with tempfile.TemporaryDirectory(prefix="ser-") as td:
         tmp_dir = Path(td)

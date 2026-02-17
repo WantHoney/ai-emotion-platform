@@ -9,8 +9,8 @@ logging:
     org.springframework.boot.autoconfigure: DEBUG
 
 ser:
-  enabled: ${SER_ENABLED:false}
-  base-url: ${SER_BASE_URL:http://localhost:8001}
+  enabled: ${SER_ENABLED:true}
+  base-url: ${SER_BASE_URL:http://127.0.0.1:8001}
   segment-ms: ${SER_SEGMENT_MS:8000}
   overlap-ms: ${SER_OVERLAP_MS:0}
   llm-summary-enabled: ${SER_LLM_SUMMARY_ENABLED:false}
@@ -25,5 +25,6 @@ analysis:
     batch-size: ${ANALYSIS_WORKER_BATCH_SIZE:20}
     max-attempts: ${ANALYSIS_TASK_MAX_ATTEMPTS:4}
     ser-timeout-ms: ${ANALYSIS_WORKER_SER_TIMEOUT_MS:180000}
+    asr-timeout-ms: ${ANALYSIS_WORKER_ASR_TIMEOUT_MS:180000}
     backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
     backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}

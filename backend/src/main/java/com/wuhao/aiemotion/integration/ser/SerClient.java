@@ -72,8 +72,8 @@ public class SerClient {
 
     public boolean warmup() {
         RestTemplate restTemplate = buildRestTemplate(properties.getConnectTimeoutMs(), properties.getReadTimeoutMs());
-        if (callGet(restTemplate, properties.getBaseUrl() + "/health")) return true;
-        return callGet(restTemplate, properties.getBaseUrl() + "/warmup");
+        if (callGet(restTemplate, properties.getBaseUrl() + "/warmup")) return true;
+        return callGet(restTemplate, properties.getBaseUrl() + "/health");
     }
 
     private RestTemplate buildRestTemplate(long connectMs, long readMs) {

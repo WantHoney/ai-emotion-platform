@@ -21,6 +21,8 @@ Backend runs in real AI mode by default. You must provide API key and DB connect
 - `SPRING_DATASOURCE_URL` (optional override)
 - `SPRING_DATASOURCE_USERNAME` (optional override)
 - `SPRING_DATASOURCE_PASSWORD` (optional override)
+- `SER_ENABLED` (optional, default `true`)
+- `SER_BASE_URL` (optional, default `http://127.0.0.1:8001`)
 
 Windows PowerShell example:
 
@@ -47,6 +49,8 @@ SER service (required for `/api/health` ser status = `UP`):
 ```powershell
 ./scripts/start-ser.ps1
 ```
+
+The startup script now performs `/warmup` after health check, so first start may take longer.
 
 or on macOS/Linux:
 

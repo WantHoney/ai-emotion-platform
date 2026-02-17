@@ -53,6 +53,7 @@ _model = None
 _asr_model = None
 _speechbrain_import_error = None
 _bundled_ffmpeg_path = None
+_asr_warmup_error = None
 
 # speechbrain 1.0 expects torchaudio.list_audio_backends on torchaudio>=2
 # Newer torchaudio may remove this symbol; provide a minimal compatibility shim.
@@ -262,6 +263,8 @@ def health():
         "ffmpegReady": resolve_ffmpeg_binary() is not None,
         "ffmpegPath": resolve_ffmpeg_binary(),
         "asrModel": WHISPER_MODEL,
+        "asrModelReady": _asr_model is not None,
+        "asrModelWarmupError": _asr_warmup_error,
         "asrDevice": WHISPER_DEVICE,
         "asrComputeType": WHISPER_COMPUTE_TYPE,
         "asrCpuThreads": WHISPER_CPU_THREADS,
@@ -270,15 +273,28 @@ def health():
 
 @app.get("/warmup")
 def warmup():
+    global _asr_warmup_error
     try:
         get_model()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"ser warmup failed: {exc}")
 
+    asr_ready = False
+    _asr_warmup_error = None
+    try:
+        get_asr_model()
+        asr_ready = True
+    except Exception as exc:
+        _asr_warmup_error = str(exc)
+        logger.warning("asr model warmup failed: %s", _asr_warmup_error)
+
     return {
-        "status": "ok",
+        "status": "ok" if asr_ready else "degraded",
         "serModel": MODEL_NAME,
         "serModelReady": True,
+        "asrModel": WHISPER_MODEL,
+        "asrModelReady": asr_ready,
+        "asrModelWarmupError": _asr_warmup_error,
     }
 
 

@@ -24,6 +24,13 @@ if ($runningConn) {
     $existingHealth = Invoke-RestMethod -Uri "http://127.0.0.1:8001/health" -Method Get -TimeoutSec 2
     if ($existingHealth.status -eq "ok") {
       Write-Host "[start-ser] already healthy on 127.0.0.1:8001"
+      Write-Host "[start-ser] warming up models via /warmup ..."
+      try {
+        $warmup = Invoke-RestMethod -Uri "http://127.0.0.1:8001/warmup" -Method Get -TimeoutSec 240
+        Write-Host ("[start-ser] WARMUP => " + ($warmup | ConvertTo-Json -Compress))
+      } catch {
+        Write-Host "[start-ser] warmup request failed, service is still running. Check logs if needed."
+      }
       exit 0
     }
   } catch {
@@ -76,3 +83,10 @@ if (-not $ok) {
 }
 
 Write-Host "[start-ser] HEALTH OK => http://127.0.0.1:8001/health"
+Write-Host "[start-ser] warming up models via /warmup ..."
+try {
+  $warmup = Invoke-RestMethod -Uri "http://127.0.0.1:8001/warmup" -Method Get -TimeoutSec 240
+  Write-Host ("[start-ser] WARMUP => " + ($warmup | ConvertTo-Json -Compress))
+} catch {
+  Write-Host "[start-ser] warmup request failed, service is still running. Check logs if needed."
+}

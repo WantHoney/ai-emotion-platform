@@ -7,7 +7,7 @@ echo "[dev-all] Starting SER service on 127.0.0.1:8001 ..."
 bash "$ROOT_DIR/scripts/start-ser.sh"
 
 echo "[dev-all] Starting backend on 127.0.0.1:8080 ..."
-(cd "$ROOT_DIR/backend" && mvn spring-boot:run) &
+(cd "$ROOT_DIR/backend" && SER_ENABLED=true SER_BASE_URL=http://127.0.0.1:8001 mvn spring-boot:run) &
 BACK_PID=$!
 
 echo "[dev-all] Starting frontend on 127.0.0.1:5173 ..."

@@ -22,6 +22,12 @@ fi
 if lsof -iTCP:8001 -sTCP:LISTEN >/dev/null 2>&1; then
   if curl -fsS "http://127.0.0.1:8001/health" >/dev/null 2>&1; then
     echo "[start-ser] already healthy on 127.0.0.1:8001"
+    echo "[start-ser] warming up models via /warmup ..."
+    if curl --max-time 240 -fsS "http://127.0.0.1:8001/warmup" >/dev/null 2>&1; then
+      echo "[start-ser] WARMUP OK"
+    else
+      echo "[start-ser] warmup request failed, service is still running. Check logs if needed."
+    fi
     exit 0
   fi
 fi
@@ -58,3 +64,9 @@ if [[ "$ok" -ne 1 ]]; then
 fi
 
 echo "[start-ser] HEALTH OK => http://127.0.0.1:8001/health"
+echo "[start-ser] warming up models via /warmup ..."
+if curl --max-time 240 -fsS "http://127.0.0.1:8001/warmup" >/dev/null 2>&1; then
+  echo "[start-ser] WARMUP OK"
+else
+  echo "[start-ser] warmup request failed, service is still running. Check logs if needed."
+fi

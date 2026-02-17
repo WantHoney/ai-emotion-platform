@@ -1,5 +1,6 @@
 package com.wuhao.aiemotion.controller;
 
+import com.wuhao.aiemotion.config.AuthInterceptor;
 import com.wuhao.aiemotion.dto.response.AnalysisSegmentsResponse;
 import com.wuhao.aiemotion.dto.response.AnalysisTaskResultResponse;
 import com.wuhao.aiemotion.dto.response.AnalysisTaskStartResponse;
@@ -11,11 +12,13 @@ import com.wuhao.aiemotion.dto.response.AudioAnalysisListResponse;
 import com.wuhao.aiemotion.dto.response.AudioAnalysisReportResponse;
 import com.wuhao.aiemotion.dto.response.AudioAnalysisRunResponse;
 import com.wuhao.aiemotion.service.AnalysisTaskService;
+import com.wuhao.aiemotion.service.AuthService;
 import com.wuhao.aiemotion.service.AudioAnalysisService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,18 +35,21 @@ public class AudioAnalysisController {
     }
 
     @PostMapping("/api/audio/{audioId}/analysis/start")
-    public AnalysisTaskStartResponse start(@PathVariable long audioId) {
-        return analysisTaskService.startTask(audioId);
+    public AnalysisTaskStartResponse start(@PathVariable long audioId,
+                                           @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        return analysisTaskService.startTask(audioId, user);
     }
 
     @GetMapping("/api/analysis/task/{taskId}")
-    public AnalysisTaskStatusResponse getTask(@PathVariable long taskId) {
-        return analysisTaskService.getTask(taskId);
+    public AnalysisTaskStatusResponse getTask(@PathVariable long taskId,
+                                              @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        return analysisTaskService.getTask(taskId, user);
     }
 
     @GetMapping("/api/analysis/task/{taskId}/result")
-    public AnalysisTaskResultResponse getTaskResult(@PathVariable long taskId) {
-        return analysisTaskService.getTaskResult(taskId);
+    public AnalysisTaskResultResponse getTaskResult(@PathVariable long taskId,
+                                                    @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        return analysisTaskService.getTaskResult(taskId, user);
     }
 
     @GetMapping("/api/analysis/task/{taskId}/segments")
@@ -52,9 +58,10 @@ public class AudioAnalysisController {
             @RequestParam(required = false) Long fromMs,
             @RequestParam(required = false) Long toMs,
             @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) Integer offset
+            @RequestParam(required = false) Integer offset,
+            @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user
     ) {
-        return analysisTaskService.getTaskSegments(taskId, fromMs, toMs, limit, offset);
+        return analysisTaskService.getTaskSegments(taskId, fromMs, toMs, limit, offset, user);
     }
 
     @GetMapping("/api/analysis/list")

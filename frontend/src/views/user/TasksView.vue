@@ -56,7 +56,7 @@ void loadTasks()
         </el-select>
       </el-form-item>
       <el-form-item label="搜索">
-        <el-input v-model="query.keyword" placeholder="任务ID/traceId" clearable />
+        <el-input v-model="query.keyword" placeholder="任务编号 / Task ID / traceId" clearable />
       </el-form-item>
       <el-form-item label="排序">
         <el-select v-model="query.sortBy" style="width: 140px">
@@ -89,7 +89,14 @@ void loadTasks()
     />
     <template v-else>
       <el-table :data="rows" border>
-        <el-table-column prop="id" label="任务ID" width="100" />
+        <el-table-column label="任务编号" min-width="220">
+          <template #default="scope">
+            <div class="task-no-cell">
+              <strong>{{ scope.row.taskNo || `TASK-${scope.row.id}` }}</strong>
+              <span>Task ID: {{ scope.row.id }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="attemptCount" label="重试次数" width="100" />
         <el-table-column prop="traceId" label="traceId" min-width="180" show-overflow-tooltip />
@@ -115,9 +122,21 @@ void loadTasks()
 </template>
 
 <style scoped>
+.task-no-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-no-cell span {
+  font-size: 12px;
+  color: #64748b;
+}
+
 .pager {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
 }
 </style>
+

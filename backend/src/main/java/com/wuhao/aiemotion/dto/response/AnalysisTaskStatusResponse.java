@@ -2,6 +2,7 @@ package com.wuhao.aiemotion.dto.response;
 
 public record AnalysisTaskStatusResponse(
         long taskId,
+        String task_no,
         String status,
         int attempt_count,
         String next_run_at,

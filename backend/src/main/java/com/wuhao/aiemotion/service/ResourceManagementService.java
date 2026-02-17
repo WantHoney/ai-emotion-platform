@@ -43,6 +43,7 @@ public class ResourceManagementService {
     private final AudioRepository audioRepository;
     private final ObjectMapper objectMapper;
     private final WarningEventTriggerService warningEventTriggerService;
+    private final TaskNoFormatter taskNoFormatter;
 
     public ResourceManagementService(AnalysisTaskRepository analysisTaskRepository,
                                      AnalysisResultRepository analysisResultRepository,
@@ -50,7 +51,8 @@ public class ResourceManagementService {
                                      ReportRepository reportRepository,
                                      AudioRepository audioRepository,
                                      ObjectMapper objectMapper,
-                                     WarningEventTriggerService warningEventTriggerService) {
+                                     WarningEventTriggerService warningEventTriggerService,
+                                     TaskNoFormatter taskNoFormatter) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
@@ -58,6 +60,7 @@ public class ResourceManagementService {
         this.audioRepository = audioRepository;
         this.objectMapper = objectMapper;
         this.warningEventTriggerService = warningEventTriggerService;
+        this.taskNoFormatter = taskNoFormatter;
     }
 
     public TaskListResponse tasks(int page,
@@ -81,6 +84,11 @@ public class ResourceManagementService {
             List<TaskListResponse.TaskDTO> items = rows.stream()
                     .map(it -> new TaskListResponse.TaskDTO(
                             it.id(),
+                            taskNoFormatter.format(
+                                    resolveTaskOwnerUserId(it),
+                                    it.createdAt(),
+                                    it.id()
+                            ),
                             it.audioFileId(),
                             it.status(),
                             it.attemptCount(),
@@ -315,5 +323,10 @@ public class ResourceManagementService {
 
     private String format(LocalDateTime value) {
         return value == null ? null : value.format(FMT);
+    }
+
+    private Long resolveTaskOwnerUserId(AnalysisTask task) {
+        if (task.audioFileId() == null) return null;
+        return audioRepository.findUserIdByAudioId(task.audioFileId()).orElse(null);
     }
 }

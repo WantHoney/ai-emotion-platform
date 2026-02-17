@@ -11,6 +11,7 @@ public record TaskListResponse(
 ) {
     public record TaskDTO(
             long id,
+            String taskNo,
             Long audioId,
             String status,
             int attemptCount,

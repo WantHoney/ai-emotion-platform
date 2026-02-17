@@ -218,14 +218,20 @@ public class AudioChunkUploadService {
             uploadSessionRepository.deleteChunksBySession(session.id());
 
             Long taskId = null;
+            String taskNo = null;
             if (autoStartTask) {
-                AnalysisTaskStartResponse start = analysisTaskService.startTask(audioId);
+                if (userId == null) {
+                    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "login required");
+                }
+                AnalysisTaskStartResponse start = analysisTaskService.startTask(audioId, new AuthService.UserProfile(userId, "session-user", AuthService.ROLE_USER));
                 taskId = start.taskId();
+                taskNo = start.taskNo();
             }
             Map<String, Object> payload = new HashMap<>();
             payload.put("uploadId", uploadId);
             payload.put("audioId", audioId);
             payload.put("taskId", taskId);
+            payload.put("taskNo", taskNo);
             payload.put("fileName", generatedFileName);
             payload.put("fileUrl", "/uploads/" + generatedFileName);
             payload.put("status", "MERGED");

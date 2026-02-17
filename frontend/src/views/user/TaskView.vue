@@ -15,10 +15,11 @@ const taskId = computed(() => Number(route.params.id))
 const { pollingState, task, errorMessage, statusText, start } = useTaskPolling(taskId, {
   baseIntervalMs: 3000,
   maxIntervalMs: 15000,
-  timeoutMs: 300000,
+  timeoutMs: 1800000,
   maxRetry: 8,
 })
 
+const displayTaskNo = computed(() => task.value?.taskNo || `TASK-${taskId.value}`)
 const durationSeconds = computed(() => ((task.value?.durationMs ?? 0) / 1000).toFixed(2))
 const confidencePercent = computed(() => Math.round((task.value?.result?.confidence ?? 0) * 100))
 const riskScorePercent = computed(() => Math.round((task.value?.result?.risk_score ?? 0) * 100))
@@ -52,7 +53,8 @@ onMounted(() => {
       <div class="hero-header">
         <div>
           <p class="hero-subtitle">情绪分析任务</p>
-          <h2>任务 #{{ taskId }}</h2>
+          <h2>任务编号 {{ displayTaskNo }}</h2>
+          <p class="task-id-tip">Task ID: {{ taskId }}</p>
         </div>
         <el-tag effect="dark" :type="statusTagType">{{ statusText }}</el-tag>
       </div>
@@ -72,7 +74,7 @@ onMounted(() => {
         action-text="重新拉取"
         @action="start"
       />
-      <div class="metric-grid" v-else>
+      <div v-else class="metric-grid">
         <el-card class="metric-item" shadow="hover">
           <p>综合情绪</p>
           <h3>{{ task.result?.overall ?? '-' }}</h3>
@@ -158,6 +160,12 @@ onMounted(() => {
   color: #1e293b;
 }
 
+.task-id-tip {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -202,3 +210,4 @@ onMounted(() => {
   }
 }
 </style>
+

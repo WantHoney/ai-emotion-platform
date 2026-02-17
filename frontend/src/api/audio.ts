@@ -37,6 +37,7 @@ export interface UploadSessionCompleteResponse {
   uploadId: string
   audioId: number
   taskId?: number | null
+  taskNo?: string | null
   fileName: string
   fileUrl: string
   status: string

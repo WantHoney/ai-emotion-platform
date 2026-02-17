@@ -12,6 +12,7 @@ import com.wuhao.aiemotion.dto.response.AnalysisTaskStatusResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
+import com.wuhao.aiemotion.repository.AudioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -34,35 +35,48 @@ public class AnalysisTaskService {
     private final AnalysisTaskRepository analysisTaskRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisSegmentRepository analysisSegmentRepository;
+    private final AudioRepository audioRepository;
     private final PsychologicalRiskScoringService riskScoringService;
     private final ObjectMapper objectMapper;
     private final AnalysisWorkerProperties workerProperties;
+    private final TaskNoFormatter taskNoFormatter;
 
     public AnalysisTaskService(AnalysisTaskRepository analysisTaskRepository,
                                AnalysisResultRepository analysisResultRepository,
                                AnalysisSegmentRepository analysisSegmentRepository,
+                               AudioRepository audioRepository,
                                PsychologicalRiskScoringService riskScoringService,
                                ObjectMapper objectMapper,
-                               AnalysisWorkerProperties workerProperties) {
+                               AnalysisWorkerProperties workerProperties,
+                               TaskNoFormatter taskNoFormatter) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
+        this.audioRepository = audioRepository;
         this.riskScoringService = riskScoringService;
         this.objectMapper = objectMapper;
         this.workerProperties = workerProperties;
+        this.taskNoFormatter = taskNoFormatter;
     }
 
-    public AnalysisTaskStartResponse startTask(long audioId) {
-        if (!analysisTaskRepository.audioExists(audioId)) {
-            throw new IllegalArgumentException("audio_id 不存在: " + audioId);
+    public AnalysisTaskStartResponse startTask(long audioId, AuthService.UserProfile user) {
+        if (!audioRepository.existsById(audioId)) {
+            throw new IllegalArgumentException("audio_id not found: " + audioId);
         }
+        Long ownerUserId = audioRepository.findUserIdByAudioId(audioId).orElse(null);
+        ensureCanAccess(ownerUserId, user);
+
         String traceId = MDC.get("traceId");
         long taskId = analysisTaskRepository.insertPendingTask(audioId, workerProperties.getMaxAttempts(), traceId);
-        return new AnalysisTaskStartResponse(taskId, "PENDING");
+        AnalysisTask task = analysisTaskRepository.findById(taskId).orElse(null);
+        String taskNo = taskNoFormatter.format(ownerUserId, task == null ? null : task.createdAt(), taskId);
+        return new AnalysisTaskStartResponse(taskId, taskNo, "PENDING");
     }
 
-    public AnalysisTaskStatusResponse getTask(long taskId) {
+    public AnalysisTaskStatusResponse getTask(long taskId, AuthService.UserProfile user) {
         AnalysisTask task = findTaskOr404(taskId);
+        Long ownerUserId = analysisTaskRepository.findUserIdByTaskId(taskId).orElse(null);
+        ensureCanAccess(ownerUserId, user);
 
         AnalysisTaskStatusResponse.OverallSummary overall = null;
         if ("SUCCESS".equals(task.status())) {
@@ -77,6 +91,7 @@ public class AnalysisTaskService {
 
         return new AnalysisTaskStatusResponse(
                 task.id(),
+                taskNoFormatter.format(ownerUserId, task.createdAt(), task.id()),
                 task.status(),
                 task.attemptCount(),
                 format(task.nextRunAt()),
@@ -87,11 +102,13 @@ public class AnalysisTaskService {
         );
     }
 
-    public AnalysisTaskResultResponse getTaskResult(long taskId) {
-        findTaskOr404(taskId);
+    public AnalysisTaskResultResponse getTaskResult(long taskId, AuthService.UserProfile user) {
+        AnalysisTask task = findTaskOr404(taskId);
+        Long ownerUserId = analysisTaskRepository.findUserIdByTaskId(task.id()).orElse(null);
+        ensureCanAccess(ownerUserId, user);
 
         AnalysisResult result = analysisResultRepository.findByTaskId(taskId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "analysis_result 不存在: " + taskId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "analysis_result not found: " + taskId));
 
         List<AnalysisSegment> allSegments = analysisSegmentRepository.findByTaskIdOrderByStartMs(taskId);
         AnalysisTaskResultResponse.RiskAssessmentPayload risk = buildRiskAssessment(taskId, result, allSegments);
@@ -112,11 +129,18 @@ public class AnalysisTaskService {
         );
     }
 
-    public AnalysisSegmentsResponse getTaskSegments(long taskId, Long fromMs, Long toMs, Integer limit, Integer offset) {
-        findTaskOr404(taskId);
+    public AnalysisSegmentsResponse getTaskSegments(long taskId,
+                                                    Long fromMs,
+                                                    Long toMs,
+                                                    Integer limit,
+                                                    Integer offset,
+                                                    AuthService.UserProfile user) {
+        AnalysisTask task = findTaskOr404(taskId);
+        Long ownerUserId = analysisTaskRepository.findUserIdByTaskId(task.id()).orElse(null);
+        ensureCanAccess(ownerUserId, user);
 
         AnalysisResult result = analysisResultRepository.findByTaskId(taskId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "analysis_result 不存在: " + taskId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "analysis_result not found: " + taskId));
 
         long safeFromMs = fromMs == null ? 0 : fromMs;
         long safeToMs = toMs == null ? resolveDefaultToMs(result) : toMs;
@@ -145,13 +169,13 @@ public class AnalysisTaskService {
 
     private void validateRangeParams(long fromMs, long toMs, int offset) {
         if (fromMs < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromMs 必须 >= 0");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromMs must be >= 0");
         }
         if (toMs <= fromMs) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "toMs 必须 > fromMs");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "toMs must be > fromMs");
         }
         if (offset < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "offset 必须 >= 0");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "offset must be >= 0");
         }
     }
 
@@ -164,7 +188,16 @@ public class AnalysisTaskService {
 
     private AnalysisTask findTaskOr404(long taskId) {
         return analysisTaskRepository.findById(taskId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "task 不存在: " + taskId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "task not found: " + taskId));
+    }
+
+    private void ensureCanAccess(Long ownerUserId, AuthService.UserProfile user) {
+        if (user == null) return;
+        if (AuthService.ROLE_ADMIN.equals(user.role())) return;
+        if (ownerUserId == null) return;
+        if (!ownerUserId.equals(user.userId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "no permission for this task");
+        }
     }
 
     private AnalysisTaskStatusResponse.OverallSummary toOverallSummary(AnalysisResult r,
@@ -180,7 +213,7 @@ public class AnalysisTaskService {
     }
 
     private AnalysisTaskResultResponse.AnalysisResultPayload toResultPayload(AnalysisResult r,
-                                                                              AnalysisTaskResultResponse.RiskAssessmentPayload risk) {
+                                                                             AnalysisTaskResultResponse.RiskAssessmentPayload risk) {
         return new AnalysisTaskResultResponse.AnalysisResultPayload(
                 r.id(),
                 r.taskId(),
@@ -268,3 +301,4 @@ public class AnalysisTaskService {
         return time == null ? null : time.format(FMT);
     }
 }
+

@@ -39,6 +39,8 @@ export interface AnalysisTaskResult {
 
 interface AnalysisTaskStatusRaw {
   taskId: number
+  taskNo?: string
+  task_no?: string
   status: Exclude<TaskStatus, 'CANCELED'>
   attempt_count: number
   next_run_at: string | null
@@ -50,6 +52,8 @@ interface AnalysisTaskStatusRaw {
 
 interface AnalysisTaskListRaw {
   id?: number
+  taskNo?: string
+  task_no?: string
   status?: TaskStatus
   attemptCount?: number
   attempt_count?: number
@@ -71,6 +75,7 @@ interface AnalysisTaskListRaw {
 
 export interface AnalysisTask {
   id: number
+  taskNo?: string
   status: TaskStatus
   attemptCount?: number
   errorMessage?: string
@@ -106,6 +111,7 @@ const normalizeTask = (raw: AnalysisTaskStatusRaw): AnalysisTask => {
 
   return {
     id: raw.taskId,
+    taskNo: raw.taskNo ?? raw.task_no ?? undefined,
     status: raw.status,
     attemptCount: raw.attempt_count,
     errorMessage: raw.error_message ?? undefined,
@@ -128,6 +134,7 @@ const normalizeTask = (raw: AnalysisTaskStatusRaw): AnalysisTask => {
 const normalizeTaskListItem = (raw: AnalysisTaskListRaw): AnalysisTask => {
   return {
     id: Number(raw.id ?? 0),
+    taskNo: raw.taskNo ?? raw.task_no ?? undefined,
     status: (raw.status ?? 'PENDING') as TaskStatus,
     attemptCount: raw.attemptCount ?? raw.attempt_count ?? undefined,
     errorMessage: raw.errorMessage ?? raw.error_message ?? undefined,

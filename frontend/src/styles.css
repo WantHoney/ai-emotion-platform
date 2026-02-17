@@ -4,6 +4,7 @@
 
   --content-max-width: 1240px;
   --radius-lg: 16px;
+  --radius-xl: 24px;
 
   --user-bg: #070c18;
   --user-surface: #0f192d;
@@ -11,6 +12,8 @@
   --user-border: rgba(130, 154, 196, 0.28);
   --user-text-primary: #eef4ff;
   --user-text-secondary: #a8bbd9;
+  --user-accent-gold: #c3a26e;
+  --user-accent-cyan: #4ca8bc;
 
   --admin-bg: #0b1220;
   --admin-surface: #10192c;
@@ -32,12 +35,28 @@ body {
   margin: 0;
   min-height: 100%;
   font-family: var(--font-base);
-  background: var(--user-bg);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(194, 163, 109, 0.18), transparent 30%),
+    radial-gradient(circle at 78% 10%, rgba(80, 159, 177, 0.14), transparent 34%),
+    var(--user-bg);
   color: var(--user-text-primary);
 }
 
 #app {
   min-height: 100vh;
+}
+
+body::-webkit-scrollbar {
+  width: 10px;
+}
+
+body::-webkit-scrollbar-track {
+  background: rgba(8, 16, 31, 0.9);
+}
+
+body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(195, 162, 110, 0.7), rgba(76, 168, 188, 0.7));
 }
 
 .page-shell {
@@ -97,10 +116,40 @@ body {
   color: #dbe7fc;
 }
 
+.user-layout .el-table {
+  --el-table-bg-color: #101b31;
+  --el-table-tr-bg-color: #101b31;
+  --el-table-header-bg-color: #15243f;
+  --el-table-border-color: rgba(129, 153, 194, 0.34);
+  --el-table-text-color: #dce8fa;
+  --el-table-header-text-color: #a7bcdf;
+}
+
+.user-layout .el-table__row:hover > td.el-table__cell {
+  background: rgba(30, 48, 78, 0.56) !important;
+}
+
 .user-layout .el-card {
   border: 1px solid rgba(161, 182, 216, 0.26);
   background: linear-gradient(180deg, rgba(13, 21, 35, 0.88), rgba(10, 16, 30, 0.88));
   box-shadow: 0 16px 40px rgba(1, 7, 20, 0.38);
+}
+
+.user-layout .el-radio-group,
+.user-layout .el-radio-button__inner {
+  border-radius: 999px;
+}
+
+.user-layout .el-radio-button__inner {
+  background: rgba(16, 27, 47, 0.84);
+  border-color: rgba(130, 154, 196, 0.34);
+  color: #c8d9f3;
+}
+
+.user-layout .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: rgba(195, 162, 110, 0.2);
+  border-color: rgba(195, 162, 110, 0.8);
+  color: #f5f9ff;
 }
 
 .user-layout .el-alert {

@@ -116,6 +116,10 @@ One-command smoke test (Windows PowerShell):
 
 The script validates public APIs, user upload->analysis flow, and admin governance endpoints.
 
+Manual page-by-page acceptance checklist:
+
+- `docs/frontend_page_interaction_checklist.md`
+
 Authenticated checks (register first, then pass Bearer token):
 
 ```bash

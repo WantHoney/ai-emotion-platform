@@ -60,7 +60,11 @@ onMounted(() => {
 
 <template>
   <div class="profile-page user-layout">
-    <SectionBlock eyebrow="Account" title="Personal Profile" description="Simple account panel and last 30-day summary.">
+    <SectionBlock
+      eyebrow="Account"
+      title="Personal Profile"
+      description="Account identity and 30-day emotional activity snapshot."
+    >
       <LoadingState v-if="loading" />
       <ErrorState
         v-else-if="errorState"
@@ -70,11 +74,15 @@ onMounted(() => {
         @retry="loadProfileSummary"
       />
       <template v-else>
-        <div class="user-line">
-          <span class="label">Username:</span>
-          <strong>{{ authStore.currentUser?.username || '-' }}</strong>
-          <span class="label">Role:</span>
-          <strong>{{ authStore.userRole || '-' }}</strong>
+        <div class="identity-card">
+          <div>
+            <p class="label">Username</p>
+            <strong>{{ authStore.currentUser?.username || '-' }}</strong>
+          </div>
+          <div>
+            <p class="label">Role</p>
+            <strong>{{ authStore.userRole || '-' }}</strong>
+          </div>
         </div>
 
         <KpiGrid
@@ -93,6 +101,12 @@ onMounted(() => {
           action-text="Refresh"
           @action="loadProfileSummary"
         />
+        <el-table v-else :data="trendRows.slice(-7).reverse()" border>
+          <el-table-column prop="date" label="Date" min-width="140" />
+          <el-table-column prop="reportCount" label="Reports" width="100" />
+          <el-table-column prop="avgRiskScore" label="Avg Score" width="120" />
+          <el-table-column prop="highCount" label="High Risk" width="110" />
+        </el-table>
       </template>
     </SectionBlock>
   </div>
@@ -104,15 +118,27 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.user-line {
+.identity-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 28px;
   flex-wrap: wrap;
-  color: #d4e3fb;
+  border: 1px solid rgba(145, 167, 207, 0.32);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(13, 22, 39, 0.8);
+}
+
+.identity-card strong {
+  color: #eff5ff;
+  font-size: 15px;
 }
 
 .label {
   color: #9fb6dc;
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 </style>

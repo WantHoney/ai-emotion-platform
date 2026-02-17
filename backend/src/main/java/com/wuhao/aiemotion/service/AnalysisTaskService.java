@@ -94,8 +94,12 @@ public class AnalysisTaskService {
                 taskNoFormatter.format(ownerUserId, task.createdAt(), task.id()),
                 task.status(),
                 task.attemptCount(),
+                task.maxAttempts(),
+                task.traceId(),
                 format(task.nextRunAt()),
                 task.errorMessage(),
+                format(task.startedAt()),
+                format(task.finishedAt()),
                 format(task.createdAt()),
                 format(task.updatedAt()),
                 overall
@@ -301,4 +305,3 @@ public class AnalysisTaskService {
         return time == null ? null : time.format(FMT);
     }
 }
-

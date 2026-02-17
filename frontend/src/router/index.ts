@@ -95,6 +95,17 @@ const router = createRouter({
           },
         },
         {
+          path: 'tasks/:id/timeline',
+          name: 'userTaskTimeline',
+          component: () => import('@/views/user/TaskTimelineView.vue'),
+          meta: {
+            requiresUserAuth: true,
+            title: '任务时间线',
+            description: '查看任务从创建到完成的处理节点',
+            breadcrumb: ['用户端', '任务中心', '任务时间线'],
+          },
+        },
+        {
           path: 'reports',
           name: 'userReports',
           component: () => import('@/views/user/ReportsView.vue'),

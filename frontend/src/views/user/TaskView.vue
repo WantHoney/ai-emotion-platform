@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { DocumentCopy } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -42,6 +44,15 @@ const statusTagType = computed(() => {
   return 'warning'
 })
 
+const copyTaskNo = async () => {
+  try {
+    await navigator.clipboard.writeText(displayTaskNo.value)
+    ElMessage.success('任务编号已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动复制')
+  }
+}
+
 onMounted(() => {
   void start()
 })
@@ -56,7 +67,10 @@ onMounted(() => {
           <h2>任务编号 {{ displayTaskNo }}</h2>
           <p class="task-id-tip">Task ID: {{ taskId }}</p>
         </div>
-        <el-tag effect="dark" :type="statusTagType">{{ statusText }}</el-tag>
+        <div class="header-actions">
+          <el-tag effect="dark" :type="statusTagType">{{ statusText }}</el-tag>
+          <el-button size="small" :icon="DocumentCopy" @click="copyTaskNo">复制编号</el-button>
+        </div>
       </div>
 
       <LoadingState v-if="pollingState === 'loading' && !task" />
@@ -70,7 +84,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!task"
         title="任务不存在"
-        description="该任务暂不可用，可能仍在初始化。"
+        description="该任务暂不可用，可能仍在初始化中。"
         action-text="重新拉取"
         @action="start"
       />
@@ -122,6 +136,7 @@ onMounted(() => {
 
         <div class="actions">
           <el-button @click="router.push('/app/tasks')">返回列表</el-button>
+          <el-button @click="router.push(`/app/tasks/${taskId}/timeline`)">查看时间线</el-button>
           <el-button type="primary" @click="router.push('/app/reports')">前往报告中心</el-button>
         </div>
       </el-card>
@@ -146,6 +161,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .hero-subtitle {
@@ -210,4 +231,3 @@ onMounted(() => {
   }
 }
 </style>
-

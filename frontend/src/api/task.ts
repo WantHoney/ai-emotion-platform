@@ -43,8 +43,12 @@ interface AnalysisTaskStatusRaw {
   task_no?: string
   status: Exclude<TaskStatus, 'CANCELED'>
   attempt_count: number
+  max_attempts?: number | null
+  trace_id?: string | null
   next_run_at: string | null
   error_message: string | null
+  started_at?: string | null
+  finished_at?: string | null
   created_at: string
   updated_at: string
   overall: AnalysisTaskOverallSummary | null
@@ -78,9 +82,12 @@ export interface AnalysisTask {
   taskNo?: string
   status: TaskStatus
   attemptCount?: number
+  maxAttempts?: number
   errorMessage?: string
   traceId?: string
   nextRunAt?: string
+  startedAt?: string
+  finishedAt?: string
   durationMs?: number
   serLatencyMs?: number
   result?: AnalysisTaskResult
@@ -114,8 +121,12 @@ const normalizeTask = (raw: AnalysisTaskStatusRaw): AnalysisTask => {
     taskNo: raw.taskNo ?? raw.task_no ?? undefined,
     status: raw.status,
     attemptCount: raw.attempt_count,
+    maxAttempts: raw.max_attempts ?? undefined,
     errorMessage: raw.error_message ?? undefined,
+    traceId: raw.trace_id ?? undefined,
     nextRunAt: raw.next_run_at ?? undefined,
+    startedAt: raw.started_at ?? undefined,
+    finishedAt: raw.finished_at ?? undefined,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     durationMs: raw.overall?.duration_ms,

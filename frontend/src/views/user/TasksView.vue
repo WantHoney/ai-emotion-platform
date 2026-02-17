@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { DocumentCopy } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getTaskList, type AnalysisTask, type TaskStatus } from '@/api/task'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import { getTaskList, type AnalysisTask, type TaskStatus } from '@/api/task'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const router = useRouter()
@@ -34,6 +36,17 @@ const loadTasks = async () => {
     errorState.value = parseError(error, '任务列表加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+const displayTaskNo = (row: AnalysisTask) => row.taskNo || `TASK-${row.id}`
+
+const copyTaskNo = async (row: AnalysisTask) => {
+  try {
+    await navigator.clipboard.writeText(displayTaskNo(row))
+    ElMessage.success('任务编号已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动复制')
   }
 }
 
@@ -89,10 +102,13 @@ void loadTasks()
     />
     <template v-else>
       <el-table :data="rows" border>
-        <el-table-column label="任务编号" min-width="220">
+        <el-table-column label="任务编号" min-width="260">
           <template #default="scope">
             <div class="task-no-cell">
-              <strong>{{ scope.row.taskNo || `TASK-${scope.row.id}` }}</strong>
+              <div class="task-no-row">
+                <strong>{{ displayTaskNo(scope.row) }}</strong>
+                <el-button link type="primary" :icon="DocumentCopy" @click="copyTaskNo(scope.row)">复制</el-button>
+              </div>
               <span>Task ID: {{ scope.row.id }}</span>
             </div>
           </template>
@@ -101,9 +117,12 @@ void loadTasks()
         <el-table-column prop="attemptCount" label="重试次数" width="100" />
         <el-table-column prop="traceId" label="traceId" min-width="180" show-overflow-tooltip />
         <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="200">
           <template #default="scope">
             <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">详情</el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}/timeline`)">
+              时间线
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -128,6 +147,12 @@ void loadTasks()
   gap: 2px;
 }
 
+.task-no-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .task-no-cell span {
   font-size: 12px;
   color: #64748b;
@@ -139,4 +164,3 @@ void loadTasks()
   justify-content: flex-end;
 }
 </style>
-

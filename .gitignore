@@ -24,3 +24,7 @@ Thumbs.db
 # Python virtualenv and runtime logs for SER local service
 backend/ser-service/venv/
 backend/ser-service/logs/
+backend/ser-service/pretrained_models/
+backend/ser-service/wav2vec2_checkpoints/
+backend/ser-service/tmp-*.wav
+backend/ser-service/__pycache__/

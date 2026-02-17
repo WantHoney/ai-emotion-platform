@@ -6,6 +6,7 @@ import tempfile
 import time
 from collections import Counter
 import logging
+import pathlib
 from pathlib import Path
 
 import numpy as np
@@ -51,10 +52,12 @@ EMOTION_MAP = {
 _model = None
 _asr_model = None
 _speechbrain_import_error = None
+_bundled_ffmpeg_path = None
 
 # speechbrain 1.0 expects torchaudio.list_audio_backends on torchaudio>=2
 # Newer torchaudio may remove this symbol; provide a minimal compatibility shim.
 try:
+    import torch as _torch
     import torchaudio as _ta
 
     if not hasattr(_ta, "list_audio_backends"):
@@ -62,8 +65,75 @@ try:
             return ["soundfile"]
 
         _ta.list_audio_backends = _list_audio_backends_compat
+
+    if not hasattr(_ta, "io"):
+        class _TorchaudioIoCompat:
+            class StreamReader:  # pragma: no cover - compatibility shim
+                pass
+
+        _ta.io = _TorchaudioIoCompat()
+
+    _torchaudio_load = getattr(_ta, "load", None)
+    if callable(_torchaudio_load):
+        def _load_compat(uri, *args, **kwargs):
+            try:
+                return _torchaudio_load(uri, *args, **kwargs)
+            except ImportError as exc:
+                # torchaudio>=2.9 may require optional torchcodec at runtime.
+                # For our normalized local wav files, fallback to soundfile keeps
+                # speechbrain classify_file path stable without extra dependency.
+                if "TorchCodec" not in str(exc):
+                    raise
+
+                channels_first = bool(kwargs.get("channels_first", True))
+                frame_offset = int(kwargs.get("frame_offset", 0) or 0)
+                num_frames = int(kwargs.get("num_frames", -1) or -1)
+
+                audio_np, sample_rate = sf.read(str(uri), dtype="float32", always_2d=True)
+                if frame_offset > 0:
+                    audio_np = audio_np[frame_offset:]
+                if num_frames >= 0:
+                    audio_np = audio_np[:num_frames]
+
+                if channels_first:
+                    audio_np = np.ascontiguousarray(audio_np.T)
+                else:
+                    audio_np = np.ascontiguousarray(audio_np)
+
+                return _torch.from_numpy(audio_np), sample_rate
+
+        _ta.load = _load_compat
 except Exception:
     pass
+
+try:
+    import imageio_ffmpeg
+
+    _bundled_ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:
+    _bundled_ffmpeg_path = None
+
+# SpeechBrain internally tries to create symlinks when fetching model files.
+# On Windows without Developer Mode/Admin privilege this raises WinError 1314.
+# Fallback to file copy to keep local development runnable.
+_path_symlink_to = pathlib.Path.symlink_to
+
+
+def _safe_symlink_to(self, target, target_is_directory=False):
+    try:
+        return _path_symlink_to(self, target, target_is_directory=target_is_directory)
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            source = pathlib.Path(target)
+            if source.is_dir():
+                shutil.copytree(source, self, dirs_exist_ok=True)
+            else:
+                shutil.copy2(source, self)
+            return None
+        raise
+
+
+pathlib.Path.symlink_to = _safe_symlink_to
 
 try:
     from speechbrain.inference.interfaces import foreign_class
@@ -101,8 +171,15 @@ def get_asr_model():
     return _asr_model
 
 
-def run_ffmpeg_convert(input_path: Path, output_path: Path):
+def resolve_ffmpeg_binary() -> str | None:
     ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        return ffmpeg_path
+    return _bundled_ffmpeg_path
+
+
+def run_ffmpeg_convert(input_path: Path, output_path: Path):
+    ffmpeg_path = resolve_ffmpeg_binary()
     if not ffmpeg_path:
         raise HTTPException(status_code=500, detail="ffmpeg not found in ser-service")
 
@@ -122,34 +199,6 @@ def run_ffmpeg_convert(input_path: Path, output_path: Path):
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise HTTPException(status_code=400, detail=f"ffmpeg convert failed: {proc.stderr.strip()}")
-
-
-def get_audio_duration_ms(input_path: Path) -> int:
-    ffprobe_path = shutil.which("ffprobe")
-    if not ffprobe_path:
-        raise HTTPException(status_code=500, detail="ffprobe not found in ser-service")
-
-    cmd = [
-        ffprobe_path,
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        str(input_path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise HTTPException(status_code=400, detail=f"unsupported or invalid audio format: {proc.stderr.strip()}")
-
-    duration_text = proc.stdout.strip()
-    try:
-        duration_sec = float(duration_text)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="failed to read audio duration")
-
-    return int(math.floor(duration_sec * 1000))
 
 
 def normalize_label(raw_label: str) -> str:
@@ -210,10 +259,26 @@ def health():
         "serModel": MODEL_NAME,
         "serModelReady": foreign_class is not None,
         "serModelImportError": _speechbrain_import_error,
+        "ffmpegReady": resolve_ffmpeg_binary() is not None,
+        "ffmpegPath": resolve_ffmpeg_binary(),
         "asrModel": WHISPER_MODEL,
         "asrDevice": WHISPER_DEVICE,
         "asrComputeType": WHISPER_COMPUTE_TYPE,
         "asrCpuThreads": WHISPER_CPU_THREADS,
+    }
+
+
+@app.get("/warmup")
+def warmup():
+    try:
+        get_model()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"ser warmup failed: {exc}")
+
+    return {
+        "status": "ok",
+        "serModel": MODEL_NAME,
+        "serModelReady": True,
     }
 
 
@@ -312,15 +377,6 @@ async def transcribe(file: UploadFile = File(...)):
         content = await file.read()
         raw_path.write_bytes(content)
 
-        raw_duration_ms = get_audio_duration_ms(raw_path)
-        if raw_duration_ms <= 0:
-            raise HTTPException(status_code=400, detail="empty audio")
-        if raw_duration_ms > MAX_ASR_DURATION_MS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"audio too long: {raw_duration_ms}ms, max allowed is {MAX_ASR_DURATION_MS}ms",
-            )
-
         run_ffmpeg_convert(raw_path, wav_path)
 
         audio, sr = sf.read(str(wav_path), dtype="float32")
@@ -330,6 +386,11 @@ async def transcribe(file: UploadFile = File(...)):
         duration_ms = int(math.floor((len(audio) / sr) * 1000))
         if duration_ms <= 0:
             raise HTTPException(status_code=400, detail="empty audio after conversion")
+        if duration_ms > MAX_ASR_DURATION_MS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"audio too long: {duration_ms}ms, max allowed is {MAX_ASR_DURATION_MS}ms",
+            )
 
         segments_iter, info = model.transcribe(str(wav_path), vad_filter=True)
         segments = [

@@ -65,7 +65,7 @@ onMounted(() => {
         <div>
           <p class="hero-subtitle">情绪分析任务</p>
           <h2>任务编号 {{ displayTaskNo }}</h2>
-          <p class="task-id-tip">Task ID: {{ taskId }}</p>
+          <p class="task-id-tip">任务ID: {{ taskId }}</p>
         </div>
         <div class="header-actions">
           <el-tag effect="dark" :type="statusTagType">{{ statusText }}</el-tag>
@@ -133,6 +133,14 @@ onMounted(() => {
           <el-descriptions-item label="SER 延迟">{{ task.serLatencyMs ?? '-' }}ms</el-descriptions-item>
           <el-descriptions-item label="建议" :span="2">{{ task.result?.advice_text ?? '-' }}</el-descriptions-item>
         </el-descriptions>
+
+        <el-alert
+          title="分析在服务端持续执行，离开当前页面只会停止前端轮询。"
+          type="info"
+          :closable="false"
+          class="polling-hint"
+          show-icon
+        />
 
         <div class="actions">
           <el-button @click="router.push('/app/tasks')">返回列表</el-button>
@@ -213,6 +221,10 @@ onMounted(() => {
   margin: 0;
 }
 
+.polling-hint {
+  margin-top: 12px;
+}
+
 .actions {
   margin-top: 16px;
   display: flex;
@@ -231,3 +243,4 @@ onMounted(() => {
   }
 }
 </style>
+

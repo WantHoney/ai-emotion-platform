@@ -57,7 +57,7 @@ const kpiItems = computed<KpiItem[]>(() => {
     { label: '综合情绪', value: report.value.overall || '-' },
     { label: '置信度', value: confidencePercent.value },
     { label: '风险分数', value: `${normalizedRiskScore.value.toFixed(0)}/100` },
-    { label: '任务 ID', value: `#${report.value.taskId}` },
+    { label: '任务编号', value: report.value.taskNo || `TASK-${report.value.taskId}` },
   ]
 })
 
@@ -158,11 +158,11 @@ onMounted(() => {
     <template v-else>
       <SectionBlock
         eyebrow="报告卷宗"
-        :title="`报告 #${report.id}`"
+        :title="report.reportNo || `REPORT-${report.id}`"
         description="多模态情绪分析的结构化输出。"
       >
         <div class="top-meta">
-          <p>生成时间：{{ formattedCreatedAt }}</p>
+          <p>报告ID: {{ report.id }} | 任务ID: {{ report.taskId }} | 生成时间: {{ formattedCreatedAt }}</p>
           <BadgeTag :tone="riskTone" :text="report.riskLevel || '风险未知'" />
         </div>
 
@@ -327,3 +327,4 @@ ul {
   }
 }
 </style>
+

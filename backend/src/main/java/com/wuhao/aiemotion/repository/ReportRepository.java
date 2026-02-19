@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 @Repository
 public class ReportRepository {
@@ -181,6 +182,22 @@ public class ReportRepository {
                 taskId
         );
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    public long countReportsByUserUntil(long userId, long reportIdInclusive) {
+        Long total = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM report_resource rr
+                JOIN audio_file af ON af.id=rr.audio_id
+                WHERE af.user_id=?
+                  AND rr.id <= ?
+                """,
+                Long.class,
+                userId,
+                reportIdInclusive
+        );
+        return total == null ? 0L : total;
     }
 
     public int softDelete(long reportId) {

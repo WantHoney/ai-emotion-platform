@@ -286,6 +286,22 @@ public class AnalysisTaskRepository {
         return values.isEmpty() ? Optional.empty() : Optional.ofNullable(values.get(0));
     }
 
+    public long countTasksByUserUntil(long userId, long taskIdInclusive) {
+        Long total = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM analysis_task t
+                JOIN audio_file af ON af.id=t.audio_file_id
+                WHERE af.user_id=?
+                  AND t.id <= ?
+                """,
+                Long.class,
+                userId,
+                taskIdInclusive
+        );
+        return total == null ? 0L : total;
+    }
+
     public long countActiveTasks() {
         Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM analysis_task WHERE status='RUNNING'", Long.class);
         return total == null ? 0 : total;

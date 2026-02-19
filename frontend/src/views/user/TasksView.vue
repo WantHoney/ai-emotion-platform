@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { DocumentCopy } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getTaskList, type AnalysisTask, type TaskStatus } from '@/api/task'
@@ -15,6 +15,9 @@ const loading = ref(false)
 const rows = ref<AnalysisTask[]>([])
 const total = ref(0)
 const errorState = ref<ErrorStatePayload | null>(null)
+let refreshTimer: number | null = null
+let isRequestInFlight = false
+let queuedLoadMode: 'silent' | 'normal' | null = null
 
 const query = reactive({
   page: 1,
@@ -25,17 +28,51 @@ const query = reactive({
   sortOrder: 'desc' as 'asc' | 'desc',
 })
 
-const loadTasks = async () => {
-  loading.value = true
-  errorState.value = null
+const queueLoad = (silent: boolean) => {
+  if (queuedLoadMode === 'normal') return
+  queuedLoadMode = silent ? 'silent' : 'normal'
+}
+
+const loadTasks = async (options: { silent?: boolean } = {}) => {
+  const silent = options.silent === true
+
+  if (isRequestInFlight) {
+    queueLoad(silent)
+    if (!silent) {
+      loading.value = true
+      errorState.value = null
+    }
+    return
+  }
+
+  isRequestInFlight = true
+  if (!silent) {
+    loading.value = true
+    errorState.value = null
+  }
+
   try {
     const { data } = await getTaskList(query)
     rows.value = data.items ?? data.list ?? []
     total.value = data.total
+    if (!silent) {
+      errorState.value = null
+    }
   } catch (error) {
-    errorState.value = parseError(error, '任务列表加载失败')
+    if (!silent) {
+      errorState.value = parseError(error, 'Task list load failed')
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
+    isRequestInFlight = false
+
+    const nextMode = queuedLoadMode
+    queuedLoadMode = null
+    if (nextMode) {
+      void loadTasks({ silent: nextMode === 'silent' })
+    }
   }
 }
 
@@ -44,21 +81,34 @@ const displayTaskNo = (row: AnalysisTask) => row.taskNo || `TASK-${row.id}`
 const copyTaskNo = async (row: AnalysisTask) => {
   try {
     await navigator.clipboard.writeText(displayTaskNo(row))
-    ElMessage.success('任务编号已复制')
+    ElMessage.success('Task number copied')
   } catch {
-    ElMessage.warning('复制失败，请手动复制')
+    ElMessage.warning('Copy failed, please copy manually')
   }
 }
 
-void loadTasks()
+onMounted(() => {
+  void loadTasks()
+  refreshTimer = window.setInterval(() => {
+    void loadTasks({ silent: true })
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer !== null) {
+    window.clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+})
 </script>
 
 <template>
   <el-card>
-    <template #header>任务中心</template>
+    <template #header>Task Center</template>
+    <p class="auto-refresh-tip">Auto refresh runs every 5 seconds without request re-entry.</p>
 
     <el-form inline>
-      <el-form-item label="状态">
+      <el-form-item label="Status">
         <el-select v-model="query.status" clearable style="width: 140px">
           <el-option label="PENDING" value="PENDING" />
           <el-option label="RUNNING" value="RUNNING" />
@@ -68,21 +118,21 @@ void loadTasks()
           <el-option label="CANCELED" value="CANCELED" />
         </el-select>
       </el-form-item>
-      <el-form-item label="搜索">
-        <el-input v-model="query.keyword" placeholder="任务编号 / Task ID / traceId" clearable />
+      <el-form-item label="Search">
+        <el-input v-model="query.keyword" placeholder="Task No / 任务ID / traceId" clearable />
       </el-form-item>
-      <el-form-item label="排序">
+      <el-form-item label="Sort">
         <el-select v-model="query.sortBy" style="width: 140px">
-          <el-option label="创建时间" value="createdAt" />
-          <el-option label="更新时间" value="updatedAt" />
-          <el-option label="状态" value="status" />
+          <el-option label="Created" value="createdAt" />
+          <el-option label="Updated" value="updatedAt" />
+          <el-option label="Status" value="status" />
         </el-select>
         <el-select v-model="query.sortOrder" style="width: 100px; margin-left: 8px">
-          <el-option label="降序" value="desc" />
-          <el-option label="升序" value="asc" />
+          <el-option label="Desc" value="desc" />
+          <el-option label="Asc" value="asc" />
         </el-select>
       </el-form-item>
-      <el-button type="primary" @click="loadTasks">查询</el-button>
+      <el-button type="primary" @click="loadTasks">Query</el-button>
     </el-form>
 
     <LoadingState v-if="loading" />
@@ -95,34 +145,32 @@ void loadTasks()
     />
     <EmptyState
       v-else-if="rows.length === 0"
-      title="暂无任务"
-      description="当前筛选条件下没有任务记录。"
-      action-text="刷新列表"
+      title="No Tasks"
+      description="No task records under current filter conditions."
+      action-text="Refresh"
       @action="loadTasks"
     />
     <template v-else>
       <el-table :data="rows" border>
-        <el-table-column label="任务编号" min-width="260">
+        <el-table-column label="Task No" min-width="260">
           <template #default="scope">
             <div class="task-no-cell">
               <div class="task-no-row">
                 <strong>{{ displayTaskNo(scope.row) }}</strong>
-                <el-button link type="primary" :icon="DocumentCopy" @click="copyTaskNo(scope.row)">复制</el-button>
+                <el-button link type="primary" :icon="DocumentCopy" @click="copyTaskNo(scope.row)">Copy</el-button>
               </div>
-              <span>Task ID: {{ scope.row.id }}</span>
+              <span>任务ID: {{ scope.row.id }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="120" />
-        <el-table-column prop="attemptCount" label="重试次数" width="100" />
+        <el-table-column prop="status" label="Status" width="120" />
+        <el-table-column prop="attemptCount" label="Retries" width="100" />
         <el-table-column prop="traceId" label="traceId" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
-        <el-table-column label="操作" width="200">
+        <el-table-column prop="updatedAt" label="Updated At" min-width="180" />
+        <el-table-column label="Actions" width="200">
           <template #default="scope">
-            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">详情</el-button>
-            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}/timeline`)">
-              时间线
-            </el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">Detail</el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}/timeline`)">Timeline</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -156,6 +204,12 @@ void loadTasks()
 .task-no-cell span {
   font-size: 12px;
   color: #64748b;
+}
+
+.auto-refresh-tip {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .pager {

@@ -65,6 +65,7 @@ void loadReports()
           <el-option label="中风险" value="medium" />
           <el-option label="高风险" value="high" />
         </el-select>
+        <el-button @click="router.push('/app/tasks')">进行中任务</el-button>
         <el-button type="primary" @click="loadReports">查询</el-button>
       </div>
 
@@ -88,8 +89,8 @@ void loadReports()
           <LoreCard
             v-for="item in rows"
             :key="item.id"
-            :title="`报告 #${item.id}`"
-            :subtitle="`任务 #${item.taskId}`"
+            :title="item.reportNo || `REPORT-${item.id}`"
+            :subtitle="item.taskNo || `TASK-${item.taskId}`"
             interactive
             @click="router.push(`/app/reports/${item.id}`)"
           >
@@ -98,6 +99,7 @@ void loadReports()
               <span>{{ item.overall || '情绪未知' }}</span>
             </div>
             <p class="created-at">{{ item.createdAt || '时间未知' }}</p>
+            <p class="id-hint">报告ID: {{ item.id }} | 任务ID: {{ item.taskId }}</p>
             <template #footer>
               <el-button type="primary" text @click.stop="router.push(`/app/reports/${item.id}`)">查看详情</el-button>
             </template>
@@ -127,7 +129,7 @@ void loadReports()
 
 .filters {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 140px auto;
+  grid-template-columns: 1.3fr 1fr 140px auto auto;
   gap: 10px;
 }
 
@@ -151,6 +153,12 @@ void loadReports()
   font-size: 13px;
 }
 
+.id-hint {
+  margin: 4px 0 0;
+  color: #8aa2c8;
+  font-size: 12px;
+}
+
 .pager {
   display: flex;
   justify-content: flex-end;
@@ -167,3 +175,4 @@ void loadReports()
   }
 }
 </style>
+

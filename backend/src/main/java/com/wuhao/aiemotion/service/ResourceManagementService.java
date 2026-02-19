@@ -12,6 +12,7 @@ import com.wuhao.aiemotion.dto.response.TaskListResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
+import com.wuhao.aiemotion.repository.AuthRepository;
 import com.wuhao.aiemotion.repository.AudioRepository;
 import com.wuhao.aiemotion.repository.ReportRepository;
 import org.slf4j.Logger;
@@ -41,26 +42,32 @@ public class ResourceManagementService {
     private final AnalysisSegmentRepository analysisSegmentRepository;
     private final ReportRepository reportRepository;
     private final AudioRepository audioRepository;
+    private final AuthRepository authRepository;
     private final ObjectMapper objectMapper;
     private final WarningEventTriggerService warningEventTriggerService;
     private final TaskNoFormatter taskNoFormatter;
+    private final ReportNoFormatter reportNoFormatter;
 
     public ResourceManagementService(AnalysisTaskRepository analysisTaskRepository,
                                      AnalysisResultRepository analysisResultRepository,
                                      AnalysisSegmentRepository analysisSegmentRepository,
                                      ReportRepository reportRepository,
                                      AudioRepository audioRepository,
+                                     AuthRepository authRepository,
                                      ObjectMapper objectMapper,
                                      WarningEventTriggerService warningEventTriggerService,
-                                     TaskNoFormatter taskNoFormatter) {
+                                     TaskNoFormatter taskNoFormatter,
+                                     ReportNoFormatter reportNoFormatter) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
         this.reportRepository = reportRepository;
         this.audioRepository = audioRepository;
+        this.authRepository = authRepository;
         this.objectMapper = objectMapper;
         this.warningEventTriggerService = warningEventTriggerService;
         this.taskNoFormatter = taskNoFormatter;
+        this.reportNoFormatter = reportNoFormatter;
     }
 
     public TaskListResponse tasks(int page,
@@ -84,11 +91,7 @@ public class ResourceManagementService {
             List<TaskListResponse.TaskDTO> items = rows.stream()
                     .map(it -> new TaskListResponse.TaskDTO(
                             it.id(),
-                            taskNoFormatter.format(
-                                    resolveTaskOwnerUserId(it),
-                                    it.createdAt(),
-                                    it.id()
-                            ),
+                            buildTaskNo(it),
                             it.audioFileId(),
                             it.status(),
                             it.attemptCount(),
@@ -131,7 +134,7 @@ public class ResourceManagementService {
                     ? reportRepository.page(riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder)
                     : reportRepository.pageByUser(userId, riskLevel, emotion, keyword, offset, safeSize, sortBy, sortOrder);
             List<ReportListResponse.ReportDTO> items = rows.stream()
-                    .map(this::toReportDTO)
+                    .map(report -> toReportDTO(report, resolveReportOwnerUserId(report)))
                     .toList();
             return new ReportListResponse(total, safePage, safeSize, safeSize, items);
         } catch (Exception e) {
@@ -145,7 +148,7 @@ public class ResourceManagementService {
                 ? reportRepository.findById(reportId)
                 : reportRepository.findByIdForUser(reportId, userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "report not found: " + reportId));
-        return toReportDTO(report);
+        return toReportDTO(report, resolveReportOwnerUserId(report));
     }
 
     public Map<String, Object> reportTrend(long userId, int days) {
@@ -239,7 +242,7 @@ public class ResourceManagementService {
         warningEventTriggerService.tryCreateWarningEvent(taskId, audioId, rawJson, overall, riskLevel);
     }
 
-    private ReportListResponse.ReportDTO toReportDTO(ReportResource report) {
+    private ReportListResponse.ReportDTO toReportDTO(ReportResource report, Long ownerUserId) {
         var audio = audioRepository.findById(report.audioId())
                 .map(a -> new ReportListResponse.AudioMetaDTO(a.id(), a.originalName(), a.storedName(), a.contentType(), a.sizeBytes(), a.durationMs()))
                 .orElse(null);
@@ -275,7 +278,18 @@ public class ResourceManagementService {
         } catch (IOException ignored) {
         }
 
-        return new ReportListResponse.ReportDTO(report.id(), report.taskId(), overall, segments, risk, confidence, format(report.createdAt()), audio);
+        return new ReportListResponse.ReportDTO(
+                report.id(),
+                buildReportNo(ownerUserId, report),
+                report.taskId(),
+                buildTaskNo(ownerUserId, report.taskId()),
+                overall,
+                segments,
+                risk,
+                confidence,
+                format(report.createdAt()),
+                audio
+        );
     }
 
     private Map<String, Object> toTrendItem(Map<String, Object> row) {
@@ -328,5 +342,49 @@ public class ResourceManagementService {
     private Long resolveTaskOwnerUserId(AnalysisTask task) {
         if (task.audioFileId() == null) return null;
         return audioRepository.findUserIdByAudioId(task.audioFileId()).orElse(null);
+    }
+
+    private Long resolveReportOwnerUserId(ReportResource report) {
+        return audioRepository.findUserIdByAudioId(report.audioId()).orElse(null);
+    }
+
+    private String buildTaskNo(AnalysisTask task) {
+        Long ownerUserId = resolveTaskOwnerUserId(task);
+        long serial = resolveUserTaskSequence(ownerUserId, task.createdAt(), task.id());
+        return taskNoFormatter.format(resolveUserRegisterNo(ownerUserId), task.createdAt(), serial);
+    }
+
+    private String buildTaskNo(Long ownerUserId, long taskId) {
+        AnalysisTask task = analysisTaskRepository.findById(taskId).orElse(null);
+        LocalDateTime createdAt = task == null ? null : task.createdAt();
+        long serial = resolveUserTaskSequence(ownerUserId, createdAt, taskId);
+        return taskNoFormatter.format(resolveUserRegisterNo(ownerUserId), createdAt, serial);
+    }
+
+    private String buildReportNo(Long ownerUserId, ReportResource report) {
+        long serial = resolveUserReportSequence(ownerUserId, report.createdAt(), report.id());
+        return reportNoFormatter.format(resolveUserRegisterNo(ownerUserId), report.createdAt(), serial);
+    }
+
+    private long resolveUserTaskSequence(Long ownerUserId, LocalDateTime createdAt, long fallbackTaskId) {
+        if (ownerUserId == null) {
+            return fallbackTaskId;
+        }
+        return analysisTaskRepository.countTasksByUserUntil(ownerUserId, fallbackTaskId);
+    }
+
+    private long resolveUserReportSequence(Long ownerUserId, LocalDateTime createdAt, long fallbackReportId) {
+        if (ownerUserId == null) {
+            return fallbackReportId;
+        }
+        return reportRepository.countReportsByUserUntil(ownerUserId, fallbackReportId);
+    }
+
+    private long resolveUserRegisterNo(Long ownerUserId) {
+        if (ownerUserId == null) {
+            return 0L;
+        }
+        long serial = authRepository.countUserRegisterSequence(ownerUserId);
+        return serial > 0 ? serial : ownerUserId;
     }
 }

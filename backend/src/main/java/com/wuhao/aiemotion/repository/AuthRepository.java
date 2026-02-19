@@ -165,6 +165,30 @@ public class AuthRepository {
         jdbcTemplate.update("DELETE FROM auth_session WHERE refresh_token = ?", refreshToken);
     }
 
+    public long countUserRegisterSequence(long userId) {
+        Long count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM auth_user u
+                JOIN auth_user target ON target.id = ?
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM auth_user_role ur
+                    JOIN auth_role r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id
+                      AND r.code = 'USER'
+                )
+                  AND (
+                    u.created_at < target.created_at
+                    OR (u.created_at = target.created_at AND u.id <= target.id)
+                  )
+                """,
+                Long.class,
+                userId
+        );
+        return count == null ? 0L : count;
+    }
+
     public record DbUser(long id, String username, String passwordHash, String status, String roleCode) {
     }
 

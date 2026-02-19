@@ -12,6 +12,7 @@ import com.wuhao.aiemotion.dto.response.AnalysisTaskStatusResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
+import com.wuhao.aiemotion.repository.AuthRepository;
 import com.wuhao.aiemotion.repository.AudioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class AnalysisTaskService {
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisSegmentRepository analysisSegmentRepository;
     private final AudioRepository audioRepository;
+    private final AuthRepository authRepository;
     private final PsychologicalRiskScoringService riskScoringService;
     private final ObjectMapper objectMapper;
     private final AnalysisWorkerProperties workerProperties;
@@ -45,6 +47,7 @@ public class AnalysisTaskService {
                                AnalysisResultRepository analysisResultRepository,
                                AnalysisSegmentRepository analysisSegmentRepository,
                                AudioRepository audioRepository,
+                               AuthRepository authRepository,
                                PsychologicalRiskScoringService riskScoringService,
                                ObjectMapper objectMapper,
                                AnalysisWorkerProperties workerProperties,
@@ -53,6 +56,7 @@ public class AnalysisTaskService {
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
         this.audioRepository = audioRepository;
+        this.authRepository = authRepository;
         this.riskScoringService = riskScoringService;
         this.objectMapper = objectMapper;
         this.workerProperties = workerProperties;
@@ -69,7 +73,9 @@ public class AnalysisTaskService {
         String traceId = MDC.get("traceId");
         long taskId = analysisTaskRepository.insertPendingTask(audioId, workerProperties.getMaxAttempts(), traceId);
         AnalysisTask task = analysisTaskRepository.findById(taskId).orElse(null);
-        String taskNo = taskNoFormatter.format(ownerUserId, task == null ? null : task.createdAt(), taskId);
+        LocalDateTime createdAt = task == null ? null : task.createdAt();
+        long userTaskSequence = resolveUserTaskSequence(ownerUserId, createdAt, taskId);
+        String taskNo = taskNoFormatter.format(resolveUserRegisterNo(ownerUserId), createdAt, userTaskSequence);
         return new AnalysisTaskStartResponse(taskId, taskNo, "PENDING");
     }
 
@@ -91,7 +97,7 @@ public class AnalysisTaskService {
 
         return new AnalysisTaskStatusResponse(
                 task.id(),
-                taskNoFormatter.format(ownerUserId, task.createdAt(), task.id()),
+                taskNoFormatter.format(resolveUserRegisterNo(ownerUserId), task.createdAt(), resolveUserTaskSequence(ownerUserId, task.createdAt(), task.id())),
                 task.status(),
                 task.attemptCount(),
                 task.maxAttempts(),
@@ -303,5 +309,20 @@ public class AnalysisTaskService {
 
     private String format(LocalDateTime time) {
         return time == null ? null : time.format(FMT);
+    }
+
+    private long resolveUserTaskSequence(Long ownerUserId, LocalDateTime createdAt, long fallbackTaskId) {
+        if (ownerUserId == null) {
+            return fallbackTaskId;
+        }
+        return analysisTaskRepository.countTasksByUserUntil(ownerUserId, fallbackTaskId);
+    }
+
+    private long resolveUserRegisterNo(Long ownerUserId) {
+        if (ownerUserId == null) {
+            return 0L;
+        }
+        long serial = authRepository.countUserRegisterSequence(ownerUserId);
+        return serial > 0 ? serial : ownerUserId;
     }
 }

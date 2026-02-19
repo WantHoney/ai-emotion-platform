@@ -23,6 +23,7 @@ const publicNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   { label: '语音上传', path: '/app/upload', requiresAuth: true },
+  { label: '任务中心', path: '/app/tasks', requiresAuth: true },
   { label: '报告中心', path: '/app/reports', requiresAuth: true },
   { label: '趋势分析', path: '/app/trends', requiresAuth: true },
   { label: '心理中心', path: '/app/psy-centers', requiresAuth: true },
@@ -97,3 +98,4 @@ const handleUserNavigate = async (path: string) => {
     </AppShell>
   </div>
 </template>
+

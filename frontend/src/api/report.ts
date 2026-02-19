@@ -4,7 +4,9 @@ import type { PaginatedResponse } from './task'
 
 export interface ReportSummary {
   id: number
+  reportNo?: string
   taskId: number
+  taskNo?: string
   overall?: string
   riskLevel?: string
   confidence?: number
@@ -52,8 +54,12 @@ export interface ReportTrendResponse {
 interface ReportSummaryRaw {
   id?: number | string
   report_id?: number | string
+  reportNo?: string
+  report_no?: string
   taskId?: number | string
   task_id?: number | string
+  taskNo?: string
+  task_no?: string
   overall?: string
   overall_emotion_code?: string
   riskLevel?: string
@@ -99,7 +105,9 @@ const normalizeReportSummary = (raw: ReportSummaryRaw): ReportSummary => {
 
   return {
     id,
+    reportNo: raw.reportNo ?? raw.report_no,
     taskId,
+    taskNo: raw.taskNo ?? raw.task_no,
     overall: raw.overall ?? raw.overall_emotion_code,
     riskLevel: raw.riskLevel ?? raw.risk_level ?? raw.risk?.level,
     confidence: toNumber(raw.confidence ?? raw.overall_confidence),

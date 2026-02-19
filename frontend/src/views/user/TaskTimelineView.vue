@@ -137,7 +137,7 @@ onMounted(() => {
         <div>
           <p class="subtitle">任务轨迹</p>
           <h2>任务编号 {{ displayTaskNo }}</h2>
-          <p class="tip">Task ID: {{ taskId }}</p>
+          <p class="tip">任务ID: {{ taskId }}</p>
         </div>
         <div class="header-actions">
           <el-button :icon="DocumentCopy" @click="copyTaskNo">复制编号</el-button>

@@ -11,7 +11,9 @@ public record ReportListResponse(
 ) {
     public record ReportDTO(
             long id,
+            String reportNo,
             long taskId,
+            String taskNo,
             String overall,
             List<SegmentDTO> segments,
             RiskDTO risk,

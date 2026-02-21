@@ -8,13 +8,16 @@ export interface KpiItem {
 defineProps<{
   items: KpiItem[]
 }>()
+
+const toText = (value: string | number) => String(value ?? '')
+const isLongValue = (value: string | number) => toText(value).length >= 10
 </script>
 
 <template>
   <div class="kpi-grid">
     <article v-for="item in items" :key="item.label" class="kpi-card" v-motion :initial="{ opacity: 0, y: 24 }" :visibleOnce="{ opacity: 1, y: 0 }">
       <p class="label">{{ item.label }}</p>
-      <h3 class="value">{{ item.value }}</h3>
+      <h3 class="value" :class="{ 'value--long': isLongValue(item.value) }">{{ item.value }}</h3>
       <p v-if="item.helper" class="helper">{{ item.helper }}</p>
     </article>
   </div>
@@ -24,7 +27,7 @@ defineProps<{
 .kpi-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .kpi-card {
@@ -47,31 +50,28 @@ defineProps<{
 .value {
   margin: 8px 0 0;
   color: #f8fafc;
-  font-size: clamp(24px, 2.3vw, 38px);
+  font-size: clamp(24px, 2.1vw, 36px);
   line-height: 1.15;
   font-family: var(--font-display);
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.value--long {
+  font-size: clamp(18px, 1.5vw, 28px);
+  line-height: 1.2;
   white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .helper {
   margin: 10px 0 0;
   color: #bfd1ee;
   font-size: 12px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
-}
-
-@media (max-width: 960px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .kpi-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

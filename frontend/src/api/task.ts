@@ -37,6 +37,16 @@ export interface AnalysisTaskResult {
   segments?: SegmentEmotion[]
 }
 
+export interface AnalysisTaskResultDetail {
+  taskId: number
+  overallEmotionCode?: string
+  overallConfidence?: number
+  riskAssessment?: RiskAssessmentPayload
+  rawJson?: string
+  transcript?: string
+  segments: SegmentEmotion[]
+}
+
 interface AnalysisTaskStatusRaw {
   taskId: number
   taskNo?: string
@@ -75,6 +85,23 @@ interface AnalysisTaskListRaw {
   created_at?: string
   updatedAt?: string
   updated_at?: string
+}
+
+interface AnalysisTaskResultRaw {
+  analysis_result?: {
+    task_id?: number
+    overall_emotion_code?: string
+    overall_confidence?: number
+    risk_assessment?: RiskAssessmentPayload
+    raw_json?: string
+    transcript?: string
+  }
+  analysis_segment?: Array<{
+    start_ms?: number
+    end_ms?: number
+    emotion_code?: string
+    confidence?: number
+  }>
 }
 
 export interface AnalysisTask {
@@ -193,6 +220,28 @@ const buildTaskListParams = (params: TaskListQuery) => {
   return nextParams
 }
 
+const normalizeTaskResult = (payload: AnalysisTaskResultRaw): AnalysisTaskResultDetail => {
+  const result = payload.analysis_result
+  const segments: SegmentEmotion[] = Array.isArray(payload.analysis_segment)
+    ? payload.analysis_segment.map((it) => ({
+        start: Number(it.start_ms ?? 0),
+        end: Number(it.end_ms ?? 0),
+        emotion: String(it.emotion_code ?? ''),
+        confidence: Number(it.confidence ?? 0),
+      }))
+    : []
+
+  return {
+    taskId: Number(result?.task_id ?? 0),
+    overallEmotionCode: result?.overall_emotion_code,
+    overallConfidence: result?.overall_confidence,
+    riskAssessment: result?.risk_assessment,
+    rawJson: result?.raw_json,
+    transcript: result?.transcript,
+    segments,
+  }
+}
+
 export const getTaskList = async (params: TaskListQuery) => {
   const response = await http.get<PaginatedResponse<AnalysisTaskListRaw>>('/api/tasks', {
     params: buildTaskListParams(params),
@@ -214,5 +263,10 @@ export const getTask = async (taskId: number) => {
 }
 
 export const getResult = (taskId: number) => {
-  return http.get<AnalysisTaskResult>(`/api/analysis/task/${taskId}/result`)
+  return http
+    .get<AnalysisTaskResultRaw>(`/api/analysis/task/${taskId}/result`)
+    .then((response) => ({
+      ...response,
+      data: normalizeTaskResult(response.data),
+    }))
 }

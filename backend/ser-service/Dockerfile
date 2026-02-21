@@ -15,7 +15,8 @@ RUN pip uninstall -y torchaudio torch || true \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.4.1 torchaudio==2.4.1 \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY app.py hf_wav2vec2_runtime.py text_sentiment_runtime.py ./
+COPY training ./training
 EXPOSE 8001
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]

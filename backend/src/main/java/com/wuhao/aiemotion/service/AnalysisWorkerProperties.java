@@ -11,6 +11,7 @@ public class AnalysisWorkerProperties {
     private int maxAttempts = 4;
     private long serTimeoutMs = 180000;
     private long asrTimeoutMs = 90000;
+    private long textSentimentTimeoutMs = 20000;
     private int backoffBaseSeconds = 30;
     private int backoffMaxSeconds = 600;
 
@@ -60,6 +61,14 @@ public class AnalysisWorkerProperties {
 
     public void setAsrTimeoutMs(long asrTimeoutMs) {
         this.asrTimeoutMs = asrTimeoutMs;
+    }
+
+    public long getTextSentimentTimeoutMs() {
+        return textSentimentTimeoutMs;
+    }
+
+    public void setTextSentimentTimeoutMs(long textSentimentTimeoutMs) {
+        this.textSentimentTimeoutMs = textSentimentTimeoutMs;
     }
 
     public int getBackoffBaseSeconds() {

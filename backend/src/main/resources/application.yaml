@@ -68,6 +68,7 @@ analysis:
     max-attempts: ${ANALYSIS_TASK_MAX_ATTEMPTS:4}
     ser-timeout-ms: ${ANALYSIS_WORKER_SER_TIMEOUT_MS:180000}
     asr-timeout-ms: ${ANALYSIS_WORKER_ASR_TIMEOUT_MS:180000}
+    text-sentiment-timeout-ms: ${ANALYSIS_WORKER_TEXT_SENTIMENT_TIMEOUT_MS:20000}
     backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
     backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}
 

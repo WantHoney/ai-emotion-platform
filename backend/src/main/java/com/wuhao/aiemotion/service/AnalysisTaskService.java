@@ -256,7 +256,9 @@ public class AnalysisTaskService {
     }
 
     private double resolveTextNeg(AnalysisResult result) {
-        return readDouble(result.rawJson(), "/textNeg/textNeg")
+        return readDouble(result.rawJson(), "/textNegFusion/fusedTextNeg")
+                .or(() -> readDouble(result.rawJson(), "/textSentiment/negativeScore"))
+                .or(() -> readDouble(result.rawJson(), "/textNeg/textNeg"))
                 .or(() -> readDouble(result.rawJson(), "/riskAssessment/text_neg"))
                 .orElse(0.0D);
     }

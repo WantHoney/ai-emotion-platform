@@ -36,3 +36,12 @@ build/
 __pycache__/
 *.pyc
 .venv/
+ser-service/venv/
+ser-service/venv-gpu/
+ser-service/text_models/
+ser-service/training/checkpoints/
+ser-service/training/fusion/
+ser-service/training/logs/
+ser-service/training/manifests/
+ser-service/training/*.log
+data/datasets/

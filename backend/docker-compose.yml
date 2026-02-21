@@ -16,6 +16,19 @@ services:
       context: ./ser-service
       dockerfile: Dockerfile
     environment:
+      SER_ENGINE: ${SER_ENGINE:-hf_wav2vec2}
+      SER_HF_ROUTING: ${SER_HF_ROUTING:-language}
+      SER_HF_MODEL_DIR: ${SER_HF_MODEL_DIR:-./wav2vec2_finetuned}
+      SER_HF_MODEL_DIR_EN: ${SER_HF_MODEL_DIR_EN:-./training/checkpoints/ser_multilingual_4class_exp02/best_model}
+      SER_HF_MODEL_DIR_ZH: ${SER_HF_MODEL_DIR_ZH:-./training/checkpoints/ser_casia_ft_exp01/best_model}
+      SER_HF_DEFAULT_LANGUAGE: ${SER_HF_DEFAULT_LANGUAGE:-zh}
+      SER_HF_DEVICE: ${SER_HF_DEVICE:-cpu}
+      TEXT_ENGINE: ${TEXT_ENGINE:-hf}
+      TEXT_HF_ROUTING: ${TEXT_HF_ROUTING:-language}
+      TEXT_HF_MODEL_EN: ${TEXT_HF_MODEL_EN:-cardiffnlp/twitter-roberta-base-sentiment-latest}
+      TEXT_HF_MODEL_ZH: ${TEXT_HF_MODEL_ZH:-uer/roberta-base-finetuned-jd-binary-chinese}
+      TEXT_HF_DEFAULT_LANGUAGE: ${TEXT_HF_DEFAULT_LANGUAGE:-zh}
+      TEXT_HF_DEVICE: ${TEXT_HF_DEVICE:-cpu}
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
     ports:

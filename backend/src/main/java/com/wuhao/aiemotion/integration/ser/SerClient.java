@@ -32,12 +32,40 @@ public class SerClient {
     }
 
     public SerAnalyzeResponse analyze(Path audioPath) {
+        return analyze(audioPath, null, null);
+    }
+
+    public SerAnalyzeResponse analyze(Path audioPath, String languageHint) {
+        return analyze(audioPath, languageHint, null);
+    }
+
+    public SerAnalyzeResponse analyze(Path audioPath, String languageHint, FusionTextFeatures fusionTextFeatures) {
         String url = properties.getBaseUrl() + "/ser/analyze";
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", new FileSystemResource(audioPath));
         body.add("segment_ms", String.valueOf(properties.getSegmentMs()));
         body.add("overlap_ms", String.valueOf(properties.getOverlapMs()));
+        if (languageHint != null && !languageHint.isBlank()) {
+            body.add("language_hint", languageHint.trim());
+        }
+        if (fusionTextFeatures != null) {
+            if (fusionTextFeatures.textNegative() != null) {
+                body.add("text_negative", String.valueOf(fusionTextFeatures.textNegative()));
+            }
+            if (fusionTextFeatures.textNeutral() != null) {
+                body.add("text_neutral", String.valueOf(fusionTextFeatures.textNeutral()));
+            }
+            if (fusionTextFeatures.textPositive() != null) {
+                body.add("text_positive", String.valueOf(fusionTextFeatures.textPositive()));
+            }
+            if (fusionTextFeatures.textNegativeScore() != null) {
+                body.add("text_negative_score", String.valueOf(fusionTextFeatures.textNegativeScore()));
+            }
+            if (fusionTextFeatures.textLengthNorm() != null) {
+                body.add("text_length_norm", String.valueOf(fusionTextFeatures.textLengthNorm()));
+            }
+        }
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -104,5 +132,14 @@ public class SerClient {
             current = current.getCause();
         }
         return false;
+    }
+
+    public record FusionTextFeatures(
+            Double textNegative,
+            Double textNeutral,
+            Double textPositive,
+            Double textNegativeScore,
+            Double textLengthNorm
+    ) {
     }
 }

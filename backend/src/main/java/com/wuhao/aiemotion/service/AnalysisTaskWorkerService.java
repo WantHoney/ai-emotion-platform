@@ -10,6 +10,8 @@ import com.wuhao.aiemotion.integration.asr.AsrTranscribeResponse;
 import com.wuhao.aiemotion.integration.ser.SerAnalyzeResponse;
 import com.wuhao.aiemotion.integration.ser.SerClient;
 import com.wuhao.aiemotion.integration.ser.SerClientException;
+import com.wuhao.aiemotion.integration.text.TextSentimentClient;
+import com.wuhao.aiemotion.integration.text.TextSentimentResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
@@ -26,6 +28,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class AnalysisTaskWorkerService {
@@ -33,12 +36,15 @@ public class AnalysisTaskWorkerService {
     private static final Logger log = LoggerFactory.getLogger(AnalysisTaskWorkerService.class);
     private static final int MAX_ERROR_LENGTH = 2000;
     private static final int TIMEOUT_RETRY_BACKOFF_SECONDS = 180;
+    private static final double TEXT_MODEL_WEIGHT = 0.75D;
+    private static final double TEXT_LEXICON_WEIGHT = 0.25D;
 
     private final AnalysisTaskRepository analysisTaskRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisSegmentRepository analysisSegmentRepository;
     private final SerClient serClient;
     private final AsrClient asrClient;
+    private final TextSentimentClient textSentimentClient;
     private final PsychologicalRiskScoringService riskScoringService;
     private final TextNegScorer textNegScorer;
     private final AnalysisWorkerProperties workerProperties;
@@ -51,6 +57,7 @@ public class AnalysisTaskWorkerService {
                                      AnalysisSegmentRepository analysisSegmentRepository,
                                      SerClient serClient,
                                      AsrClient asrClient,
+                                     TextSentimentClient textSentimentClient,
                                      PsychologicalRiskScoringService riskScoringService,
                                      TextNegScorer textNegScorer,
                                      AnalysisWorkerProperties workerProperties,
@@ -62,6 +69,7 @@ public class AnalysisTaskWorkerService {
         this.analysisSegmentRepository = analysisSegmentRepository;
         this.serClient = serClient;
         this.asrClient = asrClient;
+        this.textSentimentClient = textSentimentClient;
         this.riskScoringService = riskScoringService;
         this.textNegScorer = textNegScorer;
         this.workerProperties = workerProperties;
@@ -89,10 +97,6 @@ public class AnalysisTaskWorkerService {
             log.info("analysis task processing start: taskId={}, audioId={}, status=PROCESSING, attemptCount={}",
                     task.id(), audioId, task.attemptCount());
 
-            Instant started = Instant.now();
-            SerAnalyzeResponse response = serClient.analyze(Path.of(audioPath));
-            long serCostMs = Duration.between(started, Instant.now()).toMillis();
-
             AsrTranscribeResponse asrResponse = null;
             long asrCostMs = -1;
             boolean asrFailed = false;
@@ -106,18 +110,53 @@ public class AnalysisTaskWorkerService {
                 log.warn("asr transcribe failed, fallback to voice-only risk: taskId={}, audioId={}, asrCostMs={}, reason={}",
                         task.id(), audioId, asrCostMs, truncateError(ex.getMessage()));
             }
-
+            String languageHint = normalizeLanguageHint(asrResponse == null ? null : asrResponse.language());
             String transcript = asrResponse == null ? "" : asrResponse.text();
-            TextNegScorer.TextNegScoreResult textScore = textNegScorer.score(transcript);
+            TextNegScorer.TextNegScoreResult lexiconTextScore = textNegScorer.score(transcript);
+            TextSentimentResponse textSentiment = null;
+            try {
+                if (transcript != null && !transcript.isBlank()) {
+                    textSentiment = textSentimentClient.score(
+                            transcript,
+                            languageHint,
+                            workerProperties.getTextSentimentTimeoutMs()
+                    );
+                }
+            } catch (Exception ex) {
+                log.warn("text sentiment failed, fallback to lexicon only: taskId={}, audioId={}, reason={}",
+                        task.id(), audioId, truncateError(ex.getMessage()));
+            }
+            double fusedTextNeg = fuseTextNeg(
+                    lexiconTextScore.textNeg(),
+                    textSentiment == null ? null : textSentiment.negativeScore()
+            );
+            SerClient.FusionTextFeatures fusionTextFeatures =
+                    buildSerFusionTextFeatures(transcript, textSentiment, fusedTextNeg);
+
+            Instant started = Instant.now();
+            SerAnalyzeResponse response = serClient.analyze(Path.of(audioPath), languageHint, fusionTextFeatures);
+            long serCostMs = Duration.between(started, Instant.now()).toMillis();
+
             AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment =
-                    riskScoringService.evaluate(toSegments(task.id(), response), textScore.textNeg());
+                    riskScoringService.evaluate(toSegments(task.id(), response), fusedTextNeg);
 
             AsrTranscribeResponse finalAsrResponse = asrResponse;
             final long finalSerCostMs = serCostMs;
-            transactionTemplate.executeWithoutResult(s -> saveSuccessResult(task, workerId, response, finalAsrResponse, transcript, textScore, riskAssessment, finalSerCostMs));
-            log.info("analysis task success: taskId={}, audioId={}, status=SUCCESS, attemptCount={}, serCostMs={}, asrCostMs={}, asrFailed={}, textLength={}, textNeg={}, finalRisk={}",
+            TextSentimentResponse finalTextSentiment = textSentiment;
+            transactionTemplate.executeWithoutResult(s -> saveSuccessResult(
+                    task, workerId, response, finalAsrResponse, transcript,
+                    lexiconTextScore, finalTextSentiment, fusedTextNeg, riskAssessment, finalSerCostMs
+            ));
+            log.info("analysis task success: taskId={}, audioId={}, status=SUCCESS, attemptCount={}, serCostMs={}, asrCostMs={}, asrFailed={}, asrLanguageHint={}, textLength={}, textNegLexicon={}, textNegModel={}, textNegFused={}, finalRisk={}, fusionReady={}, fusionLabel={}",
                     task.id(), audioId, task.attemptCount(), serCostMs, asrCostMs, asrFailed,
-                    transcript == null ? 0 : transcript.length(), textScore.textNeg(), riskAssessment.risk_score());
+                    languageHint,
+                    transcript == null ? 0 : transcript.length(),
+                    lexiconTextScore.textNeg(),
+                    textSentiment == null ? null : textSentiment.negativeScore(),
+                    fusedTextNeg,
+                    riskAssessment.risk_score(),
+                    response.fusion() == null ? null : response.fusion().ready(),
+                    response.fusion() == null ? null : response.fusion().label());
         } catch (Exception e) {
             transactionTemplate.executeWithoutResult(s -> handleFailure(task, workerId, e));
         } finally {
@@ -130,12 +169,22 @@ public class AnalysisTaskWorkerService {
                                      SerAnalyzeResponse response,
                                      AsrTranscribeResponse asrResponse,
                                      String transcript,
-                                     TextNegScorer.TextNegScoreResult textScore,
+                                     TextNegScorer.TextNegScoreResult lexiconTextScore,
+                                     TextSentimentResponse textSentiment,
+                                     double fusedTextNeg,
                                      AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment,
                                      long serLatencyMs) {
         String rawJson;
         try {
-            rawJson = objectMapper.writeValueAsString(new WorkerPersistedPayload(response, asrResponse, transcript, textScore, riskAssessment));
+            rawJson = objectMapper.writeValueAsString(new WorkerPersistedPayload(
+                    response,
+                    asrResponse,
+                    transcript,
+                    lexiconTextScore,
+                    textSentiment,
+                    new TextNegFusionPayload(round4(fusedTextNeg), TEXT_LEXICON_WEIGHT, TEXT_MODEL_WEIGHT),
+                    riskAssessment
+            ));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("failed to serialize SER response for taskId=" + task.id(), e);
         }
@@ -245,6 +294,92 @@ public class AnalysisTaskWorkerService {
         return Math.min(seconds, workerProperties.getBackoffMaxSeconds());
     }
 
+    private SerClient.FusionTextFeatures buildSerFusionTextFeatures(String transcript,
+                                                                    TextSentimentResponse textSentiment,
+                                                                    double fusedTextNeg) {
+        double negative = clamp01(fusedTextNeg);
+        double neutral = Math.max(0.0D, 1.0D - negative);
+        double positive = 0.0D;
+        Double negativeScore = null;
+
+        if (textSentiment != null) {
+            if (textSentiment.negativeScore() != null) {
+                negativeScore = clamp01(textSentiment.negativeScore());
+                negative = negativeScore;
+            }
+            Map<String, Double> scores = textSentiment.scores();
+            if (scores != null && !scores.isEmpty()) {
+                negative = clamp01(scoreFromMap(scores, "negative", negative));
+                neutral = clamp01(scoreFromMap(scores, "neutral", neutral));
+                positive = clamp01(scoreFromMap(scores, "positive", positive));
+                double total = negative + neutral + positive;
+                if (total > 0.0D) {
+                    negative /= total;
+                    neutral /= total;
+                    positive /= total;
+                }
+            } else {
+                neutral = Math.max(0.0D, 1.0D - negative);
+                positive = 0.0D;
+            }
+        }
+
+        if (negativeScore == null) {
+            negativeScore = negative;
+        }
+        double textLengthNorm = clamp01((transcript == null ? 0.0D : transcript.length() / 256.0D));
+
+        return new SerClient.FusionTextFeatures(
+                round4(negative),
+                round4(neutral),
+                round4(positive),
+                round4(negativeScore),
+                round4(textLengthNorm)
+        );
+    }
+
+    private double scoreFromMap(Map<String, Double> scores, String key, double fallback) {
+        if (scores == null || scores.isEmpty()) {
+            return fallback;
+        }
+        Double value = scores.get(key);
+        if (value == null) {
+            value = scores.get(key.toUpperCase());
+        }
+        return value == null ? fallback : value;
+    }
+
+    private double fuseTextNeg(double lexiconScore, Double modelScore) {
+        double lexical = clamp01(lexiconScore);
+        if (modelScore == null) {
+            return round4(lexical);
+        }
+        double model = clamp01(modelScore);
+        return round4(TEXT_LEXICON_WEIGHT * lexical + TEXT_MODEL_WEIGHT * model);
+    }
+
+    private String normalizeLanguageHint(String language) {
+        if (language == null || language.isBlank()) {
+            return null;
+        }
+        String normalized = language.trim().toLowerCase();
+        if (normalized.startsWith("zh")) {
+            return "zh";
+        }
+        if (normalized.startsWith("en")) {
+            return "en";
+        }
+        return null;
+    }
+
+    private double clamp01(double value) {
+        return Math.max(0.0D, Math.min(1.0D, value));
+    }
+
+    private double round4(double value) {
+        return Math.round(value * 10000.0D) / 10000.0D;
+    }
+
     private String truncateError(String value) {
         String message = value == null || value.isBlank() ? "unknown error" : value;
         return message.length() > MAX_ERROR_LENGTH ? message.substring(0, MAX_ERROR_LENGTH) : message;
@@ -255,7 +390,16 @@ public class AnalysisTaskWorkerService {
             AsrTranscribeResponse asr,
             String transcript,
             TextNegScorer.TextNegScoreResult textNeg,
+            TextSentimentResponse textSentiment,
+            TextNegFusionPayload textNegFusion,
             AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment
+    ) {
+    }
+
+    private record TextNegFusionPayload(
+            double fusedTextNeg,
+            double lexiconWeight,
+            double modelWeight
     ) {
     }
 }

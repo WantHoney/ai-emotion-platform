@@ -163,6 +163,23 @@ public class AdminGovernanceController {
         return adminGovernanceService.summary();
     }
 
+    @PostMapping("/governance/drift/scan")
+    public Map<String, Object> triggerDriftScan(@RequestParam(required = false) Integer windowDays,
+                                                @RequestParam(required = false) Integer baselineDays,
+                                                @RequestParam(required = false) Double mediumThreshold,
+                                                @RequestParam(required = false) Double highThreshold,
+                                                @RequestParam(required = false) Integer minSamples) {
+        int created = adminGovernanceService.triggerModelDriftWarnings(
+                windowDays == null ? 7 : windowDays,
+                baselineDays == null ? 7 : baselineDays,
+                mediumThreshold == null ? 0.15D : mediumThreshold,
+                highThreshold == null ? 0.25D : highThreshold,
+                minSamples == null ? 20 : minSamples,
+                "api_manual"
+        );
+        return Map.of("created", created);
+    }
+
     public record CreateModelRequest(
             @NotBlank String modelCode,
             @NotBlank String modelName,

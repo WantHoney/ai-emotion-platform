@@ -220,8 +220,27 @@ public class WarningGovernanceRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
+    public Optional<Long> findOpenSystemDriftWarningByEmotion(String emotion) {
+        List<Long> rows = jdbcTemplate.query(
+                """
+                SELECT id
+                FROM warning_event
+                WHERE report_id IS NULL
+                  AND task_id IS NULL
+                  AND user_id IS NULL
+                  AND UPPER(COALESCE(top_emotion, 'UNKNOWN')) = UPPER(?)
+                  AND status IN ('NEW','ACKED','FOLLOWING')
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (rs, rowNum) -> rs.getLong("id"),
+                emotion
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
     public long createWarningEvent(Long reportId,
-                                   long taskId,
+                                   Long taskId,
                                    Long userId,
                                    String userMask,
                                    double riskScore,
@@ -248,7 +267,7 @@ public class WarningGovernanceRepository {
         jdbcTemplate.update(con -> {
             PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setObject(1, reportId);
-            ps.setLong(2, taskId);
+            ps.setObject(2, taskId);
             ps.setObject(3, userId);
             ps.setString(4, userMask);
             ps.setDouble(5, riskScore);
@@ -263,6 +282,66 @@ public class WarningGovernanceRepository {
         }, keyHolder);
         Number key = Objects.requireNonNull(keyHolder.getKey(), "createWarningEvent generated key is null");
         return key.longValue();
+    }
+
+    public int updateWarningSnapshotWorkflow(long warningEventId,
+                                             String actionType,
+                                             String actionNote,
+                                             String templateCode,
+                                             String nextStatus,
+                                             Long operatorId) {
+        return jdbcTemplate.update(
+                """
+                UPDATE warning_event
+                SET trigger_snapshot = JSON_SET(
+                        COALESCE(trigger_snapshot, JSON_OBJECT()),
+                        '$.workflow.lastAction', ?,
+                        '$.workflow.lastActionNote', ?,
+                        '$.workflow.lastTemplateCode', ?,
+                        '$.workflow.lastStatus', ?,
+                        '$.workflow.lastOperatorId', ?,
+                        '$.workflow.updatedAt', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')
+                    ),
+                    updated_at = NOW()
+                WHERE id = ?
+                """,
+                actionType,
+                actionNote,
+                templateCode,
+                nextStatus,
+                operatorId,
+                warningEventId
+        );
+    }
+
+    public int updateReportGovernanceTrace(long reportId,
+                                           long warningEventId,
+                                           String status,
+                                           String actionType,
+                                           String templateCode,
+                                           String actionNote) {
+        return jdbcTemplate.update(
+                """
+                UPDATE report_resource
+                SET report_json = JSON_SET(
+                        COALESCE(report_json, JSON_OBJECT()),
+                        '$.governance.warning.warningId', ?,
+                        '$.governance.warning.status', ?,
+                        '$.governance.warning.lastAction', ?,
+                        '$.governance.warning.templateCode', ?,
+                        '$.governance.warning.actionNote', ?,
+                        '$.governance.warning.updatedAt', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')
+                    )
+                WHERE id = ?
+                  AND deleted_at IS NULL
+                """,
+                warningEventId,
+                status,
+                actionType,
+                templateCode,
+                actionNote,
+                reportId
+        );
     }
 
     public void createWarningAction(long warningEventId,

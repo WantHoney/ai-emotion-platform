@@ -8,6 +8,7 @@
 - `docs/thesis_notes.md`：论文写作技术素材提纲。
 - `docs/frontend_page_interaction_checklist.md`：前端页面联调清单。
 - `docs/archive/`：历史方案与旧版记录（非当前事实源）。
+- `scripts/stress-realtime.ps1`：WebSocket 实时通道压测脚本。
 
 ## 维护规则
 

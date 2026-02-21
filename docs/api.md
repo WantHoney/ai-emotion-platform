@@ -83,7 +83,15 @@
 - `GET /api/admin/analytics/daily`
 - `GET /api/admin/analytics/quality`
 - `GET /api/admin/governance/summary`
+- `POST /api/admin/governance/drift/scan`
 - `GET /api/admin/metrics`
+
+`POST /api/admin/governance/drift/scan` 支持可选 query 参数：
+- `windowDays`
+- `baselineDays`
+- `mediumThreshold`
+- `highThreshold`
+- `minSamples`
 
 ### 5.2 CMS 内容管理
 - `GET /api/home`

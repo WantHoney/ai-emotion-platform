@@ -74,6 +74,16 @@ analysis:
   realtime:
     push-interval-ms: ${ANALYSIS_REALTIME_PUSH_INTERVAL_MS:1000}
 
+governance:
+  drift:
+    monitor-enabled: ${GOVERNANCE_DRIFT_MONITOR_ENABLED:true}
+    scan-interval-ms: ${GOVERNANCE_DRIFT_SCAN_INTERVAL_MS:900000}
+    window-days: ${GOVERNANCE_DRIFT_WINDOW_DAYS:7}
+    baseline-days: ${GOVERNANCE_DRIFT_BASELINE_DAYS:7}
+    medium-threshold: ${GOVERNANCE_DRIFT_MEDIUM_THRESHOLD:0.15}
+    high-threshold: ${GOVERNANCE_DRIFT_HIGH_THRESHOLD:0.25}
+    min-samples: ${GOVERNANCE_DRIFT_MIN_SAMPLES:20}
+
 
 auth:
   access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:7200}

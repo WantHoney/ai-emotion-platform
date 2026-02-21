@@ -4,21 +4,27 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuhao.aiemotion.repository.ModelGovernanceRepository;
 import com.wuhao.aiemotion.repository.WarningGovernanceRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 @Service
 public class AdminGovernanceService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminGovernanceService.class);
 
     private final ModelGovernanceRepository modelGovernanceRepository;
     private final WarningGovernanceRepository warningGovernanceRepository;
@@ -194,24 +200,117 @@ public class AdminGovernanceService {
                               String templateCode,
                               String nextStatus,
                               Long operatorId) {
-        warningGovernanceRepository.findWarningById(warningId)
+        Map<String, Object> warning = warningGovernanceRepository.findWarningById(warningId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "warning event not found: " + warningId));
 
         String normalizedAction = normalizeCode(actionType, "actionType");
         String normalizedStatus = nextStatus == null || nextStatus.isBlank() ? null : normalizeCode(nextStatus, "nextStatus");
+        String normalizedNote = normalizeOptional(actionNote);
+        String normalizedTemplate = normalizeOptional(templateCode);
 
         warningGovernanceRepository.createWarningAction(
                 warningId,
                 normalizedAction,
-                normalizeOptional(actionNote),
-                normalizeOptional(templateCode),
+                normalizedNote,
+                normalizedTemplate,
                 operatorId
         );
         warningGovernanceRepository.touchWarningWorkflow(warningId, normalizedAction, normalizedStatus);
         if (normalizedStatus != null) {
             warningGovernanceRepository.updateWarningStatus(warningId, normalizedStatus);
         }
+
+        String snapshotStatus = normalizedStatus != null
+                ? normalizedStatus
+                : String.valueOf(warning.getOrDefault("status", "NEW"));
+        warningGovernanceRepository.updateWarningSnapshotWorkflow(
+                warningId,
+                normalizedAction,
+                normalizedNote,
+                normalizedTemplate,
+                snapshotStatus,
+                operatorId
+        );
+
+        Long reportId = toLong(warning.get("report_id"));
+        if (reportId != null && reportId > 0) {
+            warningGovernanceRepository.updateReportGovernanceTrace(
+                    reportId,
+                    warningId,
+                    snapshotStatus,
+                    normalizedAction,
+                    normalizedTemplate,
+                    normalizedNote
+            );
+        }
         warningGovernanceRepository.markOverdueWarningsBreached();
+    }
+
+    @Transactional
+    public int triggerModelDriftWarnings(int windowDays,
+                                         int baselineDays,
+                                         double mediumThreshold,
+                                         double highThreshold,
+                                         int minSamples,
+                                         String triggerSource) {
+        int safeWindow = Math.max(1, Math.min(windowDays, 30));
+        int safeBaseline = Math.max(1, Math.min(baselineDays, 30));
+        double safeMedium = clamp(mediumThreshold, 0.01D, 1.0D);
+        double safeHigh = Math.max(safeMedium, clamp(highThreshold, 0.01D, 1.0D));
+        int safeMinSamples = Math.max(1, Math.min(minSamples, 10000));
+
+        DriftDistribution distribution = computeEmotionDrift(safeWindow, safeBaseline);
+        if (distribution.currentTotal() < safeMinSamples || distribution.baselineTotal() < safeMinSamples) {
+            return 0;
+        }
+
+        int created = 0;
+        for (Map<String, Object> item : distribution.items()) {
+            String emotion = String.valueOf(item.getOrDefault("emotion", "UNKNOWN")).toUpperCase(Locale.ROOT);
+            double drift = toDouble(item.get("drift"), 0D);
+            double absDrift = Math.abs(drift);
+            if (absDrift < safeMedium) {
+                continue;
+            }
+            if (warningGovernanceRepository.findOpenSystemDriftWarningByEmotion(emotion).isPresent()) {
+                continue;
+            }
+
+            String riskLevel = absDrift >= safeHigh ? "HIGH" : "MEDIUM";
+            long slaMinutes = "HIGH".equals(riskLevel) ? 360 : 1440;
+            String snapshot = toJson(Map.of(
+                    "detector", Map.of(
+                            "type", "MODEL_DRIFT_MONITOR",
+                            "source", normalizeOptional(triggerSource) == null ? "unknown" : normalizeOptional(triggerSource),
+                            "windowDays", safeWindow,
+                            "baselineDays", safeBaseline,
+                            "mediumThreshold", safeMedium,
+                            "highThreshold", safeHigh,
+                            "minSamples", safeMinSamples,
+                            "triggeredAt", LocalDateTime.now().toString()
+                    ),
+                    "drift", item
+            ));
+
+            warningGovernanceRepository.createWarningEvent(
+                    null,
+                    null,
+                    null,
+                    "system_drift",
+                    round2(absDrift * 100.0D),
+                    riskLevel,
+                    emotion,
+                    null,
+                    snapshot,
+                    LocalDateTime.now().plusMinutes(slaMinutes)
+            );
+            created++;
+        }
+        if (created > 0) {
+            log.info("model drift monitor created {} warning events (windowDays={}, baselineDays={})",
+                    created, safeWindow, safeBaseline);
+        }
+        return created;
     }
 
     public Map<String, Object> listAnalyticsDaily(Integer days) {
@@ -232,34 +331,8 @@ public class AdminGovernanceService {
         int safeWindow = Math.max(1, Math.min(windowDays == null ? 7 : windowDays, 30));
         int safeBaseline = Math.max(1, Math.min(baselineDays == null ? 7 : baselineDays, 30));
 
-        List<Map<String, Object>> currentRows = warningGovernanceRepository.listEmotionDistributionLastDays(safeWindow);
-        List<Map<String, Object>> baselineRows = warningGovernanceRepository.listEmotionDistributionBeforeDays(safeWindow + safeBaseline, safeWindow);
-        Map<String, Long> currentMap = toDistributionMap(currentRows);
-        Map<String, Long> baselineMap = toDistributionMap(baselineRows);
-
-        long currentTotal = currentMap.values().stream().mapToLong(Long::longValue).sum();
-        long baselineTotal = baselineMap.values().stream().mapToLong(Long::longValue).sum();
-
-        Set<String> emotions = new HashSet<>();
-        emotions.addAll(currentMap.keySet());
-        emotions.addAll(baselineMap.keySet());
-
-        List<Map<String, Object>> driftItems = new ArrayList<>();
-        for (String emotion : emotions) {
-            long currentCount = currentMap.getOrDefault(emotion, 0L);
-            long baselineCount = baselineMap.getOrDefault(emotion, 0L);
-            double currentRatio = currentTotal == 0 ? 0D : (double) currentCount / currentTotal;
-            double baselineRatio = baselineTotal == 0 ? 0D : (double) baselineCount / baselineTotal;
-            driftItems.add(Map.of(
-                    "emotion", emotion,
-                    "currentCount", currentCount,
-                    "baselineCount", baselineCount,
-                    "currentRatio", currentRatio,
-                    "baselineRatio", baselineRatio,
-                    "drift", currentRatio - baselineRatio
-            ));
-        }
-        driftItems.sort(Comparator.comparingDouble(item -> -Math.abs(toDouble(item.get("drift"), 0D))));
+        DriftDistribution distribution = computeEmotionDrift(safeWindow, safeBaseline);
+        List<Map<String, Object>> driftItems = distribution.items();
 
         List<Map<String, Object>> errorCategories = warningGovernanceRepository.listFailedTaskCategoryStats(safeWindow);
         List<Map<String, Object>> errorSamples = warningGovernanceRepository.listFailedTaskSamples(safeWindow, 20);
@@ -375,5 +448,66 @@ public class AdminGovernanceService {
             result.put(emotion, count);
         }
         return result;
+    }
+
+    private DriftDistribution computeEmotionDrift(int windowDays, int baselineDays) {
+        List<Map<String, Object>> currentRows = warningGovernanceRepository.listEmotionDistributionLastDays(windowDays);
+        List<Map<String, Object>> baselineRows = warningGovernanceRepository.listEmotionDistributionBeforeDays(windowDays + baselineDays, windowDays);
+        Map<String, Long> currentMap = toDistributionMap(currentRows);
+        Map<String, Long> baselineMap = toDistributionMap(baselineRows);
+
+        long currentTotal = currentMap.values().stream().mapToLong(Long::longValue).sum();
+        long baselineTotal = baselineMap.values().stream().mapToLong(Long::longValue).sum();
+
+        Set<String> emotions = new HashSet<>();
+        emotions.addAll(currentMap.keySet());
+        emotions.addAll(baselineMap.keySet());
+
+        List<Map<String, Object>> driftItems = new ArrayList<>();
+        for (String emotion : emotions) {
+            long currentCount = currentMap.getOrDefault(emotion, 0L);
+            long baselineCount = baselineMap.getOrDefault(emotion, 0L);
+            double currentRatio = currentTotal == 0 ? 0D : (double) currentCount / currentTotal;
+            double baselineRatio = baselineTotal == 0 ? 0D : (double) baselineCount / baselineTotal;
+            driftItems.add(Map.of(
+                    "emotion", emotion,
+                    "currentCount", currentCount,
+                    "baselineCount", baselineCount,
+                    "currentRatio", currentRatio,
+                    "baselineRatio", baselineRatio,
+                    "drift", currentRatio - baselineRatio
+            ));
+        }
+        driftItems.sort(Comparator.comparingDouble(item -> -Math.abs(toDouble(item.get("drift"), 0D))));
+        return new DriftDistribution(driftItems, currentTotal, baselineTotal);
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100.0D) / 100.0D;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private record DriftDistribution(
+            List<Map<String, Object>> items,
+            long currentTotal,
+            long baselineTotal
+    ) {
     }
 }

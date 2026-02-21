@@ -36,6 +36,10 @@ mvn spring-boot:run
 - `OPENROUTER_BASE_URL`、`OPENROUTER_MODEL`
 - `APP_CORS_ALLOWED_ORIGINS`
 - `SER_ENABLED`、`SER_BASE_URL`
+- `GOVERNANCE_DRIFT_MONITOR_ENABLED`、`GOVERNANCE_DRIFT_SCAN_INTERVAL_MS`
+- `GOVERNANCE_DRIFT_WINDOW_DAYS`、`GOVERNANCE_DRIFT_BASELINE_DAYS`
+- `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD`、`GOVERNANCE_DRIFT_HIGH_THRESHOLD`
+- `GOVERNANCE_DRIFT_MIN_SAMPLES`
 
 ## 数据库脚本
 
@@ -48,3 +52,4 @@ mvn spring-boot:run
 - 本文件是 backend 子项目说明。
 - 项目整体说明请查看仓库根目录 `README.md`。
 - 文档一致性检查请在仓库根目录执行：`python scripts/check_doc_sync.py`。
+- 可手动触发漂移扫描：`POST /api/admin/governance/drift/scan`。

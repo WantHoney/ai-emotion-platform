@@ -27,6 +27,13 @@ OpenRouter variables are optional and only used when you explicitly switch to re
 - `SER_ENABLED` (optional, default `true`)
 - `SER_BASE_URL` (optional, default `http://127.0.0.1:8001`)
 - `ANALYSIS_REALTIME_PUSH_INTERVAL_MS` (optional, default `1000`)
+- `GOVERNANCE_DRIFT_MONITOR_ENABLED` (optional, default `true`)
+- `GOVERNANCE_DRIFT_SCAN_INTERVAL_MS` (optional, default `900000`)
+- `GOVERNANCE_DRIFT_WINDOW_DAYS` (optional, default `7`)
+- `GOVERNANCE_DRIFT_BASELINE_DAYS` (optional, default `7`)
+- `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD` (optional, default `0.15`)
+- `GOVERNANCE_DRIFT_HIGH_THRESHOLD` (optional, default `0.25`)
+- `GOVERNANCE_DRIFT_MIN_SAMPLES` (optional, default `20`)
 
 Windows PowerShell example:
 
@@ -122,6 +129,12 @@ One-command smoke test (Windows PowerShell):
 
 ```powershell
 ./scripts/smoke-api.ps1
+```
+
+Realtime channel stress test (Windows PowerShell):
+
+```powershell
+./scripts/stress-realtime.ps1 -TaskId 1201 -AccessToken "<accessToken>" -Connections 30 -DurationSec 40
 ```
 
 Doc sync guard:

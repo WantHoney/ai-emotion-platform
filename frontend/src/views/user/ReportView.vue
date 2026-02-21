@@ -75,6 +75,35 @@ const confidencePercent = computed(() => {
   return `${normalized.toFixed(2)}%`
 })
 
+const confidenceGaugeValue = computed(() => {
+  const fusionConfidence = extractFusionConfidence(taskResult.value?.rawJson)
+  const confidence = fusionConfidence ?? report.value?.confidence ?? taskResult.value?.overallConfidence
+  if (confidence == null || Number.isNaN(confidence)) return 0
+  const normalized = confidence <= 1 ? confidence * 100 : confidence
+  return clamp(normalized, 0, 100)
+})
+
+const riskGaugeValue = computed(() => clamp(normalizedRiskScore.value, 0, 100))
+const textGaugeValue = computed(() => clamp(textRiskScore.value, 0, 100))
+
+const confidenceGaugeColor = computed(() => {
+  if (confidenceGaugeValue.value >= 80) return '#67c23a'
+  if (confidenceGaugeValue.value >= 60) return '#e6a23c'
+  return '#f56c6c'
+})
+
+const riskGaugeColor = computed(() => {
+  if (riskGaugeValue.value >= 70) return '#f56c6c'
+  if (riskGaugeValue.value >= 40) return '#e6a23c'
+  return '#67c23a'
+})
+
+const textGaugeColor = computed(() => {
+  if (textGaugeValue.value >= 60) return '#f56c6c'
+  if (textGaugeValue.value >= 30) return '#e6a23c'
+  return '#409eff'
+})
+
 const riskLevel = computed(() => {
   return riskAssessment.value?.risk_level ?? report.value?.riskLevel ?? ''
 })
@@ -396,6 +425,41 @@ onMounted(() => {
 
       <div class="report-grid">
         <SectionBlock title="融合看板" description="语音/文本/融合(PSI)与贡献细项。">
+          <LoreCard title="可视化总览" subtitle="融合结果环形图">
+            <div class="viz-ring-grid">
+              <article class="viz-ring-item">
+                <el-progress
+                  type="dashboard"
+                  :percentage="Number(confidenceGaugeValue.toFixed(1))"
+                  :color="confidenceGaugeColor"
+                  :stroke-width="11"
+                />
+                <p>融合置信度</p>
+                <strong>{{ confidencePercent }}</strong>
+              </article>
+              <article class="viz-ring-item">
+                <el-progress
+                  type="dashboard"
+                  :percentage="Number(riskGaugeValue.toFixed(1))"
+                  :color="riskGaugeColor"
+                  :stroke-width="11"
+                />
+                <p>PSI 风险分</p>
+                <strong>{{ `${riskGaugeValue.toFixed(2)}/100` }}</strong>
+              </article>
+              <article class="viz-ring-item">
+                <el-progress
+                  type="dashboard"
+                  :percentage="Number(textGaugeValue.toFixed(1))"
+                  :color="textGaugeColor"
+                  :stroke-width="11"
+                />
+                <p>文本负向分</p>
+                <strong>{{ textGaugeValue.toFixed(2) }}</strong>
+              </article>
+            </div>
+          </LoreCard>
+
           <KpiGrid :items="fusionKpiItems" />
 
           <LoreCard title="文本融合细项" subtitle="词典 + 文本模型">
@@ -537,6 +601,36 @@ onMounted(() => {
 .bucket-grid {
   display: grid;
   gap: 10px;
+}
+
+.viz-ring-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.viz-ring-item {
+  border: 1px solid rgba(141, 163, 205, 0.35);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, rgba(20, 31, 52, 0.45), rgba(13, 21, 36, 0.65));
+}
+
+.viz-ring-item p {
+  margin: 0;
+  font-size: 13px;
+  color: #9eb7de;
+}
+
+.viz-ring-item strong {
+  color: #f4f8ff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 ul {

@@ -7,6 +7,8 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
+
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
@@ -22,8 +24,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Value("${app.upload.public-path:/uploads}")
     private String publicPath;
 
-    @Value("${app.cors.allowed-origins:http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:}")
     private String[] corsAllowedOrigins;
+
+    @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
+    private String[] corsAllowedOriginPatterns;
 
     @Value("${app.cors.allow-credentials:true}")
     private boolean corsAllowCredentials;
@@ -46,15 +51,34 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(corsAllowedOrigins)
+        var registration = registry.addMapping("/api/**")
                 .allowedMethods(corsAllowedMethods)
                 .allowedHeaders(corsAllowedHeaders)
                 .allowCredentials(corsAllowCredentials);
+
+        String[] patterns = sanitizeCorsValues(corsAllowedOriginPatterns);
+        String[] origins = sanitizeCorsValues(corsAllowedOrigins);
+        if (patterns.length > 0) {
+            registration.allowedOriginPatterns(patterns);
+        } else if (origins.length > 0) {
+            registration.allowedOrigins(origins);
+        } else {
+            registration.allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*");
+        }
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor).addPathPatterns("/api/**");
+    }
+
+    private static String[] sanitizeCorsValues(String[] values) {
+        if (values == null) {
+            return new String[0];
+        }
+        return Arrays.stream(values)
+                .filter(v -> v != null && !v.isBlank())
+                .map(String::trim)
+                .toArray(String[]::new);
     }
 }

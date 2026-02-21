@@ -14,6 +14,12 @@ public class PsychologicalRiskScoringService {
     private static final double WEIGHT_ANGRY = 0.25;
     private static final double WEIGHT_VAR_CONF = 0.10;
 
+    private final InterventionAdviceService interventionAdviceService;
+
+    public PsychologicalRiskScoringService(InterventionAdviceService interventionAdviceService) {
+        this.interventionAdviceService = interventionAdviceService;
+    }
+
     public AnalysisTaskResultResponse.RiskAssessmentPayload evaluate(List<AnalysisSegment> segments) {
         return evaluate(segments, 0.0D);
     }
@@ -32,11 +38,19 @@ public class PsychologicalRiskScoringService {
         double textRisk = 100.0D * normalizedTextNeg;
         double riskScore = clamp(0.6D * voiceRisk + 0.4D * textRisk, 0.0D, 100.0D);
         String riskLevel = toRiskLevel(riskScore);
+        String adviceText = interventionAdviceService.buildAdvice(
+                riskLevel,
+                riskScore,
+                pSad,
+                pAngry,
+                varConf,
+                normalizedTextNeg
+        );
 
         return new AnalysisTaskResultResponse.RiskAssessmentPayload(
                 round2(riskScore),
                 riskLevel,
-                adviceText(riskLevel),
+                adviceText,
                 round4(pSad),
                 round4(pAngry),
                 round4(varConf),
@@ -95,14 +109,6 @@ public class PsychologicalRiskScoringService {
             return "ATTENTION";
         }
         return "NORMAL";
-    }
-
-    private String adviceText(String riskLevel) {
-        return switch (riskLevel) {
-            case "HIGH" -> "当前情绪风险较高。建议优先减少高压情境，尽快与可信赖的人沟通；如持续不适，建议咨询专业人士或联系心理热线寻求支持。";
-            case "ATTENTION" -> "当前情绪风险需要关注。建议安排休息、与朋友沟通、减少压力源；如状态持续波动，可考虑寻求进一步帮助。";
-            default -> "当前情绪风险总体平稳。建议保持规律睡眠、适度运动，并持续记录情绪变化。";
-        };
     }
 
     private double clamp(double value, double min, double max) {

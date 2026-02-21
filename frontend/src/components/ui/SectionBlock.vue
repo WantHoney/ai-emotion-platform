@@ -46,6 +46,9 @@ defineProps<{
   font-size: clamp(24px, 4.4vw, 34px);
   line-height: 1.2;
   font-family: var(--font-display);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .description {

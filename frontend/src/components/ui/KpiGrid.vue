@@ -32,6 +32,8 @@ defineProps<{
   border: 1px solid rgba(170, 185, 216, 0.28);
   background: linear-gradient(180deg, rgba(20, 31, 52, 0.84), rgba(13, 21, 36, 0.9));
   padding: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .label {
@@ -45,15 +47,20 @@ defineProps<{
 .value {
   margin: 8px 0 0;
   color: #f8fafc;
-  font-size: 30px;
-  line-height: 1;
+  font-size: clamp(24px, 2.3vw, 38px);
+  line-height: 1.15;
   font-family: var(--font-display);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .helper {
   margin: 10px 0 0;
   color: #bfd1ee;
   font-size: 12px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 960px) {

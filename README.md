@@ -156,6 +156,13 @@ Manual page-by-page acceptance checklist:
 
 - `docs/frontend_page_interaction_checklist.md`
 
+Project docs for thesis/defense:
+
+- `docs/experiments.md`
+- `docs/figures/README.md`
+- `docs/thesis_notes.md`
+- `docs/defense_script.md`
+
 Authenticated checks (register first, then pass Bearer token):
 
 ```bash

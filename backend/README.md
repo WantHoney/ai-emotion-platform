@@ -1,12 +1,13 @@
-# Backend (Spring Boot)
+﻿# Backend (Spring Boot)
+最后同步日期：`2026-02-21`
 
-## 环境要求
+## 1. 环境要求
 
 - JDK 17+
 - Maven 3.9+
 - MySQL 8+
 
-## 本地启动
+## 2. 本地启动
 
 ```bash
 # 1) 导入基线结构
@@ -28,9 +29,9 @@ mvn spring-boot:run
 默认地址：`http://127.0.0.1:8080`  
 健康检查：`curl http://127.0.0.1:8080/api/health`
 
-## 关键配置（建议环境变量）
+## 3. 关键配置（建议环境变量）
 
-- `AI_MODE`：默认 `mock`（本地模式），可切 `spring`
+- `AI_MODE`：默认 `mock`（本地模式），可切到 `spring`
 - `SPRING_AI_OPENAI_ENABLED`：默认 `false`
 - `OPENROUTER_API_KEY`：仅当 `AI_MODE=spring` 时需要
 - `OPENROUTER_BASE_URL`、`OPENROUTER_MODEL`
@@ -41,13 +42,13 @@ mvn spring-boot:run
 - `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD`、`GOVERNANCE_DRIFT_HIGH_THRESHOLD`
 - `GOVERNANCE_DRIFT_MIN_SAMPLES`
 
-## 数据库脚本
+## 4. 数据库脚本
 
 - 基线：`docs/db/schema_v1.sql`
 - 迁移：`docs/db/migrations/`
 - 当前最新迁移：`V8__cleanup_legacy_sequence_indexes.sql`
 
-## 说明
+## 5. 说明
 
 - 本文件是 backend 子项目说明。
 - 项目整体说明请查看仓库根目录 `README.md`。

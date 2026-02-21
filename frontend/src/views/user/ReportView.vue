@@ -490,14 +490,25 @@ onMounted(() => {
 
 .top-meta {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   color: #bcd0ef;
 }
 
 .top-meta p {
   margin: 0;
+  flex: 1 1 460px;
+  min-width: 0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.top-meta :deep(.badge) {
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .report-grid {
@@ -613,6 +624,16 @@ ul {
 @media (max-width: 1024px) {
   .recommend-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-meta {
+    align-items: stretch;
+  }
+
+  .top-meta :deep(.badge) {
+    margin-left: auto;
   }
 }
 </style>

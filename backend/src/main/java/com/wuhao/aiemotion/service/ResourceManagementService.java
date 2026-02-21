@@ -253,11 +253,30 @@ public class ResourceManagementService {
         try {
             JsonNode root = objectMapper.readTree(report.reportJson());
             JsonNode serOverall = root.at("/ser/overall");
+            JsonNode serFusion = root.at("/ser/fusion");
+            Double fusionConfidence = null;
             if (serOverall.hasNonNull("emotionCode")) {
                 overall = serOverall.get("emotionCode").asText();
             }
             if (serOverall.has("confidence") && serOverall.get("confidence").isNumber()) {
                 confidence = serOverall.get("confidence").asDouble();
+            }
+            if (serFusion.isObject()) {
+                if (serFusion.hasNonNull("label")) {
+                    String fusionLabel = serFusion.get("label").asText();
+                    if (!fusionLabel.isBlank()) {
+                        overall = fusionLabel;
+                    }
+                }
+                boolean fusionEnabled = serFusion.path("enabled").asBoolean(false);
+                boolean fusionReady = serFusion.path("ready").asBoolean(false);
+                JsonNode fusionConfidenceNode = serFusion.get("confidence");
+                if (fusionEnabled && fusionReady && fusionConfidenceNode != null && fusionConfidenceNode.isNumber()) {
+                    fusionConfidence = fusionConfidenceNode.asDouble();
+                }
+            }
+            if (fusionConfidence != null) {
+                confidence = fusionConfidence;
             }
             JsonNode riskNode = root.at("/riskAssessment");
             if (riskNode.isObject()) {

@@ -42,6 +42,22 @@ const toNumber = (value: unknown): number | undefined => {
   return undefined
 }
 
+const extractFusionConfidence = (rawJson?: string | null): number | undefined => {
+  if (!rawJson) return undefined
+  try {
+    const root = JSON.parse(rawJson) as Record<string, unknown>
+    const serNode = (root.ser ?? null) as Record<string, unknown> | null
+    const fusionNode = (serNode?.fusion ?? null) as Record<string, unknown> | null
+    const enabled = Boolean(fusionNode?.enabled)
+    const ready = Boolean(fusionNode?.ready)
+    const confidence = toNumber(fusionNode?.confidence)
+    if (enabled && ready && confidence != null) return confidence
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
 const fetchTaskResult = async () => {
   if (!Number.isFinite(taskId.value) || taskId.value <= 0) return
   resultLoading.value = true
@@ -78,7 +94,8 @@ const durationSeconds = computed(() => ((task.value?.durationMs ?? 0) / 1000).to
 const riskAssessment = computed<RiskAssessmentPayload | null>(() => taskResult.value?.riskAssessment ?? null)
 
 const confidencePercent = computed(() => {
-  const confidence = taskResult.value?.overallConfidence ?? task.value?.result?.confidence
+  const fusionConfidence = extractFusionConfidence(taskResult.value?.rawJson)
+  const confidence = fusionConfidence ?? taskResult.value?.overallConfidence ?? task.value?.result?.confidence
   if (confidence == null || Number.isNaN(confidence)) return 0
   const normalized = confidence <= 1 ? confidence * 100 : confidence
   return Math.round(clamp(normalized, 0, 100))

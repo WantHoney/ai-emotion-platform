@@ -39,6 +39,22 @@ const toNumber = (value: unknown): number | undefined => {
   return undefined
 }
 
+const extractFusionConfidence = (rawJson?: string | null): number | undefined => {
+  if (!rawJson) return undefined
+  try {
+    const root = JSON.parse(rawJson) as Record<string, unknown>
+    const serNode = (root.ser ?? null) as Record<string, unknown> | null
+    const fusionNode = (serNode?.fusion ?? null) as Record<string, unknown> | null
+    const enabled = Boolean(fusionNode?.enabled)
+    const ready = Boolean(fusionNode?.ready)
+    const confidence = toNumber(fusionNode?.confidence)
+    if (enabled && ready && confidence != null) return confidence
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 const riskAssessment = computed<RiskAssessmentPayload | null>(() => {
@@ -52,7 +68,8 @@ const normalizedRiskScore = computed(() => {
 })
 
 const confidencePercent = computed(() => {
-  const confidence = report.value?.confidence ?? taskResult.value?.overallConfidence
+  const fusionConfidence = extractFusionConfidence(taskResult.value?.rawJson)
+  const confidence = fusionConfidence ?? report.value?.confidence ?? taskResult.value?.overallConfidence
   if (confidence == null || Number.isNaN(confidence)) return '--'
   const normalized = confidence <= 1 ? confidence * 100 : confidence
   return `${normalized.toFixed(2)}%`

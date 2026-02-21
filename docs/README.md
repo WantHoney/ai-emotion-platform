@@ -14,3 +14,5 @@
 - 功能有变更时，优先更新 `docs/api.md`、`docs/architecture.md`、`docs/db.md`。
 - 每次跑完关键实验后，追加更新 `docs/experiments.md`。
 - 论文写作前，先从 `docs/thesis_notes.md` 补齐图表与术语。
+- 提交前建议执行 `python scripts/check_doc_sync.py`。
+- 远端 CI 会自动执行 `.github/workflows/doc-sync-guard.yml`，未同步文档将直接失败。

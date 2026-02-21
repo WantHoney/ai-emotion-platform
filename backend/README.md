@@ -47,3 +47,4 @@ mvn spring-boot:run
 
 - 本文件是 backend 子项目说明。
 - 项目整体说明请查看仓库根目录 `README.md`。
+- 文档一致性检查请在仓库根目录执行：`python scripts/check_doc_sync.py`。

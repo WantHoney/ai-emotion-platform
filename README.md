@@ -124,13 +124,20 @@ One-command smoke test (Windows PowerShell):
 ./scripts/smoke-api.ps1
 ```
 
-Doc/DB consistency check:
+Doc sync guard:
 
 ```bash
 python scripts/check_doc_sync.py
 ```
 
-The script validates public APIs, user upload->analysis flow, and admin governance endpoints.
+The script enforces:
+- latest DB migration references in `README.md` and `backend/README.md`
+- backend controller endpoints vs `docs/api.md` bidirectional consistency
+- WebSocket path documentation consistency
+- required docs existence and `最后同步日期` marker
+
+CI also runs this guard on every `push` / `pull_request` via:
+- `.github/workflows/doc-sync-guard.yml`
 
 Manual page-by-page acceptance checklist:
 

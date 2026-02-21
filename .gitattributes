@@ -1,0 +1,24 @@
+* text=auto eol=lf
+
+# Windows launch scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Keep PowerShell files UTF-8/LF (avoid locale re-encoding)
+*.ps1 text eol=lf
+
+# Common binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.wav binary
+*.mp3 binary
+*.mp4 binary
+*.ckpt binary
+*.pt binary
+*.bin binary

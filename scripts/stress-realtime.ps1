@@ -12,6 +12,8 @@ param(
   [switch]$ShowErrors
 )
 
+. (Join-Path $PSScriptRoot 'enable-utf8.ps1')
+
 if ($Connections -lt 1) {
   throw "Connections must be >= 1"
 }

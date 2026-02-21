@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'enable-utf8.ps1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $serDir = Join-Path $root "backend\ser-service"

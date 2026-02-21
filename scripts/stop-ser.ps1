@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'enable-utf8.ps1')
 
 $conn = Get-NetTCPConnection -LocalPort 8001 -State Listen -ErrorAction SilentlyContinue |
   Select-Object -First 1
@@ -11,4 +12,3 @@ if (-not $conn) {
 $pidValue = $conn.OwningProcess
 Stop-Process -Id $pidValue -Force
 Write-Host "[stop-ser] stopped PID=$pidValue on port 8001"
-

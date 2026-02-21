@@ -118,7 +118,7 @@ const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
 
 const formattedCreatedAt = computed(() => {
   const value = report.value?.createdAt
-  if (!value) return '未知'
+  if (!value) return '鏈煡'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
@@ -138,29 +138,6 @@ const textRiskScore = computed(() => {
   if (!source) return 0
   return 100 * source.text_neg
 })
-
-const fusionKpiItems = computed<KpiItem[]>(() => [
-  {
-    label: '语音分',
-    value: `${voiceRiskScore.value.toFixed(2)}`,
-    helper: '由 p_sad / p_angry / var_conf 计算',
-  },
-  {
-    label: '文本分',
-    value: `${textRiskScore.value.toFixed(2)}`,
-    helper: '由 text_neg 计算',
-  },
-  {
-    label: '融合分(PSI)',
-    value: `${normalizedRiskScore.value.toFixed(2)}`,
-    helper: 'PSI = 0.6*语音分 + 0.4*文本分',
-  },
-  {
-    label: '风险等级',
-    value: riskLevel.value || '未知',
-    helper: '低风险 / 关注 / 高风险',
-  },
-])
 
 const parsedRawJson = computed<Record<string, unknown> | null>(() => {
   const raw = taskResult.value?.rawJson
@@ -231,6 +208,42 @@ const serFusionInfo = computed(() => {
   }
 })
 
+const serProbabilityRings = computed(() => {
+  const toPercent = (value?: number) => (value != null ? clamp(value * 100, 0, 100) : 0)
+  const toDisplay = (value?: number) => (value != null ? `${(clamp(value, 0, 1) * 100).toFixed(2)}%` : '--')
+
+  return [
+    {
+      key: 'happy',
+      label: '喜概率',
+      percentage: Number(toPercent(serFusionInfo.value.scoreHappy).toFixed(1)),
+      valueText: toDisplay(serFusionInfo.value.scoreHappy),
+      color: '#67c23a',
+    },
+    {
+      key: 'sad',
+      label: '悲伤概率',
+      percentage: Number(toPercent(serFusionInfo.value.scoreSad).toFixed(1)),
+      valueText: toDisplay(serFusionInfo.value.scoreSad),
+      color: '#4f8cff',
+    },
+    {
+      key: 'angry',
+      label: '怒概率',
+      percentage: Number(toPercent(serFusionInfo.value.scoreAngry).toFixed(1)),
+      valueText: toDisplay(serFusionInfo.value.scoreAngry),
+      color: '#f56c6c',
+    },
+    {
+      key: 'neutral',
+      label: '中性概率',
+      percentage: Number(toPercent(serFusionInfo.value.scoreNeutral).toFixed(1)),
+      valueText: toDisplay(serFusionInfo.value.scoreNeutral),
+      color: '#e6a23c',
+    },
+  ]
+})
+
 const serFusionItems = computed<KpiItem[]>(() => [
   {
     label: 'SER融合就绪',
@@ -252,25 +265,6 @@ const serFusionItems = computed<KpiItem[]>(() => [
     label: 'SER融合错误',
     value: serFusionInfo.value.error ? '有' : '无',
     helper: serFusionInfo.value.error ?? '无',
-  },
-])
-
-const serFusionScoreItems = computed<KpiItem[]>(() => [
-  {
-    label: '怒概率',
-    value: serFusionInfo.value.scoreAngry != null ? serFusionInfo.value.scoreAngry.toFixed(4) : '--',
-  },
-  {
-    label: '喜概率',
-    value: serFusionInfo.value.scoreHappy != null ? serFusionInfo.value.scoreHappy.toFixed(4) : '--',
-  },
-  {
-    label: '中性概率',
-    value: serFusionInfo.value.scoreNeutral != null ? serFusionInfo.value.scoreNeutral.toFixed(4) : '--',
-  },
-  {
-    label: '悲伤概率',
-    value: serFusionInfo.value.scoreSad != null ? serFusionInfo.value.scoreSad.toFixed(4) : '--',
   },
 ])
 
@@ -355,7 +349,6 @@ const contributionFactors = computed(() => {
 
   return factors
 })
-
 const openArticle = (url?: string) => {
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -382,7 +375,7 @@ const loadReport = async () => {
     homeContent.value = homeResp
     taskResult.value = resultResp?.data ?? null
   } catch (error) {
-    errorState.value = parseError(error, '报告详情加载失败')
+    errorState.value = parseError(error, '鎶ュ憡璇︽儏鍔犺浇澶辫触')
   } finally {
     loading.value = false
   }
@@ -425,49 +418,26 @@ onMounted(() => {
 
       <div class="report-grid">
         <SectionBlock title="融合看板" description="语音/文本/融合(PSI)与贡献细项。">
-          <LoreCard title="可视化总览" subtitle="融合结果环形图">
+          <LoreCard title="可视化总览" subtitle="SER 概率环图">
             <div class="viz-ring-grid">
-              <article class="viz-ring-item">
+              <article v-for="ring in serProbabilityRings" :key="ring.key" class="viz-ring-item">
                 <el-progress
                   type="dashboard"
-                  :percentage="Number(confidenceGaugeValue.toFixed(1))"
-                  :color="confidenceGaugeColor"
+                  :percentage="ring.percentage"
+                  :color="ring.color"
                   :stroke-width="11"
                 />
-                <p>融合置信度</p>
-                <strong>{{ confidencePercent }}</strong>
-              </article>
-              <article class="viz-ring-item">
-                <el-progress
-                  type="dashboard"
-                  :percentage="Number(riskGaugeValue.toFixed(1))"
-                  :color="riskGaugeColor"
-                  :stroke-width="11"
-                />
-                <p>PSI 风险分</p>
-                <strong>{{ `${riskGaugeValue.toFixed(2)}/100` }}</strong>
-              </article>
-              <article class="viz-ring-item">
-                <el-progress
-                  type="dashboard"
-                  :percentage="Number(textGaugeValue.toFixed(1))"
-                  :color="textGaugeColor"
-                  :stroke-width="11"
-                />
-                <p>文本负向分</p>
-                <strong>{{ textGaugeValue.toFixed(2) }}</strong>
+                <p>{{ ring.label }}</p>
+                <strong>{{ ring.valueText }}</strong>
               </article>
             </div>
           </LoreCard>
-
-          <KpiGrid :items="fusionKpiItems" />
 
           <LoreCard title="文本融合细项" subtitle="词典 + 文本模型">
             <KpiGrid :items="textFusionItems" />
           </LoreCard>
           <LoreCard title="SER 融合输出" subtitle="在线融合预测">
             <KpiGrid :items="serFusionItems" />
-            <KpiGrid :items="serFusionScoreItems" />
           </LoreCard>
 
           <LoreCard title="PSI 贡献项">
@@ -556,7 +526,7 @@ onMounted(() => {
 
       <div class="footer-actions">
         <el-button @click="router.push('/app/reports')">返回报告中心</el-button>
-        <el-button type="primary" plain @click="router.push(`/app/tasks/${report.taskId}`)">查看任务</el-button>
+        <el-button type="primary" plain @click="report && router.push(`/app/tasks/${report.taskId}`)">查看任务</el-button>
       </div>
     </template>
   </div>
@@ -606,7 +576,7 @@ onMounted(() => {
 .viz-ring-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .viz-ring-item {
@@ -631,6 +601,7 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 ul {
@@ -730,6 +701,10 @@ ul {
   .report-grid {
     grid-template-columns: 1fr;
   }
+
+  .viz-ring-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
@@ -746,5 +721,13 @@ ul {
   .top-meta :deep(.badge) {
     margin-left: auto;
   }
+
+  .viz-ring-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
+
+
+
+

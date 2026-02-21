@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'enable-utf8.ps1')
 
 $base = "http://127.0.0.1:8080"
 $proxy = "http://127.0.0.1:5173"

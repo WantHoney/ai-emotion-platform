@@ -1,4 +1,4 @@
-﻿# AI Emotion Monorepo
+# AI Emotion Monorepo
 
 This repository is a monorepo with:
 - `backend/`: Spring Boot + MySQL (API server)
@@ -10,6 +10,16 @@ This repository is a monorepo with:
 - Maven 3.9+
 - Node.js `^20.19.0 || >=22.12.0`
 - MySQL 8+
+
+## 1.1 UTF-8 shell (Windows, recommended)
+
+To avoid Chinese mojibake in logs/scripts, initialize PowerShell as UTF-8 before running dev commands:
+
+```powershell
+./scripts/enable-utf8.ps1
+```
+
+This is already called by `dev-all.ps1`, `start-ser.ps1`, `smoke-api.ps1`, `stop-ser.ps1`, and `stress-realtime.ps1`.
 
 ## 2. Environment Variables
 

@@ -11,13 +11,16 @@ This repository is a monorepo with:
 - Node.js `^20.19.0 || >=22.12.0`
 - MySQL 8+
 
-## 2. Required Environment Variables
+## 2. Environment Variables
 
-Backend runs in real AI mode by default. You must provide API key and DB connection.
+Backend now runs in local-only mode by default (`AI_MODE=mock` + Spring AI disabled).  
+OpenRouter variables are optional and only used when you explicitly switch to remote LLM mode.
 
-- `OPENROUTER_API_KEY` (required)
+- `OPENROUTER_API_KEY` (optional, only for `AI_MODE=spring`)
 - `OPENROUTER_BASE_URL` (optional, default `https://openrouter.ai/api`)
 - `OPENROUTER_MODEL` (optional)
+- `AI_MODE` (optional, default `mock`)
+- `SPRING_AI_OPENAI_ENABLED` (optional, default `false`)
 - `SPRING_DATASOURCE_URL` (optional override)
 - `SPRING_DATASOURCE_USERNAME` (optional override)
 - `SPRING_DATASOURCE_PASSWORD` (optional override)

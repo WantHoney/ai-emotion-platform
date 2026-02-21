@@ -1,41 +1,67 @@
-# 架构与模块说明
+﻿# 架构与模块说明（与代码同步）
+最后同步日期：`2026-02-21`
 
-## 1. 总体架构
+## 1. 总体拓扑
 
-- **frontend（Vue3 + Vite）**
-  - 用户端：上传音频、查看任务、报告与历史。
-  - 运营端 CMS：内容管理与轻量看板。
-- **backend（Spring Boot）**
-  - REST API、鉴权、任务调度、报告持久化。
-  - 可切换 AI 调用模式（mock / spring）。
-- **MySQL**
-  - 存储用户、音频、分析任务、分段结果、报告、CMS 内容。
-- **可选 SER 服务（Python FastAPI）**
-  - 在开启 `SER_ENABLED=true` 时由 backend 调用。
+```text
+Frontend (Vue3/Vite, :5173)
+    | HTTP /api + WS /ws/tasks/stream
+Backend (Spring Boot, :8080)
+    | JDBC
+MySQL
+    |
+    +-- HTTP -> SER Service (FastAPI, :8001, 可选)
+            |- ASR (faster-whisper)
+            |- SER (wav2vec2 EN/ZH)
+            |- Text Sentiment (HF EN/ZH)
+            |- Late Fusion + PSI
+```
 
-## 2. 前后端交互
+说明：
+- 默认是本地模型链路（不开外部大模型即可运行）。
+- 外部 LLM（如 OpenRouter）仅作可选增强，不是主路径。
 
-- 前端默认开发端口：`5173`
-- 后端默认端口：`8080`
-- 前端通过 Vite proxy 将 `/api` 转发至后端。
+## 2. 后端核心模块
 
-## 3. backend 主要模块
+- `controller/`：接口入口，覆盖认证、上传、分析、报告、治理、CMS。
+- `service/`：任务调度、报告生成、风险计算、实时快照组装。
+- `websocket/`：`/ws/tasks/stream` 实时推送任务快照。
+- `repository/`：JDBC 数据访问。
+- `integration/`：SER/ASR/AI 外部能力集成。
+- `dto/`：前后端交互契约。
 
-- `controller/`：API 入口（auth、audio、analysis、cms、health 等）
-- `service/`：业务编排（任务处理、报告生成、CMS 管理等）
-- `repository/`：JDBC 数据访问
-- `integration/`：对接 AI/SER/ASR 等外部能力
-- `domain` / `dto`：领域对象与接口出参
-- `config/`：数据源、资源映射、启动检查等配置
+## 3. 前端核心模块
 
-## 4. frontend 主要模块
+- `views/user/`：上传、任务、报告、趋势等用户侧页面。
+- `views/admin/`：治理、告警、CMS 管理页面。
+- `api/`：按域封装接口调用。
+- `composables/`：任务轮询、WebSocket 实时订阅、状态管理。
+- `stores/`：Pinia 全局状态。
 
-- `src/views/`：业务页面（上传、任务、报告、系统、运营端等）
-- `src/api/`：按模块封装 API（auth/audio/analysis/admin 等）
-- `src/router/`：路由与权限入口
-- `src/stores/`：Pinia 状态管理
+## 4. 端到端分析流程
 
-## 5. 运行形态建议
+1. 用户上传音频（支持普通上传和分片上传）。
+2. 创建分析任务并进入队列。
+3. 后端调用 SER 服务执行：ASR -> 音频情绪 -> 文本情绪 -> 融合。
+4. 生成风险评分与 PSI 相关贡献项。
+5. 写入分段结果、任务状态、报告数据。
+6. 前端通过 WebSocket + 轮询看到任务阶段与风险曲线变化。
 
-- **本地开发最小链路**：frontend + backend + MySQL，AI 先用 `mock`。
-- **联调/演示链路**：frontend + backend + MySQL + OpenRouter（可选 + SER）。
+## 5. 实时能力边界（毕设可交付）
+
+当前实现目标是：
+- 时间轴持续更新。
+- 风险曲线可视化。
+- 阶段进度可追踪。
+
+不追求：
+- 毫秒级硬实时。
+- 真正在线增量 ASR 重训练。
+- 动态模型重训练闭环。
+
+## 6. 与文档的同步关系
+
+- 接口细节：`docs/api.md`
+- 数据库迁移：`docs/db.md`
+- 实验结果：`docs/experiments.md`
+- 论文技术素材：`docs/thesis_notes.md`

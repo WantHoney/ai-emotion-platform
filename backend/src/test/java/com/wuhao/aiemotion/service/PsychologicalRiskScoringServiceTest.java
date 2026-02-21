@@ -11,7 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PsychologicalRiskScoringServiceTest {
 
-    private final PsychologicalRiskScoringService service = new PsychologicalRiskScoringService();
+    private final PsychologicalRiskScoringService service =
+            new PsychologicalRiskScoringService(new InterventionAdviceService());
 
     @Test
     void shouldReturnNormalRiskWhenSegmentsAreCalm() {

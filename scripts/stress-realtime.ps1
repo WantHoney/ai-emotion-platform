@@ -26,94 +26,163 @@ $wsUrl = "$WsBaseUrl/ws/tasks/stream?taskId=$TaskId&accessToken=$([uri]::EscapeD
 Write-Host "[stress] target=$wsUrl"
 Write-Host "[stress] connections=$Connections durationSec=$DurationSec"
 
-$jobScript = {
-  param($id, $url, $durationSec, $receiveTimeoutMs)
+$env:STRESS_WS_URL = $wsUrl
+$env:STRESS_CONNECTIONS = [string]$Connections
+$env:STRESS_DURATION_SEC = [string]$DurationSec
+$env:STRESS_TIMEOUT_MS = [string]$ReceiveTimeoutMs
+$env:STRESS_SHOW_ERRORS = if ($ShowErrors) { "1" } else { "0" }
 
-  $ws = [System.Net.WebSockets.ClientWebSocket]::new()
-  $cts = [System.Threading.CancellationTokenSource]::new()
-  $messageCount = 0
+$pythonScript = @'
+import asyncio
+import base64
+import os
+import random
+import struct
+import time
+from urllib.parse import urlparse
 
-  try {
-    $ws.ConnectAsync([Uri]$url, $cts.Token).GetAwaiter().GetResult()
-    $buffer = New-Object byte[] 16384
-    $deadline = [DateTime]::UtcNow.AddSeconds($durationSec)
 
-    while ([DateTime]::UtcNow -lt $deadline -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
-      $segment = [System.ArraySegment[byte]]::new($buffer, 0, $buffer.Length)
-      $receiveTask = $ws.ReceiveAsync($segment, $cts.Token)
-      if (-not $receiveTask.Wait($receiveTimeoutMs)) {
-        continue
-      }
-      $result = $receiveTask.Result
-      if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
-        break
-      }
-      if ($result.Count -gt 0) {
-        $messageCount++
-      }
-    }
+def ws_close_frame():
+    mask = os.urandom(4)
+    # client-to-server frame must be masked
+    return b"\x88\x80" + mask
 
-    if ($ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
-      $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "stress_done", $cts.Token).GetAwaiter().GetResult()
-    }
 
-    [PSCustomObject]@{
-      id       = $id
-      ok       = $true
-      messages = $messageCount
-      error    = $null
-    }
-  }
-  catch {
-    [PSCustomObject]@{
-      id       = $id
-      ok       = $false
-      messages = $messageCount
-      error    = $_.Exception.Message
-    }
-  }
-  finally {
-    $cts.Dispose()
-    $ws.Dispose()
-  }
-}
+async def read_exactly(reader, n, timeout_s):
+    return await asyncio.wait_for(reader.readexactly(n), timeout=timeout_s)
 
-$jobs = @()
-for ($i = 1; $i -le $Connections; $i++) {
-  $jobs += Start-Job -ScriptBlock $jobScript -ArgumentList $i, $wsUrl, $DurationSec, $ReceiveTimeoutMs
-}
 
-$waitBudget = $DurationSec + 30
-Wait-Job -Job $jobs -Timeout $waitBudget | Out-Null
+async def read_frame(reader, timeout_s):
+    head = await read_exactly(reader, 2, timeout_s)
+    b1, b2 = head[0], head[1]
+    opcode = b1 & 0x0F
+    masked = (b2 & 0x80) != 0
+    length = b2 & 0x7F
+    if length == 126:
+        ext = await read_exactly(reader, 2, timeout_s)
+        length = int.from_bytes(ext, "big")
+    elif length == 127:
+        ext = await read_exactly(reader, 8, timeout_s)
+        length = int.from_bytes(ext, "big")
+    mask_key = b""
+    if masked:
+        mask_key = await read_exactly(reader, 4, timeout_s)
+    payload = b""
+    if length > 0:
+        payload = await read_exactly(reader, length, timeout_s)
+    if masked and payload:
+        payload = bytes(b ^ mask_key[i % 4] for i, b in enumerate(payload))
+    return opcode, payload
 
-$running = $jobs | Where-Object { $_.State -eq "Running" }
-if ($running.Count -gt 0) {
-  $running | Stop-Job | Out-Null
-}
 
-$results = Receive-Job -Job $jobs
-$jobs | Remove-Job -Force | Out-Null
+async def run_client(client_id: int, url: str, duration_sec: int, timeout_ms: int):
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "wss" else 80)
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
 
-$total = $results.Count
-$okCount = ($results | Where-Object { $_.ok }).Count
-$failCount = $total - $okCount
-$msgTotal = ($results | Measure-Object -Property messages -Sum).Sum
-$avgMessages = if ($total -gt 0) { [math]::Round($msgTotal / $total, 2) } else { 0 }
+    message_count = 0
+    reader = None
+    writer = None
 
-Write-Host ""
-Write-Host "[stress] summary"
-Write-Host "  total clients : $total"
-Write-Host "  success       : $okCount"
-Write-Host "  failed        : $failCount"
-Write-Host "  total messages: $msgTotal"
-Write-Host "  avg/client    : $avgMessages"
+    try:
+        reader, writer = await asyncio.open_connection(host, port)
 
-if ($ShowErrors) {
-  $errors = $results | Where-Object { -not $_.ok } | Select-Object -First 20
-  if ($errors.Count -gt 0) {
-    Write-Host ""
-    Write-Host "[stress] first errors"
-    $errors | Format-Table id, error -AutoSize
-  }
-}
+        key = base64.b64encode(os.urandom(16)).decode("ascii")
+        req = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "\r\n"
+        )
+        writer.write(req.encode("ascii"))
+        await writer.drain()
 
+        headers_raw = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=5.0)
+        status_line = headers_raw.split(b"\r\n", 1)[0].decode("latin1", "replace")
+        if " 101 " not in status_line:
+            raise RuntimeError(f"handshake_failed: {status_line}")
+
+        deadline = time.monotonic() + duration_sec
+        default_timeout_s = max(0.05, timeout_ms / 1000.0)
+        while time.monotonic() < deadline:
+            timeout_s = min(default_timeout_s, max(0.05, deadline - time.monotonic()))
+            try:
+                opcode, payload = await read_frame(reader, timeout_s)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.IncompleteReadError:
+                break
+
+            if opcode == 0x8:  # close
+                break
+            if opcode in (0x1, 0x2) and payload:
+                message_count += 1
+            # ignore ping/pong/continuation
+
+        if writer is not None:
+            try:
+                writer.write(ws_close_frame())
+                await writer.drain()
+            except Exception:
+                pass
+
+        return {"id": client_id, "ok": True, "messages": message_count, "error": None}
+    except Exception as e:
+        return {"id": client_id, "ok": False, "messages": message_count, "error": str(e)}
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+
+async def main():
+    url = os.environ["STRESS_WS_URL"]
+    connections = int(os.environ["STRESS_CONNECTIONS"])
+    duration_sec = int(os.environ["STRESS_DURATION_SEC"])
+    timeout_ms = int(os.environ["STRESS_TIMEOUT_MS"])
+    show_errors = os.environ.get("STRESS_SHOW_ERRORS", "0") == "1"
+
+    tasks = [
+        asyncio.create_task(run_client(i + 1, url, duration_sec, timeout_ms))
+        for i in range(connections)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    total = len(results)
+    ok_count = sum(1 for r in results if r["ok"])
+    fail_count = total - ok_count
+    total_messages = sum(int(r["messages"]) for r in results)
+    avg_per_client = round(total_messages / total, 2) if total else 0
+
+    print("")
+    print("[stress] summary")
+    print(f"  total clients : {total}")
+    print(f"  success       : {ok_count}")
+    print(f"  failed        : {fail_count}")
+    print(f"  total messages: {total_messages}")
+    print(f"  avg/client    : {avg_per_client}")
+
+    if show_errors:
+        errors = [r for r in results if not r["ok"]][:20]
+        if errors:
+            print("")
+            print("[stress] first errors")
+            print(f"{'id':>3} error")
+            for item in errors:
+                print(f"{item['id']:>3} {item['error']}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+'@
+
+$pythonScript | python -

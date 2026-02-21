@@ -31,7 +31,6 @@ OpenRouter variables are optional and only used when you explicitly switch to re
 Windows PowerShell example:
 
 ```powershell
-$env:OPENROUTER_API_KEY="your_key"
 $env:SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
 $env:SPRING_DATASOURCE_USERNAME="root"
 $env:SPRING_DATASOURCE_PASSWORD="your_password"
@@ -226,10 +225,17 @@ Frontend upload page (`/app/upload`) already uses chunk mode with realtime progr
 
 ## 9. DB migration notes
 
-- Previous governance schema: `backend/docs/db/migrations/V5__model_warning_ops.sql`
-- New SLA/quality extension: `backend/docs/db/migrations/V6__warning_sla_and_quality.sql`
+- Baseline schema: `backend/docs/db/schema_v1.sql`
+- Incremental migrations (apply in order):
+  - `backend/docs/db/migrations/V2__task_queue_schema.sql`
+  - `backend/docs/db/migrations/V3__resource_observability_upgrade.sql`
+  - `backend/docs/db/migrations/V4__home_cms_content.sql`
+  - `backend/docs/db/migrations/V5__model_warning_ops.sql`
+  - `backend/docs/db/migrations/V6__warning_sla_and_quality.sql`
+  - `backend/docs/db/migrations/V7__task_report_user_sequence_indexes.sql`
+  - `backend/docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql`
 
-If `V6` is not applied yet, backend still runs in backward-compatible mode (SLA fields degrade gracefully).
+Current latest migration is `V8`.
 
 ## 10. Troubleshooting
 
@@ -241,7 +247,12 @@ If `V6` is not applied yet, backend still runs in backward-compatible mode (SLA 
 
 ### Backend startup fails with OpenAI API key error
 
-Set `OPENROUTER_API_KEY` in your shell before running backend.
+This is only relevant when you intentionally enable remote LLM mode:
+- set `AI_MODE=spring`
+- set `SPRING_AI_OPENAI_ENABLED=true`
+- then provide `OPENROUTER_API_KEY`
+
+For local-only default mode (`AI_MODE=mock`), no OpenRouter key is required.
 
 ### Backend startup fails with `Port 8080 was already in use`
 

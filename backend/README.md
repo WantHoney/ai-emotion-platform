@@ -1,42 +1,49 @@
-# Backend（Spring Boot）
+# Backend (Spring Boot)
 
 ## 环境要求
 
 - JDK 17+
-- Maven 3.8+
+- Maven 3.9+
 - MySQL 8+
 
 ## 本地启动
 
 ```bash
-# 导入基线数据库
+# 1) 导入基线结构
 mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 
-# 启动服务
+# 2) 按顺序执行迁移（V2 -> V8）
+# backend/docs/db/migrations/V2__task_queue_schema.sql
+# backend/docs/db/migrations/V3__resource_observability_upgrade.sql
+# backend/docs/db/migrations/V4__home_cms_content.sql
+# backend/docs/db/migrations/V5__model_warning_ops.sql
+# backend/docs/db/migrations/V6__warning_sla_and_quality.sql
+# backend/docs/db/migrations/V7__task_report_user_sequence_indexes.sql
+# backend/docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql
+
+# 3) 启动服务
 mvn spring-boot:run
 ```
 
-默认地址：`http://localhost:8080`
+默认地址：`http://127.0.0.1:8080`  
+健康检查：`curl http://127.0.0.1:8080/api/health`
 
-健康检查：
+## 关键配置（建议环境变量）
 
-```bash
-curl http://localhost:8080/api/health
-```
-
-## 关键配置（建议用环境变量）
-
-- `AI_MODE`：`mock` / `spring`
-- `OPENROUTER_API_KEY`、`OPENROUTER_BASE_URL`、`OPENROUTER_MODEL`
-- `APP_CORS_ALLOWED_ORIGINS`（默认 `http://localhost:5173`）
+- `AI_MODE`：默认 `mock`（本地模式），可切 `spring`
+- `SPRING_AI_OPENAI_ENABLED`：默认 `false`
+- `OPENROUTER_API_KEY`：仅当 `AI_MODE=spring` 时需要
+- `OPENROUTER_BASE_URL`、`OPENROUTER_MODEL`
+- `APP_CORS_ALLOWED_ORIGINS`
 - `SER_ENABLED`、`SER_BASE_URL`
 
 ## 数据库脚本
 
 - 基线：`docs/db/schema_v1.sql`
 - 迁移：`docs/db/migrations/`
+- 当前最新迁移：`V8__cleanup_legacy_sequence_indexes.sql`
 
 ## 说明
 
-- 本目录仅说明 backend 子项目。
-- 项目级说明见仓库根目录 `README.md`。
+- 本文件是 backend 子项目说明。
+- 项目整体说明请查看仓库根目录 `README.md`。

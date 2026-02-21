@@ -23,6 +23,7 @@ Backend runs in real AI mode by default. You must provide API key and DB connect
 - `SPRING_DATASOURCE_PASSWORD` (optional override)
 - `SER_ENABLED` (optional, default `true`)
 - `SER_BASE_URL` (optional, default `http://127.0.0.1:8001`)
+- `ANALYSIS_REALTIME_PUSH_INTERVAL_MS` (optional, default `1000`)
 
 Windows PowerShell example:
 
@@ -151,6 +152,13 @@ curl "http://127.0.0.1:8080/api/reports?page=1&pageSize=10" \
 - Tasks list: `GET /api/tasks?page=1&pageSize=10&status=&keyword=&sortBy=createdAt&sortOrder=desc`
 - Reports list: `GET /api/reports?page=1&pageSize=10&riskLevel=&emotion=&keyword=&sortBy=createdAt&sortOrder=desc`
 - Report detail: `GET /api/reports/{id}`
+- Task realtime stream (WebSocket):
+  - `GET ws://127.0.0.1:8080/ws/tasks/stream?taskId=<taskId>&accessToken=<token>`
+  - Returns snapshot events including:
+    - task status (`status`, `attemptCount`, `nextRunAt`, `errorMessage`)
+    - risk summary (`riskScore`, `riskLevel`, `pSad`, `pAngry`, `varConf`, `textNeg`)
+    - progress stage (`phase`, `message`, `sequence`)
+    - timeline curve points (`curve[]`)
 
 List response shape:
 

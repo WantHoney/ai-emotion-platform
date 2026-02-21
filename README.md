@@ -124,6 +124,12 @@ One-command smoke test (Windows PowerShell):
 ./scripts/smoke-api.ps1
 ```
 
+Doc/DB consistency check:
+
+```bash
+python scripts/check_doc_sync.py
+```
+
 The script validates public APIs, user upload->analysis flow, and admin governance endpoints.
 
 Manual page-by-page acceptance checklist:

@@ -47,6 +47,7 @@ public class AnalysisTaskWorkerService {
     private final TextSentimentClient textSentimentClient;
     private final PsychologicalRiskScoringService riskScoringService;
     private final TextNegScorer textNegScorer;
+    private final TaskRealtimeProgressTracker taskRealtimeProgressTracker;
     private final AnalysisWorkerProperties workerProperties;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
@@ -60,6 +61,7 @@ public class AnalysisTaskWorkerService {
                                      TextSentimentClient textSentimentClient,
                                      PsychologicalRiskScoringService riskScoringService,
                                      TextNegScorer textNegScorer,
+                                     TaskRealtimeProgressTracker taskRealtimeProgressTracker,
                                      AnalysisWorkerProperties workerProperties,
                                      ObjectMapper objectMapper,
                                      TransactionTemplate transactionTemplate,
@@ -72,6 +74,7 @@ public class AnalysisTaskWorkerService {
         this.textSentimentClient = textSentimentClient;
         this.riskScoringService = riskScoringService;
         this.textNegScorer = textNegScorer;
+        this.taskRealtimeProgressTracker = taskRealtimeProgressTracker;
         this.workerProperties = workerProperties;
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
@@ -96,11 +99,21 @@ public class AnalysisTaskWorkerService {
 
             log.info("analysis task processing start: taskId={}, audioId={}, status=PROCESSING, attemptCount={}",
                     task.id(), audioId, task.attemptCount());
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    "CLAIMED",
+                    "任务已进入处理阶段",
+                    progressDetails(
+                            "audioId", audioId,
+                            "attempt", task.attemptCount() + 1
+                    )
+            );
 
             AsrTranscribeResponse asrResponse = null;
             long asrCostMs = -1;
             boolean asrFailed = false;
             Instant asrStarted = Instant.now();
+            taskRealtimeProgressTracker.publish(task.id(), "ASR_RUNNING", "正在执行语音转写");
             try {
                 asrResponse = asrClient.transcribe(Path.of(audioPath), workerProperties.getAsrTimeoutMs());
                 asrCostMs = Duration.between(asrStarted, Instant.now()).toMillis();
@@ -112,8 +125,19 @@ public class AnalysisTaskWorkerService {
             }
             String languageHint = normalizeLanguageHint(asrResponse == null ? null : asrResponse.language());
             String transcript = asrResponse == null ? "" : asrResponse.text();
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    asrFailed ? "ASR_FAILED" : "ASR_DONE",
+                    asrFailed ? "语音转写失败，已降级为语音单模态" : "语音转写完成",
+                    progressDetails(
+                            "asrCostMs", asrCostMs,
+                            "language", languageHint,
+                            "textLength", transcript == null ? 0 : transcript.length()
+                    )
+            );
             TextNegScorer.TextNegScoreResult lexiconTextScore = textNegScorer.score(transcript);
             TextSentimentResponse textSentiment = null;
+            taskRealtimeProgressTracker.publish(task.id(), "TEXT_RUNNING", "正在执行文本情感分析");
             try {
                 if (transcript != null && !transcript.isBlank()) {
                     textSentiment = textSentimentClient.score(
@@ -130,15 +154,36 @@ public class AnalysisTaskWorkerService {
                     lexiconTextScore.textNeg(),
                     textSentiment == null ? null : textSentiment.negativeScore()
             );
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    textSentiment == null ? "TEXT_FALLBACK" : "TEXT_DONE",
+                    textSentiment == null ? "文本模型不可用，已回退词典结果" : "文本情感分析完成",
+                    progressDetails(
+                            "lexiconNeg", round4(lexiconTextScore.textNeg()),
+                            "modelNeg", textSentiment == null || textSentiment.negativeScore() == null ? null : round4(textSentiment.negativeScore()),
+                            "fusedNeg", round4(fusedTextNeg)
+                    )
+            );
             SerClient.FusionTextFeatures fusionTextFeatures =
                     buildSerFusionTextFeatures(transcript, textSentiment, fusedTextNeg);
 
             Instant started = Instant.now();
+            taskRealtimeProgressTracker.publish(task.id(), "SER_RUNNING", "正在执行语音情绪识别与融合");
             SerAnalyzeResponse response = serClient.analyze(Path.of(audioPath), languageHint, fusionTextFeatures);
             long serCostMs = Duration.between(started, Instant.now()).toMillis();
 
             AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment =
                     riskScoringService.evaluate(toSegments(task.id(), response), fusedTextNeg);
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    "PERSISTING",
+                    "模型推理完成，正在写入结果",
+                    progressDetails(
+                            "serCostMs", serCostMs,
+                            "riskScore", round4(riskAssessment.risk_score()),
+                            "riskLevel", riskAssessment.risk_level()
+                    )
+            );
 
             AsrTranscribeResponse finalAsrResponse = asrResponse;
             final long finalSerCostMs = serCostMs;
@@ -157,6 +202,17 @@ public class AnalysisTaskWorkerService {
                     riskAssessment.risk_score(),
                     response.fusion() == null ? null : response.fusion().ready(),
                     response.fusion() == null ? null : response.fusion().label());
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    "DONE",
+                    "任务处理完成",
+                    progressDetails(
+                            "serLatencyMs", serCostMs,
+                            "riskScore", round4(riskAssessment.risk_score()),
+                            "riskLevel", riskAssessment.risk_level(),
+                            "fusionReady", response.fusion() == null ? null : response.fusion().ready()
+                    )
+            );
         } catch (Exception e) {
             transactionTemplate.executeWithoutResult(s -> handleFailure(task, workerId, e));
         } finally {
@@ -247,6 +303,17 @@ public class AnalysisTaskWorkerService {
         String status = nextAttempt >= workerProperties.getMaxAttempts() ? "FAILED" : "RETRY_WAIT";
         log.error("analysis task failed: taskId={}, audioId={}, status={}, attemptCount={}, backoffSeconds={}, reason={}",
                 task.id(), task.audioFileId(), status, nextAttempt, backoffSeconds, error, e);
+        taskRealtimeProgressTracker.publish(
+                task.id(),
+                "FAILED",
+                "任务执行失败，等待重试或终止",
+                progressDetails(
+                        "status", status,
+                        "attempt", nextAttempt,
+                        "backoffSeconds", backoffSeconds,
+                        "reason", error
+                )
+        );
     }
 
 
@@ -383,6 +450,22 @@ public class AnalysisTaskWorkerService {
     private String truncateError(String value) {
         String message = value == null || value.isBlank() ? "unknown error" : value;
         return message.length() > MAX_ERROR_LENGTH ? message.substring(0, MAX_ERROR_LENGTH) : message;
+    }
+
+    private Map<String, Object> progressDetails(Object... keyValues) {
+        java.util.LinkedHashMap<String, Object> details = new java.util.LinkedHashMap<>();
+        if (keyValues == null || keyValues.length == 0) {
+            return details;
+        }
+        for (int index = 0; index + 1 < keyValues.length; index += 2) {
+            Object key = keyValues[index];
+            Object value = keyValues[index + 1];
+            if (!(key instanceof String keyText) || keyText.isBlank() || value == null) {
+                continue;
+            }
+            details.put(keyText, value);
+        }
+        return details;
     }
 
     private record WorkerPersistedPayload(

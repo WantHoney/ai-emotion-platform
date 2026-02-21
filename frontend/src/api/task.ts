@@ -47,6 +47,49 @@ export interface AnalysisTaskResultDetail {
   segments: SegmentEmotion[]
 }
 
+export interface TaskRealtimeRiskSummary {
+  riskScore: number
+  riskLevel: string
+  pSad: number
+  pAngry: number
+  varConf: number
+  textNeg: number
+}
+
+export interface TaskRealtimeProgressSummary {
+  phase: string
+  message: string
+  sequence: number
+  emittedAtMs: number
+  details?: Record<string, unknown>
+}
+
+export interface TaskRealtimeCurvePoint {
+  index: number
+  startMs: number
+  endMs: number
+  emotion: string
+  confidence: number
+  riskIndex: number
+}
+
+export interface TaskRealtimeSnapshot {
+  event: 'snapshot'
+  taskId: number
+  taskNo?: string
+  status: TaskStatus
+  attemptCount: number
+  maxAttempts?: number
+  traceId?: string
+  nextRunAt?: string
+  updatedAt?: string
+  errorMessage?: string
+  terminal: boolean
+  risk?: TaskRealtimeRiskSummary | null
+  progress?: TaskRealtimeProgressSummary | null
+  curve?: TaskRealtimeCurvePoint[] | null
+}
+
 interface AnalysisTaskStatusRaw {
   taskId: number
   taskNo?: string

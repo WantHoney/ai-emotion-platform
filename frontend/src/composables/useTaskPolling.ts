@@ -16,7 +16,7 @@ const FINAL_STATES = ['SUCCESS', 'FAILED', 'CANCELED'] as const
 const STATUS_TEXT_MAP: Record<string, string> = {
   PENDING: '待处理',
   RUNNING: '处理中',
-  RETRY_WAIT: '重试等待',
+  RETRY_WAIT: '等待重试',
   SUCCESS: '处理成功',
   FAILED: '处理失败',
   CANCELED: '已取消',
@@ -31,7 +31,7 @@ const classifyPollingError = (error: ApiError) => {
     case 'UNAUTHORIZED':
       return '登录失效，请重新登录。'
     case 'SERVER':
-      return error.message || '服务暂时不可用，已自动重试。'
+      return error.message || '服务暂不可用，已自动重试。'
     default:
       return error.message || '请求失败，已自动重试。'
   }

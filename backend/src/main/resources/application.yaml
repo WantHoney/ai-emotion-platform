@@ -71,6 +71,8 @@ analysis:
     text-sentiment-timeout-ms: ${ANALYSIS_WORKER_TEXT_SENTIMENT_TIMEOUT_MS:20000}
     backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
     backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}
+  realtime:
+    push-interval-ms: ${ANALYSIS_REALTIME_PUSH_INTERVAL_MS:1000}
 
 
 auth:

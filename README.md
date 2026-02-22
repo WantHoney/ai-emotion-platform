@@ -34,6 +34,8 @@ OpenRouter variables are optional and only used when you explicitly switch to re
 - `SPRING_DATASOURCE_URL` (optional override)
 - `SPRING_DATASOURCE_USERNAME` (optional override)
 - `SPRING_DATASOURCE_PASSWORD` (optional override)
+- `AUTH_SEED_ADMIN_USERNAME` (optional, default `operator`)
+- `AUTH_SEED_ADMIN_PASSWORD` (optional, default `operator123`, dev/demo only)
 - `SER_ENABLED` (optional, default `true`)
 - `SER_BASE_URL` (optional, default `http://127.0.0.1:8001`)
 - `ANALYSIS_REALTIME_PUSH_INTERVAL_MS` (optional, default `1000`)
@@ -51,7 +53,13 @@ Windows PowerShell example:
 $env:SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
 $env:SPRING_DATASOURCE_USERNAME="root"
 $env:SPRING_DATASOURCE_PASSWORD="your_password"
+$env:AUTH_SEED_ADMIN_USERNAME="operator"
+$env:AUTH_SEED_ADMIN_PASSWORD="change_me_for_real_env"
 ```
+
+Security note:
+- `operator123` is only a seeded local demo password.
+- Before any public deployment/demo account sharing, override `AUTH_SEED_ADMIN_PASSWORD`.
 
 ## 3. Ports
 

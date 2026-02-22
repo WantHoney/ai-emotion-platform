@@ -45,3 +45,4 @@ ser-service/training/logs/
 ser-service/training/manifests/
 ser-service/training/*.log
 data/datasets/
+\${project.build.directory}/

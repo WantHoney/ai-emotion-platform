@@ -15,8 +15,12 @@ public class SerProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    public String getBaseUrl() { return baseUrl; }
-    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    public String getBaseUrl() {
+        return normalizeBaseUrl(baseUrl);
+    }
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = normalizeBaseUrl(baseUrl);
+    }
     public int getSegmentMs() { return segmentMs; }
     public void setSegmentMs(int segmentMs) { this.segmentMs = segmentMs; }
     public int getOverlapMs() { return overlapMs; }
@@ -29,4 +33,18 @@ public class SerProperties {
     public void setReadTimeoutMs(long readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
     public long getHealthTimeoutMs() { return healthTimeoutMs; }
     public void setHealthTimeoutMs(long healthTimeoutMs) { this.healthTimeoutMs = healthTimeoutMs; }
+
+    private String normalizeBaseUrl(String raw) {
+        if (raw == null) {
+            return "http://localhost:8001";
+        }
+        String normalized = raw.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (normalized.isBlank()) {
+            return "http://localhost:8001";
+        }
+        return normalized;
+    }
 }

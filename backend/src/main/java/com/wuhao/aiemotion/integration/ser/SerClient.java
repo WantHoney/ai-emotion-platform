@@ -40,7 +40,7 @@ public class SerClient {
     }
 
     public SerAnalyzeResponse analyze(Path audioPath, String languageHint, FusionTextFeatures fusionTextFeatures) {
-        String url = properties.getBaseUrl() + "/ser/analyze";
+        String url = serUrl("/ser/analyze");
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", new FileSystemResource(audioPath));
@@ -95,13 +95,13 @@ public class SerClient {
 
     public boolean probeHealth() {
         RestTemplate rt = buildRestTemplate(properties.getHealthTimeoutMs(), properties.getHealthTimeoutMs());
-        return callGet(rt, properties.getBaseUrl() + "/health");
+        return callGet(rt, serUrl("/health"));
     }
 
     public boolean warmup() {
         RestTemplate restTemplate = buildRestTemplate(properties.getConnectTimeoutMs(), properties.getReadTimeoutMs());
-        if (callGet(restTemplate, properties.getBaseUrl() + "/warmup")) return true;
-        return callGet(restTemplate, properties.getBaseUrl() + "/health");
+        if (callGet(restTemplate, serUrl("/warmup"))) return true;
+        return callGet(restTemplate, serUrl("/health"));
     }
 
     private RestTemplate buildRestTemplate(long connectMs, long readMs) {
@@ -109,6 +109,14 @@ public class SerClient {
                 .setConnectTimeout(Duration.ofMillis(connectMs))
                 .setReadTimeout(Duration.ofMillis(readMs))
                 .build();
+    }
+
+    private String serUrl(String path) {
+        String normalizedPath = (path == null || path.isBlank()) ? "" : path.trim();
+        if (!normalizedPath.isEmpty() && !normalizedPath.startsWith("/")) {
+            normalizedPath = "/" + normalizedPath;
+        }
+        return properties.getBaseUrl() + normalizedPath;
     }
 
     private boolean callGet(RestTemplate restTemplate, String url) {

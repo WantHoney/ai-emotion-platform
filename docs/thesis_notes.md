@@ -1,5 +1,5 @@
 ﻿# 论文技术要点备忘
-最后同步日期：`2026-02-21`
+最后同步日期：`2026-03-01`
 
 ## 1. 题目与研究边界
 
@@ -14,7 +14,7 @@
 ## 2. 可写创新点（对应代码）
 
 - 多模态融合：语音情绪概率 + 文本情感向量 -> late fusion。
-- 校准治理：temperature scaling 显著降低 ECE。
+- 校准治理：temperature scaling 量化模型置信度偏差。
 - 实时能力：WebSocket 推送任务快照与风险曲线。
 - 可解释性：报告页/任务页展示语音分、文本分、融合分、PSI 贡献。
 - 治理闭环：漂移扫描 -> 预警落库 -> 运营动作回写。
@@ -32,19 +32,21 @@
 
 - 实验主文档：`docs/experiments.md`
 - 图表源数据：`docs/figures/README.md`
-- 消融数据：`docs/figures/ablation_metrics.csv`
-- 校准数据：`docs/figures/calibration_metrics.csv`
-- 调参数据：`docs/figures/model_selection.csv`
-- 数据构成：`docs/figures/dataset_composition.csv`
+- Exp01 基线：`docs/figures/ablation_metrics.csv`
+- Exp02 结果：
+  - `docs/figures/ablation_metrics_exp02_esd.csv`
+  - `docs/figures/calibration_metrics_exp02_esd.csv`
+  - `docs/figures/dataset_composition_exp02_esd.csv`
+  - `docs/figures/model_selection_exp02_esd.csv`
 - 实时压测证据：`docs/figures/realtime_stress_exp01.md`
 
-## 5. 可直接写进论文的结果结论
+## 5. 当前可写结论（更新到 Exp02 二次重跑）
 
-- 语音单模态（audio_only）测试 `macro-F1=0.6219`。
-- 文本单模态（text_only）测试 `macro-F1=0.3499`。
-- 融合模型（fusion）测试 `macro-F1=0.6317`，较语音单模态提升 `+0.0099`。
-- 融合模型测试 `ECE=0.0250`，较语音单模态下降 `22.39%`。
-- 温度校准使融合模型测试 `ECE` 从 `0.2058` 降到 `0.0250`。
+- Exp01 融合测试：`macro-F1=0.6317`, `ECE=0.0250`。
+- Exp02 融合测试（calibrated）：`macro-F1=0.7049`, `ECE=0.0601`。
+- 相比 Exp01，Exp02 分类能力显著提升（`+0.0732` macro-F1）。
+- Exp02 中 `fusion` 与 `audio_only` 基本持平，说明当前文本分支对分类增益有限。
+- Exp02 ECE 仍高于目标阈值（`0.03`），后续应优先做分语言校准。
 
 ## 6. 答辩材料入口
 
@@ -55,5 +57,13 @@
 ## 7. 收尾写作建议
 
 1. 先写“方法与实现”，再写“实验结果与分析”。
-2. 每个实验图至少回答三个问题：提升多少、为什么、代价是什么。
-3. 结论章节强调“可部署、可解释、可治理”的工程价值。
+2. 每个实验图回答三个问题：提升多少、为什么、代价是什么。
+3. 在结论中强调“可部署、可解释、可治理”的工程价值。
+4. 对未达标项（Exp02 ECE）给出明确改进路线，增加学术可信度。
+
+## 8. ESD 引用（中文语音增强实验）
+
+如果论文中使用 ESD，请引用：
+
+- Zhou, K., Sisman, B., Liu, R., Li, H. (ICASSP 2021).
+- Zhou, K., Sisman, B., Liu, R., Li, H. (Speech Communication, 2022).

@@ -1,0 +1,4 @@
+﻿split,total,en,zh,zh_ratio,asr_missing_transcript
+train,26707,3907,22800,0.8536919190,53
+val,4139,1139,3000,0.7248127567,11
+test,4349,1349,3000,0.6898149000,17

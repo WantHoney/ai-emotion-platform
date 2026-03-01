@@ -1,22 +1,15 @@
 ﻿# 实验记录（毕设主线）
-最后同步日期：`2026-02-21`
+最后同步日期：`2026-03-01`
 
-## 1. 数据与任务定义
+## 1. 任务与数据口径
 
-- 英文语音情绪：IEMOCAP（主）+ RAVDESS（补）。
-- 中文语音情绪：CASIA（微调）。
-- 标签体系：4 类（`ANG/HAP/NEU/SAD`）。
-- 主目标：验证多模态融合相对单模态语音的增益，并评估校准效果（`ECE`）。
+- 标签体系：4 类（`ANG/HAP/NEU/SAD`），线上接口保持不变。
+- 主线目标：在中文为主场景下提升 SER 与融合效果，并保持可解释与可治理能力。
+- 数据源：
+  - 英文：IEMOCAP + RAVDESS
+  - 中文：CASIA + ESD
 
-特征集统计（`backend/ser-service/training/fusion/features_exp01_full/summary.json`）：
-
-| split | total | en | zh | zh ratio | asr_missing_transcript |
-|---|---:|---:|---:|---:|---:|
-| train | 4307 | 3907 | 400 | 9.29% | 53 |
-| val | 1339 | 1139 | 200 | 14.94% | 11 |
-| test | 1549 | 1349 | 200 | 12.91% | 17 |
-
-## 2. 消融核心结果（Ablation）
+## 2. Exp01 基线（ESD 接入前）
 
 来源：`backend/ser-service/training/fusion/ablation_exp01/ablation_summary.json`
 
@@ -26,47 +19,95 @@
 | text_only | 0.3178 | 0.3499 | 0.0471 |
 | fusion | 0.6463 | 0.6317 | 0.0250 |
 
-关键增益（`fusion` vs `audio_only`）：
+## 3. Exp02（ESD 接入 + 两阶段训练）最终结果
 
-- `test macro-F1`：`+0.0099`（相对提升约 `1.59%`）。
-- `test ECE`：`-0.0072`（相对下降约 `22.39%`）。
+### 3.1 ESD 清洗与切分质量
+
+来源：`backend/ser-service/training/manifests/esd_4class/summary.json`
+
+- `detected_layout`: `A(speaker/emotion/file)`
+- `label_source`: `folder`
+- `text_source`: `metadata`
+- 4 类保留样本：`28000`（每类 `7000`）
+- 丢弃：`label_surprise=7000`（符合 4 类口径）
+- speaker 独立切分：`train/val/test = 16/2/2`（总 20 speakers）
+
+### 3.2 Stage-A / Stage-B 声学模型
+
+来源：
+
+- `backend/ser-service/training/checkpoints/ser_zh_esd_stageA_exp01/train_report.json`
+- `backend/ser-service/training/checkpoints/ser_multilingual_esd_stageB_exp01/train_report.json`
+
+| 阶段 | train/val/test | best epoch | test macro-F1 | test acc | 说明 |
+|---|---:|---:|---:|---:|---|
+| Stage-A (CASIA+ESD, zh) | 22800/3000/3000 | 5 | 0.6982 | 0.7017 | 中文增量微调 |
+| Stage-B (multilingual, zh~80%) | 26707/4139/4349 | 2 | 0.7079 | 0.7027 | 中英再平衡微调 |
+
+Stage-B 采样口径（报告内证据）：
+
+- `expected_language_ratios`: `zh=0.7955`, `en=0.2045`
+- 与“中文主系统、英文保底”的目标一致。
+
+### 3.3 Exp02 融合特征构建
+
+来源：`backend/ser-service/training/fusion/features_exp02_esd/summary.json`
+
+| split | total | en | zh | zh ratio | asr_missing |
+|---|---:|---:|---:|---:|---:|
+| train | 26707 | 3907 | 22800 | 85.37% | 53 |
+| val | 4139 | 1139 | 3000 | 72.48% | 11 |
+| test | 4349 | 1349 | 3000 | 68.98% | 17 |
+
+ESD 语言识别复核：ESD 样本在特征文件中全部为 `zh`（`en=0`），说明 `ch/eh` 误识别已修正并在第二次重跑生效。
+
+### 3.4 Exp02 融合模型与校准
+
+来源：`backend/ser-service/training/fusion/models/fusion_exp02_esd/train_report.json`
+
+融合模型（calibrated）：
+
+- `test macro-F1 = 0.7049`
+- `test accuracy = 0.6986`
+- `test ECE = 0.0601`
+
+校准前后（fusion_exp02_esd）：
+
+| split | metric | uncalibrated | calibrated | delta |
+|---|---|---:|---:|---:|
+| val | NLL | 1.0614 | 0.6432 | -0.4182 |
+| val | Brier | 0.3780 | 0.3327 | -0.0453 |
+| val | ECE | 0.1614 | 0.0572 | -0.1042 |
+| test | NLL | 1.3530 | 0.8152 | -0.5378 |
+| test | Brier | 0.5010 | 0.4335 | -0.0676 |
+| test | ECE | 0.2111 | 0.0601 | -0.1509 |
+
+### 3.5 Exp02 消融（Ablation）
+
+来源：`backend/ser-service/training/fusion/ablation_exp02_esd/ablation_summary.json`
+
+| 模式 | val macro-F1 | test macro-F1 | test ECE |
+|---|---:|---:|---:|
+| audio_only | 0.7873 | 0.7049 | 0.0496 |
+| text_only | 0.2769 | 0.3048 | 0.0156 |
+| fusion | 0.7840 | 0.7049 | 0.0601 |
 
 结论：
 
-- 文本单模态在 4 类情绪任务上不足以独立承担分类主干。
-- 文本作为辅助模态可以提升最终分类稳健性并改善置信度校准。
+- Exp02 相比 Exp01，整体分类能力显著提升：
+  - `fusion test macro-F1`: `0.6317 -> 0.7049`（`+0.0732`）
+- 但 `fusion` 未超过 `audio_only`，且 ECE 高于预期阈值（`0.0601 > 0.03`），说明文本分支当前主要提供弱辅助，仍需优化。
 
-## 3. 温度校准收益（Fusion 模型）
+## 4. 验收指标达成情况（Exp02）
 
-来源：`backend/ser-service/training/fusion/models/fusion_exp01/train_report.json`
+| 指标 | 目标 | 结果 | 结论 |
+|---|---|---|---|
+| 融合 test macro-F1 | `>= 0.64` | `0.7049` | 达成 |
+| 融合 test ECE | `<= 0.03` | `0.0601` | 未达成 |
+| Stage-B 语言占比 | `zh 60~80%, en 20~40%` | `zh 79.55%, en 20.45%` | 达成 |
+| 中文主线稳定性 | ESD 全部中文路由 | ESD=zh, en=0 | 达成 |
 
-| split | 指标 | uncalibrated | calibrated | delta |
-|---|---|---:|---:|---:|
-| val | NLL | 1.1458 | 0.9146 | -0.2312 |
-| val | Brier | 0.5475 | 0.4894 | -0.0582 |
-| val | ECE | 0.2079 | 0.0463 | -0.1616 |
-| test | NLL | 1.1451 | 0.9498 | -0.1953 |
-| test | Brier | 0.5777 | 0.5132 | -0.0645 |
-| test | ECE | 0.2058 | 0.0250 | -0.1808 |
-
-备注：`test ECE` 下降约 `87.87%`，是论文“模型可靠性”部分的重点证据。
-
-## 4. 融合调参记录（Model Selection）
-
-来源：`backend/ser-service/training/fusion/models/model_selection_exp01.json`
-
-| run | val macro-F1 | test macro-F1 | test ECE |
-|---|---:|---:|---:|
-| fusion_exp01 | 0.6463 | 0.6317 | 0.0250 |
-| tune_a | 0.6428 | 0.6280 | 0.0325 |
-| tune_b | 0.6458 | 0.6274 | 0.0396 |
-| tune_c | 0.6480 | 0.6249 | 0.0388 |
-
-当前保留模型：
-
-- `backend/ser-service/training/fusion/models/fusion_best`
-
-## 5. 实时通道与治理闭环证据
+## 5. 实时与治理闭环证据
 
 ### 5.1 WebSocket 实时通道压测
 
@@ -79,28 +120,16 @@
 
 ### 5.2 漂移扫描默认阈值回归
 
-执行：
+`POST /api/admin/governance/drift/scan?windowDays=7&baselineDays=7&mediumThreshold=0.15&highThreshold=0.25&minSamples=20`  
+返回：`{"created":0}`，说明治理已回归默认阈值口径。
 
-`POST /api/admin/governance/drift/scan?windowDays=7&baselineDays=7&mediumThreshold=0.15&highThreshold=0.25&minSamples=20`
+## 6. 下一轮提升优先级（建议）
 
-返回：`{"created":0}`，说明演示期低阈值扫描未被持续使用，已回到默认治理口径。
+1. 文本分支重训（中文情绪语义数据 + 任务头重做），目标是让 `fusion` 明确超过 `audio_only`。
+2. 置信度校准升级（per-language temperature / vector scaling），优先把 `test ECE` 压到 `<=0.03`。
+3. 输出分语言评估（`test_macro_f1_zh` / `test_macro_f1_en`）进入正式报告，增强答辩抗质询能力。
 
-### 5.3 处置闭环状态
+## 7. ESD 引用（论文必须带）
 
-当前预警总量：`3`，状态分布：`NEW=2, FOLLOWING=1`。  
-证明链路：检测 -> 入库 -> 运营动作回写已打通。
-
-## 6. 可复现实验命令（训练链路）
-
-- 特征构建：`training/build_fusion_features.py`
-- 融合训练：`training/train_late_fusion.py`
-- 消融评估：`training/run_fusion_ablation.py`
-- 图表源数据导出：`python scripts/export_experiment_assets.py`
-
-详细参数以各脚本 `--help` 和训练目录配置为准。
-
-## 7. 下一轮优化（代码可继续推进）
-
-- 提升中文样本占比（当前 `test` 仅约 `12.91%`），优化跨语言泛化。
-- 引入类别重加权或 focal loss，重点拉升 `ANG/SAD` 召回。
-- 增加时序平滑消融（曲线平滑前后预警稳定性对比）用于第 10 周答辩加分项。
+- Zhou et al., ICASSP 2021
+- Zhou et al., Speech Communication 2022

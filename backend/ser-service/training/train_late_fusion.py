@@ -28,6 +28,7 @@ TEXT_FEATURES = (
     "text_positive",
     "text_negative_score",
     "text_length_norm",
+    "lang_is_zh",
 )
 
 

@@ -50,10 +50,21 @@ def normalize_emotion(label: str | None) -> str:
 
 def infer_language_from_path(path: str, fallback: str = "en") -> str:
     key = path.replace("\\", "/").lower()
-    if "casia" in key or "/zh/" in key or "/cn/" in key:
+
+    # 中文：CASIA + ESD + 常见中文路径标记
+    if (
+        "casia" in key
+        or "esd" in key
+        or "emotion speech dataset" in key
+        or "/zh/" in key
+        or "/cn/" in key
+    ):
         return "zh"
+
+    # 英文：IEMOCAP / RAVDESS + 常见英文路径标记
     if "iemocap" in key or "ravdess" in key or "/en/" in key:
         return "en"
+
     return fallback
 
 
@@ -233,6 +244,7 @@ def build_writer(path: Path) -> tuple[csv.DictWriter, object]:
         "text_top_conf_raw",
         "text_length",
         "text_length_norm",
+        "lang_is_zh",
     ]
     f = path.open("w", newline="", encoding="utf-8")
     writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -323,6 +335,7 @@ def process_split(
 
         text_lang = transcript_language or language
         text_lang = "zh" if text_lang == "zh" else "en"
+        lang_is_zh = 1.0 if text_lang == "zh" else 0.0
         text_result = text_runtime.score(transcript, text_lang)
         text_scores = text_result.get("scores", {})
         text_negative = float(text_scores.get("negative", 0.0))
@@ -359,6 +372,7 @@ def process_split(
                 "text_top_conf_raw": float(text_result.get("topConfidenceRaw", 0.0)),
                 "text_length": text_length,
                 "text_length_norm": text_length_norm,
+                "lang_is_zh": lang_is_zh,
             }
         )
         total += 1

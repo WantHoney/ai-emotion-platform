@@ -558,7 +558,12 @@ def build_audio_summary(segments: list[dict[str, Any]]) -> dict[str, float | str
     }
 
 
-def build_fusion_features(audio_summary: dict[str, Any], text_features: dict[str, Any]) -> dict[str, float]:
+def build_fusion_features(
+    audio_summary: dict[str, Any],
+    text_features: dict[str, Any],
+    route_language: str | None,
+) -> dict[str, float]:
+    lang_key = normalize_language_hint(route_language) or "en"
     return {
         "audio_prob_ang": float(audio_summary.get("audio_prob_ang", 0.0) or 0.0),
         "audio_prob_hap": float(audio_summary.get("audio_prob_hap", 0.0) or 0.0),
@@ -571,17 +576,22 @@ def build_fusion_features(audio_summary: dict[str, Any], text_features: dict[str
         "text_positive": float(text_features.get("text_positive", 0.0) or 0.0),
         "text_negative_score": float(text_features.get("text_negative_score", 0.0) or 0.0),
         "text_length_norm": float(text_features.get("text_length_norm", 0.0) or 0.0),
+        "lang_is_zh": 1.0 if lang_key == "zh" else 0.0,
     }
 
 
-def predict_fusion_result(audio_summary: dict[str, Any], text_features: dict[str, Any]) -> dict[str, Any]:
+def predict_fusion_result(
+    audio_summary: dict[str, Any],
+    text_features: dict[str, Any],
+    route_language: str | None,
+) -> dict[str, Any]:
     if not FUSION_ENABLED:
         return {"enabled": False, "ready": False}
     try:
         runtime = get_fusion_runtime()
         if runtime is None:
             return {"enabled": False, "ready": False}
-        features = build_fusion_features(audio_summary, text_features)
+        features = build_fusion_features(audio_summary, text_features, route_language)
         predicted = runtime.predict(features)
         scores_project: dict[str, float] = {}
         for label, score in predicted.get("scores", {}).items():
@@ -908,7 +918,7 @@ async def analyze(
             text_negative_score=text_negative_score,
             text_length_norm=text_length_norm,
         )
-        fusion_result = predict_fusion_result(audio_summary, text_features)
+        fusion_result = predict_fusion_result(audio_summary, text_features, model_meta["routeLanguage"])
         return {
             "overall": overall,
             "segments": segments,

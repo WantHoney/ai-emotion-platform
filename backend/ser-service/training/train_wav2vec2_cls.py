@@ -4,13 +4,14 @@ import json
 import math
 import random
 import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from transformers import (
     AutoFeatureExtractor,
     Wav2Vec2ForSequenceClassification,
@@ -24,6 +25,7 @@ from audio_utils import load_audio_mono_resample
 class Sample:
     path: str
     label: str
+    source_dataset: str
 
 
 @dataclass
@@ -90,7 +92,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--freeze-feature-encoder", action="store_true")
+    parser.add_argument(
+        "--freeze-feature-encoder-epochs",
+        type=int,
+        default=0,
+        help="Freeze feature encoder for first N epochs, then unfreeze automatically.",
+    )
     parser.add_argument("--fp16", action="store_true")
+    parser.add_argument(
+        "--source-weight-map",
+        default="",
+        help="Optional source dataset multipliers, e.g. 'esd_4class=2.5,casia_4class=2.0'.",
+    )
+    parser.add_argument(
+        "--source-language-map",
+        default="",
+        help="Optional source->language map, e.g. 'iemocap_4class=en,ravdess_4class=en,casia_4class=zh,esd_4class=zh'.",
+    )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     return parser.parse_args()
 
@@ -109,9 +127,10 @@ def read_manifest(path: str | Path) -> list[Sample]:
         for row in reader:
             file_path = (row.get("path") or "").strip()
             label = (row.get("label") or "").strip().upper()
+            source_dataset = (row.get("source_dataset") or "").strip().lower()
             if not file_path or not label:
                 continue
-            rows.append(Sample(path=file_path, label=label))
+            rows.append(Sample(path=file_path, label=label, source_dataset=source_dataset))
     if not rows:
         raise ValueError(f"manifest is empty: {path}")
     return rows
@@ -229,6 +248,151 @@ def to_device(device_name: str) -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def parse_source_weight_map(text: str) -> dict[str, float]:
+    result: dict[str, float] = {}
+    if not text:
+        return result
+    for token in text.split(","):
+        item = token.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError(f"invalid source-weight-map entry: {item}")
+        key, value = item.split("=", 1)
+        dataset = key.strip().lower()
+        if not dataset:
+            raise ValueError(f"invalid source-weight-map dataset key: {item}")
+        multiplier = float(value.strip())
+        if multiplier <= 0:
+            raise ValueError(f"source weight must be > 0: {item}")
+        result[dataset] = multiplier
+    return result
+
+
+def parse_source_language_map(text: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    if not text:
+        return result
+    for token in text.split(","):
+        item = token.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError(f"invalid source-language-map entry: {item}")
+        key, value = item.split("=", 1)
+        dataset = key.strip().lower()
+        language = value.strip().lower()
+        if not dataset:
+            raise ValueError(f"invalid source-language-map dataset key: {item}")
+        if language not in {"zh", "en", "unknown"}:
+            raise ValueError(f"invalid language in source-language-map: {item}")
+        result[dataset] = language
+    return result
+
+
+def normalize_ratios(counter: Counter[str]) -> dict[str, float]:
+    total = float(sum(counter.values()))
+    if total <= 0.0:
+        return {}
+    return {k: float(v / total) for k, v in sorted(counter.items())}
+
+
+def count_languages(samples: list[Sample], source_language_map: dict[str, str]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for sample in samples:
+        source = sample.source_dataset or "unknown"
+        language = source_language_map.get(source, source_language_map.get("*", "unknown"))
+        counter[language] += 1
+    return counter
+
+
+def weighted_sampling_preview(
+    samples: list[Sample],
+    weights: list[float],
+    source_language_map: dict[str, str],
+    seed: int,
+) -> dict[str, dict[str, float]]:
+    if not samples or not weights:
+        return {
+            "source_ratios": {},
+            "language_ratios": {},
+            "label_ratios": {},
+        }
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    index_tensor = torch.multinomial(
+        torch.as_tensor(weights, dtype=torch.double),
+        num_samples=len(weights),
+        replacement=True,
+        generator=generator,
+    )
+    sampled_source = Counter()
+    sampled_language = Counter()
+    sampled_label = Counter()
+    for index in index_tensor.tolist():
+        sample = samples[int(index)]
+        source = sample.source_dataset or "unknown"
+        language = source_language_map.get(source, source_language_map.get("*", "unknown"))
+        sampled_source[source] += 1
+        sampled_language[language] += 1
+        sampled_label[sample.label] += 1
+    return {
+        "source_ratios": normalize_ratios(sampled_source),
+        "language_ratios": normalize_ratios(sampled_language),
+        "label_ratios": normalize_ratios(sampled_label),
+    }
+
+
+def build_weighted_sampler(
+    samples: list[Sample],
+    source_weight_map: dict[str, float],
+) -> tuple[WeightedRandomSampler | None, dict[str, float] | None, dict[str, float] | None, list[float] | None]:
+    if not source_weight_map:
+        return None, None, None, None
+
+    weights: list[float] = []
+    weighted_source_mass: Counter[str] = Counter()
+    weighted_label_mass: Counter[str] = Counter()
+    total_mass = 0.0
+
+    for sample in samples:
+        source_key = sample.source_dataset
+        multiplier = source_weight_map.get(source_key, source_weight_map.get("*", 1.0))
+        value = float(max(multiplier, 1e-8))
+        weights.append(value)
+        source_name = source_key or "unknown"
+        weighted_source_mass[source_name] += value
+        weighted_label_mass[sample.label] += value
+        total_mass += value
+
+    if total_mass <= 0:
+        return None, None, None, None
+    expected_ratios = {
+        key: float(mass / total_mass)
+        for key, mass in sorted(weighted_source_mass.items())
+    }
+    expected_label_ratios = {
+        key: float(mass / total_mass)
+        for key, mass in sorted(weighted_label_mass.items())
+    }
+    sampler = WeightedRandomSampler(
+        weights=torch.as_tensor(weights, dtype=torch.double),
+        num_samples=len(weights),
+        replacement=True,
+    )
+    return sampler, expected_ratios, expected_label_ratios, weights
+
+
+def set_feature_encoder_trainable(
+    model: Wav2Vec2ForSequenceClassification,
+    trainable: bool,
+) -> None:
+    if not hasattr(model, "wav2vec2") or not hasattr(model.wav2vec2, "feature_extractor"):
+        return
+    for parameter in model.wav2vec2.feature_extractor.parameters():
+        parameter.requires_grad = trainable
+
+
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
@@ -261,8 +425,13 @@ def main() -> None:
         problem_type="single_label_classification",
         ignore_mismatched_sizes=True,
     )
-    if args.freeze_feature_encoder:
-        model.freeze_feature_encoder()
+    freeze_forever = bool(args.freeze_feature_encoder)
+    freeze_first_n_epochs = int(max(args.freeze_feature_encoder_epochs, 0))
+    if freeze_forever:
+        freeze_first_n_epochs = 0
+        set_feature_encoder_trainable(model, False)
+    elif freeze_first_n_epochs > 0:
+        set_feature_encoder_trainable(model, False)
 
     collate_fn = Wav2Vec2BatchCollator(feature_extractor=feature_extractor, sample_rate=args.sample_rate)
 
@@ -270,10 +439,49 @@ def main() -> None:
     val_ds = AudioEmotionDataset(val_samples, label2id, args.sample_rate, args.max_duration_sec)
     test_ds = AudioEmotionDataset(test_samples, label2id, args.sample_rate, args.max_duration_sec) if test_samples else None
 
+    source_weight_map = parse_source_weight_map(args.source_weight_map)
+    source_language_map = parse_source_language_map(args.source_language_map)
+    weighted_sampler, expected_source_ratios, expected_label_ratios, sampling_weights = build_weighted_sampler(
+        train_samples, source_weight_map
+    )
+    expected_language_ratios = None
+    preview_sampling = None
+    if sampling_weights is not None:
+        mass = Counter()
+        total_mass = 0.0
+        for sample, weight in zip(train_samples, sampling_weights):
+            source = sample.source_dataset or "unknown"
+            language = source_language_map.get(source, source_language_map.get("*", "unknown"))
+            mass[language] += weight
+            total_mass += weight
+        expected_language_ratios = (
+            {k: float(v / total_mass) for k, v in sorted(mass.items())}
+            if total_mass > 0.0
+            else {}
+        )
+        preview_sampling = weighted_sampling_preview(
+            train_samples,
+            sampling_weights,
+            source_language_map=source_language_map,
+            seed=args.seed,
+        )
+        print(
+            json.dumps(
+                {
+                    "weighted_sampling_preview": preview_sampling,
+                    "expected_source_ratios": expected_source_ratios,
+                    "expected_language_ratios": expected_language_ratios,
+                    "expected_label_ratios": expected_label_ratios,
+                },
+                ensure_ascii=False,
+            )
+        )
+
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=weighted_sampler is None,
+        sampler=weighted_sampler,
         collate_fn=collate_fn,
         num_workers=args.num_workers,
         pin_memory=torch.cuda.is_available(),
@@ -324,6 +532,10 @@ def main() -> None:
     train_start = time.time()
 
     for epoch in range(1, args.epochs + 1):
+        if (not freeze_forever) and freeze_first_n_epochs > 0 and epoch == freeze_first_n_epochs + 1:
+            set_feature_encoder_trainable(model, True)
+            print(f"unfreeze feature encoder at epoch={epoch}")
+
         model.train()
         optimizer.zero_grad(set_to_none=True)
         running_loss = 0.0
@@ -433,12 +645,22 @@ def main() -> None:
         "train_samples": len(train_samples),
         "val_samples": len(val_samples),
         "test_samples": len(test_samples),
+        "train_source_counts": dict(sorted(Counter((s.source_dataset or "unknown") for s in train_samples).items())),
+        "train_language_counts_raw": dict(sorted(count_languages(train_samples, source_language_map).items())),
+        "source_weight_map": source_weight_map,
+        "source_language_map": source_language_map,
+        "expected_source_ratios": expected_source_ratios,
+        "expected_language_ratios": expected_language_ratios,
+        "expected_label_ratios": expected_label_ratios,
+        "weighted_sampling_preview": preview_sampling,
         "epochs_requested": args.epochs,
         "epochs_ran": len(history),
         "best_epoch": best_epoch,
         "best_val_macro_f1": best_f1,
         "best_val_metrics": best_val_metrics,
         "test_metrics": test_metrics,
+        "freeze_feature_encoder": freeze_forever,
+        "freeze_feature_encoder_epochs": freeze_first_n_epochs,
         "history": history,
         "runtime_seconds": total_seconds,
         "device": str(device),

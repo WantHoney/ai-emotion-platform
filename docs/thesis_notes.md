@@ -38,17 +38,24 @@
   - `docs/figures/calibration_metrics_exp02_esd.csv`
   - `docs/figures/dataset_composition_exp02_esd.csv`
   - `docs/figures/model_selection_exp02_esd.csv`
+- Exp03 结果：
+  - `docs/figures/ablation_metrics_exp03_perlang.csv`
+  - `docs/figures/calibration_metrics_exp03.csv`
+  - `docs/figures/model_selection_exp03.csv`
+  - `docs/figures/text_shrink_exp03.csv`
 - 实时压测证据：`docs/figures/realtime_stress_exp01.md`
+- 实时压测复测：`docs/figures/realtime_stress_exp02.md`
 
-## 5. 当前可写结论（更新到 Exp02 二次重跑）
+## 5. 当前可写结论（更新到 Exp03）
 
 - Exp01 融合测试：`macro-F1=0.6317`, `ECE=0.0250`。
-- Exp02 融合测试（calibrated）：`macro-F1=0.7049`, `ECE=0.0601`。
-- 相比 Exp01，Exp02 分类能力显著提升（`+0.0732` macro-F1）。
-- Exp02 中 `fusion` 与 `audio_only` 基本持平，说明当前文本分支对分类增益有限。
-- Exp02 ECE 仍高于目标阈值（`0.03`），后续应优先做分语言校准。
+- Exp03 融合主候选（per-language calibrated）：`macro-F1=0.7030`, `ECE=0.0562`。
+- Exp03 分语言指标：`zh F1=0.7221`, `en F1=0.6239`。
+- Exp03 消融：`audio_only(F1=0.7049, ECE=0.0502)` 略优于 `fusion(F1=0.7030, ECE=0.0562)`。
+- Exp03 校准对比：`vector_scaling` 虽提升 F1（`0.7129`）但 ECE 恶化（`0.1297`），不满足上线约束。
+- 因此上线选择 `fusion_exp03_perlang`，并将“文本分支 4 类对齐增强”作为后续优化方向。
 
-## 5.1 已实现的下一轮实验能力（可直接写方法章节）
+## 5.1 已实现的实验能力（可直接写方法章节）
 
 - 文本分支重训脚本：`backend/ser-service/training/train_text_sentiment_from_features.py`
   - 中文域文本训练
@@ -71,7 +78,7 @@
 1. 先写“方法与实现”，再写“实验结果与分析”。
 2. 每个实验图回答三个问题：提升多少、为什么、代价是什么。
 3. 在结论中强调“可部署、可解释、可治理”的工程价值。
-4. 对未达标项（Exp02 ECE）给出明确改进路线，增加学术可信度。
+4. 对未达标项（Exp03 ECE）给出明确改进路线，增加学术可信度。
 
 ## 8. ESD 引用（中文语音增强实验）
 

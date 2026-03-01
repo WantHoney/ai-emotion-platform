@@ -39,6 +39,7 @@ __pycache__/
 ser-service/venv/
 ser-service/venv-gpu/
 ser-service/text_models/
+ser-service/training/text_models/
 ser-service/training/checkpoints/
 ser-service/training/fusion/
 ser-service/training/logs/

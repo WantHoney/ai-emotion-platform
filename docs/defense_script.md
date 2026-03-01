@@ -1,5 +1,5 @@
 ﻿# 答辩演示脚本（第 9-10 周收尾）
-最后同步日期：`2026-02-21`
+最后同步日期：`2026-03-01`
 
 ## 1. 演示目标（8-10 分钟）
 
@@ -19,6 +19,7 @@
 建议检查命令：
 
 ```powershell
+Invoke-RestMethod http://127.0.0.1:8001/warmup | ConvertTo-Json -Depth 6
 Invoke-RestMethod http://127.0.0.1:8001/health | ConvertTo-Json -Depth 6
 Invoke-RestMethod http://127.0.0.1:8080/api/health | ConvertTo-Json -Depth 6
 ```
@@ -42,9 +43,10 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health | ConvertTo-Json -Depth 6
 
 配合 `docs/figures/*.csv` 图表：
 
-1. 消融图：`fusion` 相比 `audio_only` 的 `macro-F1` 与 `ECE` 双提升。
-2. 校准图：`ECE` 从 `0.2058` 降至 `0.0250`。
-3. 数据构成图：中英文混合训练分布。
+1. 消融图（Exp03）：`audio_only` 与 `fusion` 接近，`audio_only` 略优（F1/ECE）。
+2. 校准图（Exp03）：`fusion` 的 `ECE` 从 `0.2140` 降至 `0.0562`，校准收益显著。
+3. 模型选择图（Exp03）：`vector_scaling` 虽提高 F1（`0.7129`），但 ECE 恶化到 `0.1297`，不满足上线约束。
+4. 数据构成图：中文主导（约 80%）+ 英文保底（约 20%）的训练分布。
 
 ### 3.3 第三段：治理闭环（约 2-3 分钟）
 
@@ -64,21 +66,27 @@ Invoke-RestMethod -Method POST "http://127.0.0.1:8080/api/admin/governance/drift
 压测命令：
 
 ```powershell
-.\scripts\stress-realtime.ps1 -TaskId 27 -AccessToken "<adminAccessToken>" -Connections 30 -DurationSec 40
+.\scripts\stress-realtime.ps1 -TaskId 31 -AccessToken "<adminAccessToken>" -Connections 30 -DurationSec 40
 ```
 
 本轮记录：`30/30` 连接成功，`failed=0`。  
-证据文件：`docs/figures/realtime_stress_exp01.md`。
+证据文件：
+
+- `docs/figures/realtime_stress_exp01.md`
+- `docs/figures/realtime_stress_exp02.md`
 
 ## 5. 常见追问与回答模板
 
 1. “为什么不是医学诊断？”
 答：系统定位是风险预警与辅助干预，不替代临床诊断，避免伦理和合规风险。
 
-2. “为什么融合优于单模态？”
-答：语音承载情感声学线索，文本补充语义极性，融合后在 F1 与校准误差上同时收益。
+2. “为什么最终上线不是 vector_scaling？”
+答：本系统是风险预警场景，校准可靠性优先。`vector_scaling` 虽提升 F1，但 ECE 显著恶化（`0.1297`），因此不选。
 
-3. “实时是不是毫秒级真流式？”
+3. “为什么 fusion 没超过 audio_only，还保留融合架构？”
+答：当前文本分支仍有噪声，导致 fusion 未稳定超过 audio-only；但融合架构已具备语言感知校准、可解释输出与后续可扩展能力，工程价值成立。
+
+4. “实时是不是毫秒级真流式？”
 答：毕设目标是工程可落地的准实时监测，重点是时间轴更新、风险曲线平滑和可观测闭环。
 
 ## 6. 失败兜底预案

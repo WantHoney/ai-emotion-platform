@@ -1,0 +1,4 @@
+mode,calibration_mode,val_macro_f1,test_macro_f1,test_ece,test_macro_f1_zh,test_macro_f1_en
+audio_only,per_language_temperature,0.7873439028,0.7049372913,0.0502295397,0.7287106634,0.6044739933
+text_only,per_language_temperature,0.2230365535,0.2605565971,0.0372173264,0.1914036123,0.3623237985
+fusion,per_language_temperature,0.7828305909,0.7030036685,0.0562346304,0.7220668890,0.6239459351

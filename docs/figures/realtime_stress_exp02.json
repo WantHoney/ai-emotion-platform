@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-03-01",
+  "command": "scripts/stress-realtime.ps1 -TaskId 31 -Connections 30 -DurationSec 40",
+  "target": "ws://127.0.0.1:8080/ws/tasks/stream?taskId=31&accessToken=<token>",
+  "connections": 30,
+  "durationSec": 40,
+  "success": 30,
+  "failed": 0,
+  "totalMessages": 30,
+  "avgMessagesPerClient": 1.0
+}

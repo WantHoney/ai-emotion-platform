@@ -225,7 +225,40 @@ Then start service:
 uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
-## 6. Build Multimodal Fusion Features (exp02_esd)
+## 6. Retrain Text Sentiment Branch (Chinese-domain aligned)
+
+Train a 3-class text model (`negative/neutral/positive`) from `features_exp02_esd` transcripts.
+Label alignment:
+
+- `ANG/SAD -> negative`
+- `NEU -> neutral`
+- `HAP -> positive`
+
+```bash
+cd backend/ser-service
+python training/train_text_sentiment_from_features.py \
+  --train-features training/fusion/features_exp02_esd/train_features.csv \
+  --val-features training/fusion/features_exp02_esd/val_features.csv \
+  --test-features training/fusion/features_exp02_esd/test_features.csv \
+  --output-dir training/text_models/zh_sentiment_exp02 \
+  --base-model ./text_models/zh_roberta_sentiment \
+  --language-filter zh \
+  --epochs 5 \
+  --batch-size 16 \
+  --learning-rate 2e-5 \
+  --device cuda
+```
+
+Then point runtime to the retrained Chinese text model:
+
+```bash
+TEXT_ENGINE=hf
+TEXT_HF_ROUTING=language
+TEXT_HF_MODEL_ZH=./training/text_models/zh_sentiment_exp02/best_model
+TEXT_HF_MODEL_EN=./text_models/en_roberta_sentiment
+```
+
+## 7. Build Multimodal Fusion Features (exp02_esd)
 
 Use trained acoustic models + ASR + text sentiment model to build tabular features:
 
@@ -251,7 +284,7 @@ Feature columns now include language-aware signal:
 
 - `lang_is_zh` (`0/1`)
 
-## 7. Train Learnable Late Fusion + Temperature Calibration
+## 8. Train Learnable Late Fusion + Calibration
 
 ```bash
 cd backend/ser-service
@@ -267,10 +300,24 @@ python training/train_late_fusion.py \
   --dropout 0.2 \
   --learning-rate 2e-3 \
   --weight-decay 1e-4 \
+  --calibration-mode per_language_temperature \
+  --min-language-samples 100 \
   --device cuda
 ```
 
-## 8. Run Ablation (`audio_only / text_only / fusion`)
+Calibration modes:
+
+- `global_temperature` (legacy)
+- `per_language_temperature` (recommended for zh/en mixed data)
+- `vector_scaling` (stronger calibrator, higher overfit risk)
+
+Report additions:
+
+- `test_macro_f1_zh`
+- `test_macro_f1_en`
+- `test_metrics_by_language_calibrated`
+
+## 9. Run Ablation (`audio_only / text_only / fusion`)
 
 ```bash
 cd backend/ser-service
@@ -281,10 +328,11 @@ python training/run_fusion_ablation.py \
   --output-root training/fusion/ablation_exp02_esd \
   --epochs 80 \
   --batch-size 128 \
+  --calibration-mode per_language_temperature \
   --device cuda
 ```
 
-## 9. Select Production Candidate (`fusion_best`)
+## 10. Select Production Candidate (`fusion_best`)
 
 After tuning, keep one stable directory for deployment and reporting.
 
@@ -301,7 +349,7 @@ Recommended selection priority:
 2. then lower `test_ece`
 3. then simpler/earlier checkpoint
 
-## 10. ESD Citations (required)
+## 11. ESD Citations (required)
 
 If you use ESD, cite:
 

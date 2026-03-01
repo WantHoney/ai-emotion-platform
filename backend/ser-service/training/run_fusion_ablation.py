@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 import json
 import subprocess
@@ -25,6 +25,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=12)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    parser.add_argument(
+        "--calibration-mode",
+        default="global_temperature",
+        choices=["global_temperature", "per_language_temperature", "vector_scaling"],
+    )
+    parser.add_argument("--calibration-max-iter", type=int, default=200)
+    parser.add_argument("--min-language-samples", type=int, default=100)
     return parser.parse_args()
 
 
@@ -67,6 +74,12 @@ def main() -> None:
             str(args.seed),
             "--device",
             args.device,
+            "--calibration-mode",
+            args.calibration_mode,
+            "--calibration-max-iter",
+            str(args.calibration_max_iter),
+            "--min-language-samples",
+            str(args.min_language_samples),
         ]
         if args.test_features:
             cmd.extend(["--test-features", args.test_features])
@@ -85,6 +98,7 @@ def main() -> None:
         summary_rows.append(
             {
                 "mode": mode,
+                "calibration_mode": report.get("calibration_mode"),
                 "best_epoch": report.get("best_epoch"),
                 "temperature": report.get("temperature"),
                 "val_macro_f1_cal": val_cal.get("macro_f1"),
@@ -92,6 +106,8 @@ def main() -> None:
                 "test_macro_f1_cal": test_cal.get("macro_f1"),
                 "test_accuracy_cal": test_cal.get("accuracy"),
                 "test_ece_cal": test_cal.get("ece"),
+                "test_macro_f1_zh": report.get("test_macro_f1_zh"),
+                "test_macro_f1_en": report.get("test_macro_f1_en"),
             }
         )
 

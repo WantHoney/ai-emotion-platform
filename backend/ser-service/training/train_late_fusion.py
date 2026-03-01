@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 import json
 import math
@@ -36,6 +36,7 @@ TEXT_FEATURES = (
 class DatasetSplit:
     x: np.ndarray
     y: np.ndarray
+    lang_is_zh: np.ndarray
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,6 +56,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--calibration-max-iter", type=int, default=200)
+    parser.add_argument(
+        "--calibration-mode",
+        default="global_temperature",
+        choices=["global_temperature", "per_language_temperature", "vector_scaling"],
+    )
+    parser.add_argument("--min-language-samples", type=int, default=100)
     return parser.parse_args()
 
 
@@ -160,10 +167,26 @@ def normalize_emotion(label: str) -> str:
     raise ValueError(f"unsupported label: {label}")
 
 
+def parse_lang_is_zh(row: dict[str, str]) -> int:
+    lang = (row.get("language") or "").strip().lower()
+    if lang.startswith("zh"):
+        return 1
+    if lang.startswith("en"):
+        return 0
+    lang_flag = (row.get("lang_is_zh") or "").strip()
+    if lang_flag:
+        try:
+            return 1 if float(lang_flag) >= 0.5 else 0
+        except Exception:
+            return 0
+    return 0
+
+
 def load_split(path: str | Path, mode: str) -> DatasetSplit:
     cols = feature_columns(mode)
     x_rows: list[list[float]] = []
     y_rows: list[int] = []
+    lang_rows: list[int] = []
     label2id = {label: idx for idx, label in enumerate(CANONICAL_EMOTIONS)}
     with Path(path).open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -177,11 +200,13 @@ def load_split(path: str | Path, mode: str) -> DatasetSplit:
             feature = [float(row.get(c, 0.0) or 0.0) for c in cols]
             x_rows.append(feature)
             y_rows.append(y)
+            lang_rows.append(parse_lang_is_zh(row))
     if not x_rows:
         raise ValueError(f"empty feature file: {path}")
     return DatasetSplit(
         x=np.asarray(x_rows, dtype=np.float32),
         y=np.asarray(y_rows, dtype=np.int64),
+        lang_is_zh=np.asarray(lang_rows, dtype=np.int64),
     )
 
 
@@ -220,13 +245,29 @@ def to_batches(x: np.ndarray, y: np.ndarray, batch_size: int, shuffle: bool = Fa
     return out
 
 
+def logits_to_probs(logits: np.ndarray) -> np.ndarray:
+    return torch.softmax(torch.from_numpy(logits), dim=-1).numpy()
+
+
+def metrics_from_probs(y: np.ndarray, probs: np.ndarray) -> dict[str, float]:
+    preds = np.argmax(probs, axis=-1)
+    return {
+        "accuracy": float(np.mean(preds == y)),
+        "macro_f1": macro_f1_score(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
+        "balanced_accuracy": balanced_accuracy(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
+        "nll": multiclass_nll(y, probs),
+        "brier": multiclass_brier(y, probs, num_labels=len(CANONICAL_EMOTIONS)),
+        "ece": expected_calibration_error(y, probs),
+    }
+
+
 def evaluate_logits(
     model: FusionMLP,
     x: np.ndarray,
     y: np.ndarray,
     device: torch.device,
     batch_size: int,
-) -> tuple[np.ndarray, dict]:
+) -> tuple[np.ndarray, dict[str, float]]:
     model.eval()
     logits_list: list[np.ndarray] = []
     loss_sum = 0.0
@@ -244,17 +285,9 @@ def evaluate_logits(
             total += yb.shape[0]
 
     logits_all = np.concatenate(logits_list, axis=0)
-    probs = torch.softmax(torch.from_numpy(logits_all), dim=-1).numpy()
-    preds = np.argmax(probs, axis=-1)
-    metrics = {
-        "loss": loss_sum / max(total, 1),
-        "accuracy": float(np.mean(preds == y)),
-        "macro_f1": macro_f1_score(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
-        "balanced_accuracy": balanced_accuracy(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
-        "nll": multiclass_nll(y, probs),
-        "brier": multiclass_brier(y, probs, num_labels=len(CANONICAL_EMOTIONS)),
-        "ece": expected_calibration_error(y, probs),
-    }
+    probs = logits_to_probs(logits_all)
+    metrics = metrics_from_probs(y, probs)
+    metrics["loss"] = loss_sum / max(total, 1)
     return logits_all, metrics
 
 
@@ -278,17 +311,147 @@ def fit_temperature(logits: np.ndarray, y: np.ndarray, max_iter: int, device: to
     return float(max(0.05, min(20.0, temperature)))
 
 
-def metrics_from_logits(logits: np.ndarray, y: np.ndarray, temperature: float = 1.0) -> dict:
-    probs = torch.softmax(torch.from_numpy(logits / temperature), dim=-1).numpy()
-    preds = np.argmax(probs, axis=-1)
+def fit_vector_scaling(logits: np.ndarray, y: np.ndarray, max_iter: int, device: torch.device) -> dict[str, object]:
+    logits_t = torch.tensor(logits, dtype=torch.float32, device=device)
+    labels_t = torch.tensor(y, dtype=torch.long, device=device)
+    num_labels = int(logits.shape[1])
+    log_scale = torch.nn.Parameter(torch.zeros(num_labels, dtype=torch.float32, device=device))
+    bias = torch.nn.Parameter(torch.zeros(num_labels, dtype=torch.float32, device=device))
+    optimizer = torch.optim.LBFGS([log_scale, bias], lr=0.1, max_iter=max_iter)
+    loss_fn = nn.CrossEntropyLoss()
+
+    def closure():
+        optimizer.zero_grad()
+        scale = torch.exp(log_scale)
+        calibrated = logits_t * scale + bias
+        loss = loss_fn(calibrated, labels_t)
+        loss.backward()
+        return loss
+
+    optimizer.step(closure)
+    with torch.no_grad():
+        scale_np = torch.exp(log_scale).detach().cpu().numpy()
+        bias_np = bias.detach().cpu().numpy()
+
+    scale_np = np.clip(scale_np, 0.05, 20.0)
     return {
-        "accuracy": float(np.mean(preds == y)),
-        "macro_f1": macro_f1_score(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
-        "balanced_accuracy": balanced_accuracy(y, preds, num_labels=len(CANONICAL_EMOTIONS)),
-        "nll": multiclass_nll(y, probs),
-        "brier": multiclass_brier(y, probs, num_labels=len(CANONICAL_EMOTIONS)),
-        "ece": expected_calibration_error(y, probs),
+        "mode": "vector_scaling",
+        "scale": [float(v) for v in scale_np.tolist()],
+        "bias": [float(v) for v in bias_np.tolist()],
+        "temperature_global": 1.0,
     }
+
+
+def fit_calibration(
+    mode: str,
+    logits: np.ndarray,
+    y: np.ndarray,
+    lang_is_zh: np.ndarray,
+    max_iter: int,
+    device: torch.device,
+    min_language_samples: int,
+) -> dict[str, object]:
+    if mode == "global_temperature":
+        temperature = fit_temperature(logits, y, max_iter=max_iter, device=device)
+        return {
+            "mode": "global_temperature",
+            "temperature": float(temperature),
+            "temperature_global": float(temperature),
+        }
+
+    if mode == "per_language_temperature":
+        global_temp = fit_temperature(logits, y, max_iter=max_iter, device=device)
+        zh_temp = global_temp
+        en_temp = global_temp
+        for lang_flag, key in ((1, "zh"), (0, "en")):
+            mask = lang_is_zh == lang_flag
+            if int(np.sum(mask)) >= max(4, min_language_samples):
+                temp = fit_temperature(logits[mask], y[mask], max_iter=max_iter, device=device)
+                if key == "zh":
+                    zh_temp = temp
+                else:
+                    en_temp = temp
+        return {
+            "mode": "per_language_temperature",
+            "temperature_global": float(global_temp),
+            "temperature_zh": float(zh_temp),
+            "temperature_en": float(en_temp),
+            "min_language_samples": int(min_language_samples),
+        }
+
+    if mode == "vector_scaling":
+        return fit_vector_scaling(logits, y, max_iter=max_iter, device=device)
+
+    raise ValueError(f"unsupported calibration mode: {mode}")
+
+
+def apply_calibration(logits: np.ndarray, lang_is_zh: np.ndarray, calibration: dict[str, object]) -> np.ndarray:
+    mode = str(calibration.get("mode", "global_temperature"))
+    if mode == "global_temperature":
+        temperature = float(calibration.get("temperature", calibration.get("temperature_global", 1.0)))
+        temperature = max(0.05, min(20.0, temperature))
+        return logits / temperature
+
+    if mode == "per_language_temperature":
+        temp_zh = max(0.05, min(20.0, float(calibration.get("temperature_zh", calibration.get("temperature_global", 1.0)))))
+        temp_en = max(0.05, min(20.0, float(calibration.get("temperature_en", calibration.get("temperature_global", 1.0)))))
+        temps = np.where(lang_is_zh.reshape(-1) >= 0.5, temp_zh, temp_en).astype(np.float32)
+        return logits / temps.reshape(-1, 1)
+
+    if mode == "vector_scaling":
+        scale = np.asarray(calibration.get("scale", []), dtype=np.float32)
+        bias = np.asarray(calibration.get("bias", []), dtype=np.float32)
+        if scale.shape[0] != logits.shape[1] or bias.shape[0] != logits.shape[1]:
+            raise ValueError(
+                "vector_scaling shape mismatch: "
+                f"scale={scale.shape[0]}, bias={bias.shape[0]}, logits={logits.shape[1]}"
+            )
+        return logits * scale.reshape(1, -1) + bias.reshape(1, -1)
+
+    raise ValueError(f"unsupported calibration mode: {mode}")
+
+
+def metrics_from_logits(logits: np.ndarray, y: np.ndarray) -> dict[str, float]:
+    probs = logits_to_probs(logits)
+    return metrics_from_probs(y, probs)
+
+
+def metrics_from_calibrated_logits(
+    logits: np.ndarray,
+    y: np.ndarray,
+    lang_is_zh: np.ndarray,
+    calibration: dict[str, object],
+) -> dict[str, float]:
+    calibrated_logits = apply_calibration(logits, lang_is_zh, calibration)
+    probs = logits_to_probs(calibrated_logits)
+    return metrics_from_probs(y, probs)
+
+
+def language_metrics(
+    logits: np.ndarray,
+    y: np.ndarray,
+    lang_is_zh: np.ndarray,
+    calibration: dict[str, object] | None,
+) -> dict[str, dict[str, float]]:
+    result: dict[str, dict[str, float]] = {}
+    for lang_flag, key in ((1, "zh"), (0, "en")):
+        mask = lang_is_zh == lang_flag
+        count = int(np.sum(mask))
+        if count <= 0:
+            continue
+        if calibration is None:
+            metrics = metrics_from_logits(logits[mask], y[mask])
+        else:
+            metrics = metrics_from_calibrated_logits(logits[mask], y[mask], lang_is_zh[mask], calibration)
+        metrics["count"] = count
+        result[key] = metrics
+    return result
+
+
+def predictions_from_calibrated_logits(logits: np.ndarray, lang_is_zh: np.ndarray, calibration: dict[str, object]) -> np.ndarray:
+    calibrated_logits = apply_calibration(logits, lang_is_zh, calibration)
+    probs = logits_to_probs(calibrated_logits)
+    return np.argmax(probs, axis=-1)
 
 
 def save_confusion(path: Path, y_true: np.ndarray, y_pred: np.ndarray) -> None:
@@ -376,20 +539,37 @@ def main() -> None:
 
     model.load_state_dict(best_state["model"])
     val_logits, val_metrics_uncal = evaluate_logits(model, x_val, val.y, device=device, batch_size=args.batch_size)
-    temperature = fit_temperature(val_logits, val.y, max_iter=args.calibration_max_iter, device=device)
-    val_metrics_cal = metrics_from_logits(val_logits, val.y, temperature=temperature)
+    calibration = fit_calibration(
+        mode=args.calibration_mode,
+        logits=val_logits,
+        y=val.y,
+        lang_is_zh=val.lang_is_zh,
+        max_iter=args.calibration_max_iter,
+        device=device,
+        min_language_samples=args.min_language_samples,
+    )
+    val_metrics_cal = metrics_from_calibrated_logits(val_logits, val.y, val.lang_is_zh, calibration)
+    val_metrics_by_language_uncal = language_metrics(val_logits, val.y, val.lang_is_zh, calibration=None)
+    val_metrics_by_language_cal = language_metrics(val_logits, val.y, val.lang_is_zh, calibration=calibration)
 
     test_metrics_uncal = None
     test_metrics_cal = None
+    test_metrics_by_language_uncal = None
+    test_metrics_by_language_cal = None
     if test is not None and x_test is not None:
         test_logits, test_metrics_uncal_tmp = evaluate_logits(model, x_test, test.y, device=device, batch_size=args.batch_size)
         test_metrics_uncal = test_metrics_uncal_tmp
-        test_metrics_cal = metrics_from_logits(test_logits, test.y, temperature=temperature)
-        test_preds = np.argmax(torch.softmax(torch.from_numpy(test_logits / temperature), dim=-1).numpy(), axis=-1)
+        test_metrics_cal = metrics_from_calibrated_logits(test_logits, test.y, test.lang_is_zh, calibration)
+        test_metrics_by_language_uncal = language_metrics(test_logits, test.y, test.lang_is_zh, calibration=None)
+        test_metrics_by_language_cal = language_metrics(test_logits, test.y, test.lang_is_zh, calibration=calibration)
+        test_preds = predictions_from_calibrated_logits(test_logits, test.lang_is_zh, calibration)
         save_confusion(output_dir / "test_confusion_calibrated.csv", test.y, test_preds)
 
-    val_preds = np.argmax(torch.softmax(torch.from_numpy(val_logits / temperature), dim=-1).numpy(), axis=-1)
+    val_preds = predictions_from_calibrated_logits(val_logits, val.lang_is_zh, calibration)
     save_confusion(output_dir / "val_confusion_calibrated.csv", val.y, val_preds)
+
+    checkpoint_temperature = float(calibration.get("temperature_global", calibration.get("temperature", 1.0)))
+    checkpoint_temperature = max(0.05, min(20.0, checkpoint_temperature))
 
     torch.save(
         {
@@ -399,7 +579,9 @@ def main() -> None:
             "dropout": args.dropout,
             "labels": list(CANONICAL_EMOTIONS),
             "feature_columns": list(feature_columns(args.mode)),
-            "temperature": temperature,
+            "temperature": checkpoint_temperature,
+            "calibration_mode": calibration.get("mode", "global_temperature"),
+            "calibration_params": calibration,
         },
         output_dir / "fusion_model.pt",
     )
@@ -415,6 +597,12 @@ def main() -> None:
             indent=2,
         )
 
+    test_macro_f1_zh = None
+    test_macro_f1_en = None
+    if test_metrics_by_language_cal is not None:
+        test_macro_f1_zh = (test_metrics_by_language_cal.get("zh") or {}).get("macro_f1")
+        test_macro_f1_en = (test_metrics_by_language_cal.get("en") or {}).get("macro_f1")
+
     report = {
         "mode": args.mode,
         "device": str(device),
@@ -424,11 +612,19 @@ def main() -> None:
         "feature_columns": list(feature_columns(args.mode)),
         "best_epoch": best_epoch,
         "best_val_macro_f1": best_f1,
-        "temperature": temperature,
+        "temperature": checkpoint_temperature,
+        "calibration_mode": calibration.get("mode", "global_temperature"),
+        "calibration_params": calibration,
         "val_metrics_uncalibrated": val_metrics_uncal,
         "val_metrics_calibrated": val_metrics_cal,
+        "val_metrics_by_language_uncalibrated": val_metrics_by_language_uncal,
+        "val_metrics_by_language_calibrated": val_metrics_by_language_cal,
         "test_metrics_uncalibrated": test_metrics_uncal,
         "test_metrics_calibrated": test_metrics_cal,
+        "test_metrics_by_language_uncalibrated": test_metrics_by_language_uncal,
+        "test_metrics_by_language_calibrated": test_metrics_by_language_cal,
+        "test_macro_f1_zh": test_macro_f1_zh,
+        "test_macro_f1_en": test_macro_f1_en,
         "history": history,
         "runtime_seconds": time.time() - start_time,
     }

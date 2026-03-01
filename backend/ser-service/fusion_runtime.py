@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 import numpy as np
@@ -66,8 +66,31 @@ class FusionRuntime:
         feature_columns = checkpoint.get("feature_columns") or scaler.get("feature_columns") or list(DEFAULT_FEATURE_COLUMNS)
         self.feature_columns = [str(col) for col in feature_columns]
         self.labels = [str(label) for label in checkpoint.get("labels", list(DEFAULT_LABELS))]
+
         self.temperature = float(checkpoint.get("temperature", 1.0))
         self.temperature = max(0.05, min(20.0, self.temperature))
+
+        self.calibration_mode = str(checkpoint.get("calibration_mode", "global_temperature"))
+        self.calibration_params = checkpoint.get("calibration_params") or {
+            "mode": "global_temperature",
+            "temperature": self.temperature,
+            "temperature_global": self.temperature,
+        }
+        if "mode" not in self.calibration_params:
+            self.calibration_params["mode"] = self.calibration_mode
+
+        self.vector_scale = None
+        self.vector_bias = None
+        if self.calibration_mode == "vector_scaling":
+            scale = np.asarray(self.calibration_params.get("scale", []), dtype=np.float32)
+            bias = np.asarray(self.calibration_params.get("bias", []), dtype=np.float32)
+            if scale.shape[0] != len(self.labels) or bias.shape[0] != len(self.labels):
+                raise RuntimeError(
+                    "vector scaling params shape mismatch: "
+                    f"scale={scale.shape[0]}, bias={bias.shape[0]}, labels={len(self.labels)}"
+                )
+            self.vector_scale = torch.from_numpy(scale).to(self.device)
+            self.vector_bias = torch.from_numpy(bias).to(self.device)
 
         mean = np.asarray(scaler.get("mean", []), dtype=np.float32)
         std = np.asarray(scaler.get("std", []), dtype=np.float32)
@@ -103,13 +126,40 @@ class FusionRuntime:
         vec = (vec - self.mean) / self.std
         return vec, used
 
+    def _effective_temperature(self, lang_is_zh: bool) -> float:
+        if self.calibration_mode == "per_language_temperature":
+            if lang_is_zh:
+                temp = float(self.calibration_params.get("temperature_zh", self.calibration_params.get("temperature_global", self.temperature)))
+            else:
+                temp = float(self.calibration_params.get("temperature_en", self.calibration_params.get("temperature_global", self.temperature)))
+            return max(0.05, min(20.0, temp))
+
+        if self.calibration_mode == "global_temperature":
+            temp = float(self.calibration_params.get("temperature", self.calibration_params.get("temperature_global", self.temperature)))
+            return max(0.05, min(20.0, temp))
+
+        return self.temperature
+
+    def _calibrate_logits(self, logits: torch.Tensor, lang_is_zh: bool) -> tuple[torch.Tensor, float | None]:
+        if self.calibration_mode == "vector_scaling":
+            if self.vector_scale is None or self.vector_bias is None:
+                raise RuntimeError("vector scaling params not initialized")
+            calibrated = logits * self.vector_scale + self.vector_bias
+            return calibrated, None
+
+        effective_temp = self._effective_temperature(lang_is_zh)
+        return logits / effective_temp, effective_temp
+
     def predict(self, features: dict[str, float]) -> dict:
         vec, used_features = self._vectorize(features)
+        lang_is_zh = float(used_features.get("lang_is_zh", 0.0)) >= 0.5
+
         tensor = torch.from_numpy(vec).unsqueeze(0).to(self.device)
         with torch.no_grad():
             logits = self.model(tensor)[0]
+            logits_cal, effective_temp = self._calibrate_logits(logits, lang_is_zh)
             probs_uncal = torch.softmax(logits, dim=-1).detach().cpu().numpy()
-            probs_cal = torch.softmax(logits / self.temperature, dim=-1).detach().cpu().numpy()
+            probs_cal = torch.softmax(logits_cal, dim=-1).detach().cpu().numpy()
 
         pred_id = int(np.argmax(probs_cal))
         top_label = self.labels[pred_id]
@@ -117,7 +167,8 @@ class FusionRuntime:
         return {
             "label": top_label,
             "confidence": top_conf,
-            "temperature": self.temperature,
+            "temperature": float(effective_temp) if effective_temp is not None else self.temperature,
+            "calibrationMode": self.calibration_mode,
             "scores": {label: float(probs_cal[idx]) for idx, label in enumerate(self.labels)},
             "scoresUncalibrated": {label: float(probs_uncal[idx]) for idx, label in enumerate(self.labels)},
             "features": used_features,

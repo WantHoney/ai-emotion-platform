@@ -48,6 +48,18 @@
 - Exp02 中 `fusion` 与 `audio_only` 基本持平，说明当前文本分支对分类增益有限。
 - Exp02 ECE 仍高于目标阈值（`0.03`），后续应优先做分语言校准。
 
+## 5.1 已实现的下一轮实验能力（可直接写方法章节）
+
+- 文本分支重训脚本：`backend/ser-service/training/train_text_sentiment_from_features.py`
+  - 中文域文本训练
+  - 情绪到情感标签对齐（4 类 -> 3 类）
+- 融合校准扩展：`backend/ser-service/training/train_late_fusion.py`
+  - 支持 `per_language_temperature` 与 `vector_scaling`
+- 分语言评估产物：
+  - `test_macro_f1_zh`
+  - `test_macro_f1_en`
+  - `test_metrics_by_language_calibrated`
+
 ## 6. 答辩材料入口
 
 - 答辩演示脚本：`docs/defense_script.md`

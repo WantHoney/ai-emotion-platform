@@ -41,6 +41,9 @@ def export_ablation() -> None:
             "test_macro_f1_cal",
             "test_accuracy_cal",
             "test_ece_cal",
+            "test_macro_f1_zh",
+            "test_macro_f1_en",
+            "calibration_mode",
         ],
     )
 

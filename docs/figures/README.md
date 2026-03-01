@@ -44,3 +44,8 @@ python scripts/export_experiment_assets.py
 - 图 2：`calibration_metrics_exp02_esd.csv` 绘制校准前后对比。
 - 图 3：`model_selection_exp02_esd.csv` 与 `model_selection.csv` 组合绘制“代际改进图”。
 - 图 4：`dataset_composition_exp02_esd.csv` 绘制中英比例与 ASR 缺失率。
+
+如果使用新训练脚本（per-language calibration）重跑，建议补充两列：
+
+- `test_macro_f1_zh`
+- `test_macro_f1_en`

@@ -49,7 +49,9 @@ public class TextNegScorer {
             @Value("${text.neg.high-risk-floor:0.8}") double highRiskFloor
     ) {
         this.normalizer = normalizer > 0.0D ? normalizer : DEFAULT_NORMALIZER;
-        this.highRiskFloor = clamp(highRiskFloor, 0.0D, 1.0D);
+        this.highRiskFloor = Double.isFinite(highRiskFloor)
+                ? clamp(highRiskFloor, 0.0D, 1.0D)
+                : DEFAULT_HIGH_RISK_FLOOR;
     }
 
     public TextNegScoreResult score(String transcript) {
@@ -308,7 +310,9 @@ public class TextNegScorer {
     }
 
     private List<Integer> englishWordBoundaryIndexes(String text, String term) {
-        Pattern pattern = ENGLISH_PATTERN_CACHE.computeIfAbsent(term, t -> Pattern.compile("\\b" + Pattern.quote(t) + "\\b"));
+        Pattern pattern = ENGLISH_PATTERN_CACHE.computeIfAbsent(term, t ->
+                Pattern.compile("(?<![a-z0-9_])" + Pattern.quote(t) + "(?![a-z0-9_])")
+        );
         Matcher matcher = pattern.matcher(text);
         List<Integer> indexes = new ArrayList<>();
         while (matcher.find()) {
@@ -318,13 +322,7 @@ public class TextNegScorer {
     }
 
     private boolean isEnglishTerm(String term) {
-        for (int i = 0; i < term.length(); i++) {
-            char c = term.charAt(i);
-            if (c >= 'a' && c <= 'z') {
-                return true;
-            }
-        }
-        return false;
+        return term != null && !term.isBlank() && term.matches("[a-z0-9 ]+");
     }
 
     private boolean isNegated(String text, int start) {

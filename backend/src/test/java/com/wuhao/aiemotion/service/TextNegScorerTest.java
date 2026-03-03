@@ -53,6 +53,14 @@ class TextNegScorerTest {
     }
 
     @Test
+    void shouldNotMatchEnglishInsideSnakeCaseToken() {
+        TextNegScorer.TextNegScoreResult result = scorer.score("signal panic_attack captured");
+
+        assertEquals(0.0D, result.textNeg());
+        assertEquals(0, result.hitCount());
+    }
+
+    @Test
     void shouldNotLeakDegreeAcrossClauses() {
         TextNegScorer.TextNegScoreResult crossClause = scorer.score("我昨天非常累。今天有点焦虑");
         TextNegScorer.TextNegScoreResult sameClauseStrong = scorer.score("我今天非常焦虑");

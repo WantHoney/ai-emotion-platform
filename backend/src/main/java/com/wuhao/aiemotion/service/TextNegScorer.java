@@ -1,5 +1,8 @@
-package com.wuhao.aiemotion.service;
+﻿package com.wuhao.aiemotion.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -12,21 +15,42 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class TextNegScorer {
 
-    private static final double NORMALIZER = 10.0D;
-    private static final double HIGH_RISK_FLOOR = 0.8D;
+    private static final Logger log = LoggerFactory.getLogger(TextNegScorer.class);
+
+    private static final double DEFAULT_NORMALIZER = 10.0D;
+    private static final double DEFAULT_HIGH_RISK_FLOOR = 0.8D;
     private static final double NEGATION_REDUCTION = 0.30D;
     private static final int NEGATION_LEFT_CONTEXT = 8;
     private static final int DEGREE_LEFT_CONTEXT = 8;
+    private static final int NEGATION_DISTANCE_LIMIT = 4;
+    private static final int DEGREE_DISTANCE_LIMIT = 6;
     private static final String LEXICON_ROOT = "lexicon/";
+    private static final String CLAUSE_DELIMITERS = ",.;!?，。；！？\n\r";
+
+    private static final Map<String, Pattern> ENGLISH_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private static final Map<String, Double> NEGATIVE_TERM_WEIGHTS = buildNegativeTermWeights();
     private static final List<String> HIGH_RISK_TERMS = buildHighRiskTerms();
     private static final List<String> NEGATION_TERMS = buildNegationTerms();
     private static final Map<String, Double> DEGREE_TERMS = buildDegreeTerms();
+
+    private final double normalizer;
+    private final double highRiskFloor;
+
+    public TextNegScorer(
+            @Value("${text.neg.normalizer:10.0}") double normalizer,
+            @Value("${text.neg.high-risk-floor:0.8}") double highRiskFloor
+    ) {
+        this.normalizer = normalizer > 0.0D ? normalizer : DEFAULT_NORMALIZER;
+        this.highRiskFloor = clamp(highRiskFloor, 0.0D, 1.0D);
+    }
 
     public TextNegScoreResult score(String transcript) {
         if (transcript == null || transcript.isBlank()) {
@@ -40,7 +64,7 @@ public class TextNegScorer {
 
         for (Map.Entry<String, Double> entry : NEGATIVE_TERM_WEIGHTS.entrySet()) {
             String term = entry.getKey();
-            List<Integer> positions = allIndexesOf(normalized, term);
+            List<Integer> positions = findTermPositions(normalized, term);
             if (positions.isEmpty()) {
                 continue;
             }
@@ -57,10 +81,10 @@ public class TextNegScorer {
             hits.add(term + "x" + positions.size());
         }
 
-        boolean highRiskHit = HIGH_RISK_TERMS.stream().anyMatch(normalized::contains);
-        double textNeg = clamp(weightedHits / NORMALIZER, 0.0D, 1.0D);
+        boolean highRiskHit = hasAnyTerm(normalized, HIGH_RISK_TERMS);
+        double textNeg = clamp(weightedHits / normalizer, 0.0D, 1.0D);
         if (highRiskHit) {
-            textNeg = Math.max(textNeg, HIGH_RISK_FLOOR);
+            textNeg = Math.max(textNeg, highRiskFloor);
         }
 
         return new TextNegScoreResult(round4(textNeg), hitCount, List.copyOf(hits), highRiskHit);
@@ -92,12 +116,20 @@ public class TextNegScorer {
         defaults.put("hopeless", 1.6D);
         defaults.put("stressed", 1.0D);
 
+        Map<String, Double> zh = readWeightedLexicon(LEXICON_ROOT + "text_neg_zh.txt");
+        Map<String, Double> en = readWeightedLexicon(LEXICON_ROOT + "text_neg_en.txt");
+
         LinkedHashMap<String, Double> loaded = new LinkedHashMap<>();
-        loaded.putAll(readWeightedLexicon(LEXICON_ROOT + "text_neg_zh.txt"));
-        loaded.putAll(readWeightedLexicon(LEXICON_ROOT + "text_neg_en.txt"));
+        loaded.putAll(zh);
+        loaded.putAll(en);
+
         if (loaded.isEmpty()) {
+            log.warn("TextNegScorer lexicon load failed, fallback to defaults. normalizer={}", DEFAULT_NORMALIZER);
             loaded.putAll(defaults);
         }
+
+        log.info("TextNegScorer negative lexicon loaded: zhTerms={}, enTerms={}, activeTerms={}",
+                zh.size(), en.size(), loaded.size());
         return Map.copyOf(loaded);
     }
 
@@ -106,18 +138,37 @@ public class TextNegScorer {
                 "不想活", "轻生", "自杀", "结束生命", "活不下去",
                 "kill myself", "suicide", "end my life"
         );
+
+        List<String> zh = readTermLexicon(LEXICON_ROOT + "high_risk_zh.txt");
+        List<String> en = readTermLexicon(LEXICON_ROOT + "high_risk_en.txt");
+
         List<String> loaded = new ArrayList<>();
-        loaded.addAll(readTermLexicon(LEXICON_ROOT + "high_risk_zh.txt"));
-        loaded.addAll(readTermLexicon(LEXICON_ROOT + "high_risk_en.txt"));
-        return loaded.isEmpty() ? defaults : List.copyOf(loaded);
+        loaded.addAll(zh);
+        loaded.addAll(en);
+
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer high-risk lexicon load failed, fallback to defaults.");
+            loaded = new ArrayList<>(defaults);
+        }
+
+        log.info("TextNegScorer high-risk lexicon loaded: zhTerms={}, enTerms={}, activeTerms={}",
+                zh.size(), en.size(), loaded.size());
+        return List.copyOf(loaded);
     }
 
     private static List<String> buildNegationTerms() {
         List<String> defaults = List.of(
-                "不", "没", "没有", "无", "并不", "并非", "不太", "不是", "未"
+                "并不是", "并没有", "不怎么", "没有那么", "不太", "不是", "并不", "并非", "没有", "未", "无", "没", "不"
         );
+
         List<String> loaded = readTermLexicon(LEXICON_ROOT + "negation_terms_zh.txt");
-        return loaded.isEmpty() ? defaults : List.copyOf(loaded);
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer negation lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+
+        log.info("TextNegScorer negation terms loaded: {}", loaded.size());
+        return List.copyOf(loaded);
     }
 
     private static Map<String, Double> buildDegreeTerms() {
@@ -134,14 +185,21 @@ public class TextNegScorer {
                 Map.entry("稍微", 0.7D),
                 Map.entry("略微", 0.7D)
         );
+
         Map<String, Double> loaded = readDegreeLexicon(LEXICON_ROOT + "degree_terms_zh.csv");
-        return loaded.isEmpty() ? defaults : Map.copyOf(loaded);
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer degree lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+
+        log.info("TextNegScorer degree terms loaded: {}", loaded.size());
+        return Map.copyOf(loaded);
     }
 
     private static Map<String, Double> readWeightedLexicon(String resourcePath) {
         LinkedHashMap<String, Double> result = new LinkedHashMap<>();
         for (String line : readUtf8Lines(resourcePath)) {
-            String[] fields = line.split("[,\t]", 2);
+            String[] fields = line.split("[,\\t]", 2);
             if (fields.length != 2) {
                 continue;
             }
@@ -171,7 +229,7 @@ public class TextNegScorer {
     private static Map<String, Double> readDegreeLexicon(String resourcePath) {
         LinkedHashMap<String, Double> result = new LinkedHashMap<>();
         for (String line : readUtf8Lines(resourcePath)) {
-            String[] fields = line.split("[,\t]", 2);
+            String[] fields = line.split("[,\\t]", 2);
             if (fields.length != 2) {
                 continue;
             }
@@ -190,8 +248,10 @@ public class TextNegScorer {
     private static List<String> readUtf8Lines(String resourcePath) {
         InputStream stream = TextNegScorer.class.getClassLoader().getResourceAsStream(resourcePath);
         if (stream == null) {
+            log.warn("TextNegScorer resource not found: {}", resourcePath);
             return Collections.emptyList();
         }
+
         List<String> lines = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
@@ -203,7 +263,8 @@ public class TextNegScorer {
                 lines.add(trimmed);
             }
             return lines;
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.warn("TextNegScorer failed to read resource: {}", resourcePath, ex);
             return Collections.emptyList();
         }
     }
@@ -220,7 +281,23 @@ public class TextNegScorer {
                 .trim();
     }
 
-    private List<Integer> allIndexesOf(String text, String term) {
+    private boolean hasAnyTerm(String text, List<String> terms) {
+        for (String term : terms) {
+            if (!findTermPositions(text, term).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Integer> findTermPositions(String text, String term) {
+        if (isEnglishTerm(term)) {
+            return englishWordBoundaryIndexes(text, term);
+        }
+        return substringIndexes(text, term);
+    }
+
+    private List<Integer> substringIndexes(String text, String term) {
         List<Integer> indexes = new ArrayList<>();
         int idx = 0;
         while ((idx = text.indexOf(term, idx)) != -1) {
@@ -230,30 +307,99 @@ public class TextNegScorer {
         return indexes;
     }
 
-    private boolean isNegated(String text, int start) {
-        int leftStart = Math.max(0, start - NEGATION_LEFT_CONTEXT);
-        String left = text.substring(leftStart, start);
-        for (String neg : NEGATION_TERMS) {
-            if (left.contains(neg)) {
+    private List<Integer> englishWordBoundaryIndexes(String text, String term) {
+        Pattern pattern = ENGLISH_PATTERN_CACHE.computeIfAbsent(term, t -> Pattern.compile("\\b" + Pattern.quote(t) + "\\b"));
+        Matcher matcher = pattern.matcher(text);
+        List<Integer> indexes = new ArrayList<>();
+        while (matcher.find()) {
+            indexes.add(matcher.start());
+        }
+        return indexes;
+    }
+
+    private boolean isEnglishTerm(String term) {
+        for (int i = 0; i < term.length(); i++) {
+            char c = term.charAt(i);
+            if (c >= 'a' && c <= 'z') {
                 return true;
             }
         }
         return false;
     }
 
+    private boolean isNegated(String text, int start) {
+        String clause = recentClause(text, start, NEGATION_LEFT_CONTEXT);
+        if (clause.isEmpty()) {
+            return false;
+        }
+
+        int bestEnd = -1;
+        int bestLength = 0;
+        for (String neg : NEGATION_TERMS) {
+            int idx = clause.lastIndexOf(neg);
+            if (idx < 0) {
+                continue;
+            }
+            int end = idx + neg.length();
+            if (end > bestEnd || (end == bestEnd && neg.length() > bestLength)) {
+                bestEnd = end;
+                bestLength = neg.length();
+            }
+        }
+
+        if (bestEnd < 0) {
+            return false;
+        }
+
+        int distance = clause.length() - bestEnd;
+        int limit = bestLength >= 2 ? NEGATION_DISTANCE_LIMIT + 2 : NEGATION_DISTANCE_LIMIT;
+        return distance <= limit;
+    }
+
     private double degreeMultiplier(String text, int start) {
-        int leftStart = Math.max(0, start - DEGREE_LEFT_CONTEXT);
-        String left = text.substring(leftStart, start);
+        String clause = recentClause(text, start, DEGREE_LEFT_CONTEXT);
+        if (clause.isEmpty()) {
+            return 1.0D;
+        }
+
         double factor = 1.0D;
+        int bestDistance = Integer.MAX_VALUE;
+
         for (Map.Entry<String, Double> degree : DEGREE_TERMS.entrySet()) {
-            if (left.contains(degree.getKey())) {
-                factor = Math.max(factor, degree.getValue());
+            int idx = clause.lastIndexOf(degree.getKey());
+            if (idx < 0) {
+                continue;
+            }
+            int distance = clause.length() - (idx + degree.getKey().length());
+            if (distance > DEGREE_DISTANCE_LIMIT) {
+                continue;
+            }
+            if (degree.getValue() > factor || (Double.compare(degree.getValue(), factor) == 0 && distance < bestDistance)) {
+                factor = degree.getValue();
+                bestDistance = distance;
             }
         }
         return factor;
     }
 
-    private double clamp(double value, double min, double max) {
+    private String recentClause(String text, int start, int leftWindow) {
+        int leftStart = Math.max(0, start - leftWindow);
+        String left = text.substring(leftStart, start);
+        int cut = -1;
+        for (int i = 0; i < CLAUSE_DELIMITERS.length(); i++) {
+            char delimiter = CLAUSE_DELIMITERS.charAt(i);
+            int idx = left.lastIndexOf(delimiter);
+            if (idx > cut) {
+                cut = idx;
+            }
+        }
+        if (cut >= 0 && cut + 1 < left.length()) {
+            left = left.substring(cut + 1);
+        }
+        return left.trim();
+    }
+
+    private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
 

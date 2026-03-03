@@ -1,14 +1,14 @@
-package com.wuhao.aiemotion.service;
+﻿package com.wuhao.aiemotion.service;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextNegScorerTest {
 
-    private final TextNegScorer scorer = new TextNegScorer();
+    private final TextNegScorer scorer = new TextNegScorer(10.0D, 0.8D);
 
     @Test
     void shouldApplyDegreeRule() {
@@ -42,5 +42,21 @@ class TextNegScorerTest {
         assertEquals(0.0D, result.textNeg());
         assertEquals(0, result.hitCount());
         assertFalse(result.highRiskHit());
+    }
+
+    @Test
+    void shouldNotMatchEnglishSubstringInsideWord() {
+        TextNegScorer.TextNegScoreResult result = scorer.score("this is hispanic music");
+
+        assertEquals(0.0D, result.textNeg());
+        assertEquals(0, result.hitCount());
+    }
+
+    @Test
+    void shouldNotLeakDegreeAcrossClauses() {
+        TextNegScorer.TextNegScoreResult crossClause = scorer.score("我昨天非常累。今天有点焦虑");
+        TextNegScorer.TextNegScoreResult sameClauseStrong = scorer.score("我今天非常焦虑");
+
+        assertTrue(crossClause.textNeg() < sameClauseStrong.textNeg());
     }
 }

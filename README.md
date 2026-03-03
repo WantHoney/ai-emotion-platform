@@ -124,6 +124,21 @@ bash ./scripts/dev-all.sh
 
 Both commands now start `SER -> backend -> frontend` in order.
 
+Default one-command runtime is the Chinese-main pipeline:
+- `SER_ENGINE=hf_wav2vec2`
+- `SER_HF_ROUTING=language`
+- `SER_HF_DEFAULT_LANGUAGE=zh`
+- `SER_HF_MODEL_DIR_EN=backend/ser-service/training/checkpoints/ser_multilingual_4class_exp02/best_model`
+- `SER_HF_MODEL_DIR_ZH=backend/ser-service/training/checkpoints/ser_multilingual_esd_stageB_exp01/best_model`
+- `TEXT_ENGINE=hf`
+- `TEXT_HF_ROUTING=language`
+- `TEXT_HF_DEFAULT_LANGUAGE=zh`
+- `TEXT_HF_MODEL_ZH=backend/ser-service/training/text_models/zh_sentiment_exp03/best_model`
+- `FUSION_ENABLED=true`
+- `FUSION_MODEL_DIR=backend/ser-service/training/fusion/models/fusion_exp03_perlang`
+
+All defaults can be overridden by external environment variables.
+
 ## 5. Runtime Check
 
 Backend direct checks:
@@ -194,6 +209,11 @@ curl "http://127.0.0.1:8080/api/tasks?page=1&pageSize=10" \
 curl "http://127.0.0.1:8080/api/reports?page=1&pageSize=10" \
   -H "Authorization: Bearer <accessToken>"
 ```
+
+Metric convention (defense/report consistency):
+- Always compare calibrated metrics to calibrated metrics within the same version.
+- Exp03 `0.2140` is uncalibrated ECE; Exp03 calibrated ECE is `0.0562`.
+- Exp01 calibrated ECE is `0.0250` and should not be directly compared to Exp03 uncalibrated ECE.
 
 ## 6. Main API Contracts
 
@@ -304,6 +324,14 @@ This is only relevant when you intentionally enable remote LLM mode:
 - then provide `OPENROUTER_API_KEY`
 
 For local-only default mode (`AI_MODE=mock`), no OpenRouter key is required.
+
+### `mvn test -DskipITs` fails due OpenAI key
+
+Tests now bind `test` profile with:
+- `ai.mode=mock`
+- `spring.ai.openai.enabled=false`
+
+So local tests do not require OpenAI key by default. If this still appears, make sure you did not force `AI_MODE=spring` in your shell environment.
 
 ### Backend startup fails with `Port 8080 was already in use`
 

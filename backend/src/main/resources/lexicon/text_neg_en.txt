@@ -1,0 +1,17 @@
+# term,weight
+depressed,1.4
+anxious,1.2
+anxiety,1.2
+panic,1.3
+hopeless,1.6
+lonely,1.0
+helpless,1.0
+insomnia,1.0
+stressed,1.0
+burnout,1.2
+overwhelmed,1.1
+exhausted,1.0
+fearful,1.1
+scared,1.0
+sad,1.0
+cry,1.0

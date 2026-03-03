@@ -1,4 +1,4 @@
-package com.wuhao.aiemotion;
+﻿package com.wuhao.aiemotion;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,10 +9,10 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import java.util.Map;
 
 /**
- * AI 情感分析后端主应用。
+ * AI 情绪分析后端主应用。
  *
- * 说明：默认启用 OpenAI/Spring AI 自动配置；当 ai.mode=mock 或 ai.mock.enabled=true 时，
- * 在启动早期动态关闭 spring.ai.openai.enabled，避免 mock 场景对真实 LLM Bean 的依赖。
+ * 说明：默认允许 Spring AI 相关配置存在；当 ai.mode=mock 或 ai.mock.enabled=true，
+ * 或未提供 API key 时，会在启动早期关闭 OpenAI 自动装配，避免 mock 场景依赖远端 LLM Bean。
  */
 @EnableAsync
 @SpringBootApplication

@@ -2,7 +2,12 @@ package com.wuhao.aiemotion.service;
 
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -14,31 +19,14 @@ public class TextNegScorer {
     private static final double NORMALIZER = 10.0D;
     private static final double HIGH_RISK_FLOOR = 0.8D;
     private static final double NEGATION_REDUCTION = 0.30D;
-    private static final int LEFT_CONTEXT = 4;
+    private static final int NEGATION_LEFT_CONTEXT = 8;
+    private static final int DEGREE_LEFT_CONTEXT = 8;
+    private static final String LEXICON_ROOT = "lexicon/";
 
     private static final Map<String, Double> NEGATIVE_TERM_WEIGHTS = buildNegativeTermWeights();
-
-    private static final List<String> HIGH_RISK_TERMS = List.of(
-            "\u4e0d\u60f3\u6d3b", "\u8f7b\u751f", "\u81ea\u6740", "\u7ed3\u675f\u751f\u547d", "\u6d3b\u4e0d\u4e0b\u53bb",
-            "kill myself", "suicide", "end my life"
-    );
-
-    private static final List<String> NEGATION_TERMS = List.of(
-            "\u4e0d", "\u6ca1", "\u6ca1\u6709", "\u65e0", "\u5e76\u4e0d", "\u5e76\u975e", "\u4e0d\u592a", "\u4e0d\u662f", "\u672a"
-    );
-
-    private static final Map<String, Double> DEGREE_TERMS = Map.ofEntries(
-            Map.entry("\u975e\u5e38", 1.8D),
-            Map.entry("\u7279\u522b", 1.6D),
-            Map.entry("\u6781\u5176", 2.0D),
-            Map.entry("\u592a", 1.4D),
-            Map.entry("\u5f88", 1.2D),
-            Map.entry("\u633a", 1.2D),
-            Map.entry("\u6709\u70b9", 0.8D),
-            Map.entry("\u6709\u4e9b", 0.85D),
-            Map.entry("\u7a0d\u5fae", 0.7D),
-            Map.entry("\u7565\u5fae", 0.7D)
-    );
+    private static final List<String> HIGH_RISK_TERMS = buildHighRiskTerms();
+    private static final List<String> NEGATION_TERMS = buildNegationTerms();
+    private static final Map<String, Double> DEGREE_TERMS = buildDegreeTerms();
 
     public TextNegScoreResult score(String transcript) {
         if (transcript == null || transcript.isBlank()) {
@@ -79,55 +67,145 @@ public class TextNegScorer {
     }
 
     private static Map<String, Double> buildNegativeTermWeights() {
-        Map<String, Double> terms = new LinkedHashMap<>();
+        LinkedHashMap<String, Double> defaults = new LinkedHashMap<>();
 
-        // medium
-        terms.put("\u96be\u53d7", 1.0D);
-        terms.put("\u96be\u8fc7", 1.0D);
-        terms.put("\u60f3\u54ed", 1.0D);
-        terms.put("\u538b\u529b", 1.0D);
-        terms.put("\u7126\u8651", 1.1D);
-        terms.put("\u7d27\u5f20", 0.9D);
-        terms.put("\u5931\u7720", 1.0D);
-        terms.put("\u5b64\u72ec", 1.0D);
-        terms.put("\u65e0\u52a9", 1.0D);
-        terms.put("\u5fc3\u7d2f", 0.9D);
-        terms.put("\u75b2\u60eb", 0.9D);
-        terms.put("\u60f3\u8e72", 1.0D);
-        terms.put("\u538b\u6291", 1.2D);
-        terms.put("\u5fc3\u614c", 1.1D);
-        terms.put("\u6050\u60e7", 1.1D);
-        terms.put("\u5bb3\u6015", 1.0D);
-        terms.put("\u62c5\u5fc3", 0.8D);
-        terms.put("\u70e6", 0.8D);
-        terms.put("\u70e6\u8e81", 1.0D);
-        terms.put("\u5185\u8017", 0.9D);
-        terms.put("\u5d29\u4e86", 1.2D);
+        defaults.put("难受", 1.0D);
+        defaults.put("难过", 1.0D);
+        defaults.put("压力", 1.0D);
+        defaults.put("焦虑", 1.1D);
+        defaults.put("紧张", 0.9D);
+        defaults.put("恐惧", 1.1D);
+        defaults.put("害怕", 1.0D);
+        defaults.put("担心", 0.8D);
+        defaults.put("烦躁", 1.0D);
+        defaults.put("崩溃", 1.6D);
+        defaults.put("绝望", 1.8D);
+        defaults.put("抑郁", 1.2D);
+        defaults.put("崩了", 1.2D);
+        defaults.put("孤独", 1.0D);
+        defaults.put("无助", 1.0D);
+        defaults.put("痛苦", 1.2D);
+        defaults.put("失眠", 1.0D);
+        defaults.put("depressed", 1.4D);
+        defaults.put("anxious", 1.2D);
+        defaults.put("panic", 1.3D);
+        defaults.put("hopeless", 1.6D);
+        defaults.put("stressed", 1.0D);
 
-        // severe
-        terms.put("\u5d29\u6e83", 1.6D);
-        terms.put("\u5d29\u6ebb", 1.6D);
-        terms.put("\u7edd\u671b", 1.8D);
-        terms.put("\u6ca1\u610f\u4e49", 1.6D);
-        terms.put("\u65e0\u671b", 1.5D);
-        terms.put("\u65e0\u529b", 1.2D);
-        terms.put("\u81ea\u8d23", 1.0D);
-        terms.put("\u5185\u759a", 1.0D);
-        terms.put("\u75db\u82e6", 1.2D);
+        LinkedHashMap<String, Double> loaded = new LinkedHashMap<>();
+        loaded.putAll(readWeightedLexicon(LEXICON_ROOT + "text_neg_zh.txt"));
+        loaded.putAll(readWeightedLexicon(LEXICON_ROOT + "text_neg_en.txt"));
+        if (loaded.isEmpty()) {
+            loaded.putAll(defaults);
+        }
+        return Map.copyOf(loaded);
+    }
 
-        // english fallback
-        terms.put("depressed", 1.4D);
-        terms.put("anxious", 1.2D);
-        terms.put("panic", 1.3D);
-        terms.put("hopeless", 1.6D);
-        terms.put("lonely", 1.0D);
-        terms.put("helpless", 1.0D);
-        terms.put("insomnia", 1.0D);
-        terms.put("stressed", 1.0D);
-        terms.put("burnout", 1.2D);
-        terms.put("overwhelmed", 1.1D);
+    private static List<String> buildHighRiskTerms() {
+        List<String> defaults = List.of(
+                "不想活", "轻生", "自杀", "结束生命", "活不下去",
+                "kill myself", "suicide", "end my life"
+        );
+        List<String> loaded = new ArrayList<>();
+        loaded.addAll(readTermLexicon(LEXICON_ROOT + "high_risk_zh.txt"));
+        loaded.addAll(readTermLexicon(LEXICON_ROOT + "high_risk_en.txt"));
+        return loaded.isEmpty() ? defaults : List.copyOf(loaded);
+    }
 
-        return Map.copyOf(terms);
+    private static List<String> buildNegationTerms() {
+        List<String> defaults = List.of(
+                "不", "没", "没有", "无", "并不", "并非", "不太", "不是", "未"
+        );
+        List<String> loaded = readTermLexicon(LEXICON_ROOT + "negation_terms_zh.txt");
+        return loaded.isEmpty() ? defaults : List.copyOf(loaded);
+    }
+
+    private static Map<String, Double> buildDegreeTerms() {
+        Map<String, Double> defaults = Map.ofEntries(
+                Map.entry("非常", 1.8D),
+                Map.entry("特别", 1.6D),
+                Map.entry("极其", 2.0D),
+                Map.entry("十分", 1.6D),
+                Map.entry("太", 1.4D),
+                Map.entry("很", 1.2D),
+                Map.entry("挺", 1.2D),
+                Map.entry("有点", 0.8D),
+                Map.entry("有些", 0.85D),
+                Map.entry("稍微", 0.7D),
+                Map.entry("略微", 0.7D)
+        );
+        Map<String, Double> loaded = readDegreeLexicon(LEXICON_ROOT + "degree_terms_zh.csv");
+        return loaded.isEmpty() ? defaults : Map.copyOf(loaded);
+    }
+
+    private static Map<String, Double> readWeightedLexicon(String resourcePath) {
+        LinkedHashMap<String, Double> result = new LinkedHashMap<>();
+        for (String line : readUtf8Lines(resourcePath)) {
+            String[] fields = line.split("[,\t]", 2);
+            if (fields.length != 2) {
+                continue;
+            }
+            String term = fields[0].trim().toLowerCase(Locale.ROOT);
+            try {
+                double weight = Double.parseDouble(fields[1].trim());
+                if (!term.isEmpty() && weight > 0.0D) {
+                    result.put(term, weight);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return result;
+    }
+
+    private static List<String> readTermLexicon(String resourcePath) {
+        List<String> result = new ArrayList<>();
+        for (String line : readUtf8Lines(resourcePath)) {
+            String term = line.trim().toLowerCase(Locale.ROOT);
+            if (!term.isEmpty()) {
+                result.add(term);
+            }
+        }
+        return result;
+    }
+
+    private static Map<String, Double> readDegreeLexicon(String resourcePath) {
+        LinkedHashMap<String, Double> result = new LinkedHashMap<>();
+        for (String line : readUtf8Lines(resourcePath)) {
+            String[] fields = line.split("[,\t]", 2);
+            if (fields.length != 2) {
+                continue;
+            }
+            String term = fields[0].trim().toLowerCase(Locale.ROOT);
+            try {
+                double factor = Double.parseDouble(fields[1].trim());
+                if (!term.isEmpty() && factor > 0.0D) {
+                    result.put(term, factor);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return result;
+    }
+
+    private static List<String> readUtf8Lines(String resourcePath) {
+        InputStream stream = TextNegScorer.class.getClassLoader().getResourceAsStream(resourcePath);
+        if (stream == null) {
+            return Collections.emptyList();
+        }
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                lines.add(trimmed);
+            }
+            return lines;
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
     }
 
     private String normalize(String text) {
@@ -153,7 +231,7 @@ public class TextNegScorer {
     }
 
     private boolean isNegated(String text, int start) {
-        int leftStart = Math.max(0, start - LEFT_CONTEXT);
+        int leftStart = Math.max(0, start - NEGATION_LEFT_CONTEXT);
         String left = text.substring(leftStart, start);
         for (String neg : NEGATION_TERMS) {
             if (left.contains(neg)) {
@@ -164,7 +242,7 @@ public class TextNegScorer {
     }
 
     private double degreeMultiplier(String text, int start) {
-        int leftStart = Math.max(0, start - LEFT_CONTEXT);
+        int leftStart = Math.max(0, start - DEGREE_LEFT_CONTEXT);
         String left = text.substring(leftStart, start);
         double factor = 1.0D;
         for (Map.Entry<String, Double> degree : DEGREE_TERMS.entrySet()) {

@@ -1,5 +1,5 @@
 ﻿# Backend (Spring Boot)
-最后同步日期：`2026-02-22`
+最后同步日期：`2026-03-03`
 
 ## 1. 环境要求
 
@@ -43,6 +43,10 @@ mvn spring-boot:run
 - `GOVERNANCE_DRIFT_WINDOW_DAYS`、`GOVERNANCE_DRIFT_BASELINE_DAYS`
 - `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD`、`GOVERNANCE_DRIFT_HIGH_THRESHOLD`
 - `GOVERNANCE_DRIFT_MIN_SAMPLES`
+
+补充：
+- 本地单元测试固定走 `test` profile（`ai.mode=mock` + `spring.ai.openai.enabled=false`），不需要 OpenAI key。
+- 若要启用远端 LLM，请显式设置 `AI_MODE=spring` 并提供 `OPENROUTER_API_KEY`。
 
 ## 4. 数据库脚本
 

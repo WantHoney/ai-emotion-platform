@@ -40,13 +40,13 @@ FUSION_ENABLED = os.getenv("FUSION_ENABLED", "true").strip().lower() not in {"0"
 FUSION_MODEL_DIR = os.getenv("FUSION_MODEL_DIR", "./training/fusion/models/fusion_best").strip()
 FUSION_DEVICE = os.getenv("FUSION_DEVICE", SER_HF_DEVICE).strip().lower()
 TEXT_LEXICON_NEGATIVE_TERMS_ZH = tuple(
-    t.strip() for t in os.getenv("TEXT_LEXICON_NEGATIVE_TERMS_ZH", "难受,抑郁,想哭,崩溃,压力,焦虑,失眠,绝望,没有意义,不想活,害怕,恐惧,孤独,无助").split(",") if t.strip()
+    t.strip() for t in os.getenv("TEXT_LEXICON_NEGATIVE_TERMS_ZH", "难受,难过,低落,抑郁,想哭,崩溃,压力,焦虑,紧张,失眠,绝望,没有意义,不想活,害怕,恐惧,孤独,无助,烦躁,担心").split(",") if t.strip()
 )
 TEXT_LEXICON_NEGATIVE_TERMS_EN = tuple(
     t.strip() for t in os.getenv("TEXT_LEXICON_NEGATIVE_TERMS_EN", "sad,down,depressed,anxious,panic,stressed,insomnia,hopeless,lonely,helpless").split(",") if t.strip()
 )
 TEXT_LEXICON_HIGH_RISK_TERMS_ZH = tuple(
-    t.strip() for t in os.getenv("TEXT_LEXICON_HIGH_RISK_TERMS_ZH", "不想活,轻生,自杀").split(",") if t.strip()
+    t.strip() for t in os.getenv("TEXT_LEXICON_HIGH_RISK_TERMS_ZH", "不想活,轻生,自杀,结束生命,活不下去").split(",") if t.strip()
 )
 TEXT_LEXICON_HIGH_RISK_TERMS_EN = tuple(
     t.strip() for t in os.getenv("TEXT_LEXICON_HIGH_RISK_TERMS_EN", "suicide,kill myself,end my life").split(",") if t.strip()

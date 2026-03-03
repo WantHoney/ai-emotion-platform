@@ -1,5 +1,5 @@
 ﻿# 实验记录（毕设主线）
-最后同步日期：`2026-03-01`
+最后同步日期：`2026-03-03`
 
 ## 1. 任务与数据口径
 
@@ -8,6 +8,12 @@
 - 数据源：
   - 英文：IEMOCAP + RAVDESS
   - 中文：CASIA + ESD
+
+### 1.1 指标口径规范（固定）
+
+- 同版本横向比较必须同口径：`calibrated` 对 `calibrated`，`uncalibrated` 对 `uncalibrated`。
+- 训练日志里的 `uncalibrated` 仅用于说明校准增益，不作为最终上线比较口径。
+- Exp03 口径固定：`uncalibrated ECE=0.2140`，`calibrated ECE=0.0562`。
 
 ## 2. Exp01 基线（ESD 接入前）
 
@@ -216,3 +222,9 @@ Exp03 回归记录（本轮收尾）：
 
 - Zhou et al., ICASSP 2021
 - Zhou et al., Speech Communication 2022
+
+## 9. 已知局限（当前版本）
+
+- Exp03 融合模型的 `test ECE=0.0562`，仍高于目标 `<=0.03`。
+- 消融结果显示文本分支仍弱于语音分支：`text_only` 明显低于 `audio_only`。
+- 因此当前版本采用“中文主线 + 分语言校准 + 校准优先”的上线策略，后续重点是文本 4 类情绪对齐增强与校准优化。

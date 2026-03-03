@@ -1,8 +1,13 @@
 ﻿# API 文档（与代码同步）
-最后同步日期：`2026-02-21`
+最后同步日期：`2026-03-03`
 
 > HTTP 前缀：`/api`  
 > WebSocket 通道：`/ws/tasks/stream`
+
+默认运行口径（中文主系统）：
+- SER：`hf_wav2vec2`，`SER_HF_ROUTING=language`，`SER_HF_DEFAULT_LANGUAGE=zh`
+- 文本：`TEXT_ENGINE=hf`，`TEXT_HF_ROUTING=language`，`TEXT_HF_DEFAULT_LANGUAGE=zh`
+- 融合：`FUSION_ENABLED=true`，默认模型目录 `training/fusion/models/fusion_exp03_perlang`
 
 ## 1. 健康与系统
 - `GET /api/health`

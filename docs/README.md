@@ -1,5 +1,5 @@
 ﻿# docs 索引
-最后同步日期：`2026-02-21`
+最后同步日期：`2026-03-03`
 
 - `docs/api.md`：后端 HTTP + WebSocket 接口清单。
 - `docs/architecture.md`：系统架构、链路与边界。

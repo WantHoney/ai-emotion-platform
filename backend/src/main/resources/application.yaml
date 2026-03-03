@@ -1,9 +1,9 @@
-server:
+﻿server:
   port: 8080
 
 spring:
   datasource:
-    # ✅ 添加了 allowPublicKeyRetrieval=true 解决 MySQL 8.0 连接问题
+    # 添加 allowPublicKeyRetrieval=true 以兼容 MySQL 8 本地连接
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:1029384756Wh}

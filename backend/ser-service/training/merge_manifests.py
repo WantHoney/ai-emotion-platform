@@ -4,6 +4,19 @@ import json
 from collections import Counter
 from pathlib import Path
 
+PREFERRED_COLUMNS = [
+    "path",
+    "label",
+    "source_label",
+    "duration_sec",
+    "source_dataset",
+    "language",
+    "speaker",
+    "file_id",
+    "text",
+    "transcript",
+]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Merge multiple manifest directories into one.")
@@ -30,22 +43,33 @@ def read_manifest(path: Path) -> list[dict[str, str]]:
     return rows
 
 
-def write_manifest(path: Path, rows: list[dict[str, str]]) -> None:
+def resolve_header(rows: list[dict[str, str]]) -> list[str]:
+    fields: set[str] = set()
+    for row in rows:
+        fields.update(k for k in row.keys() if isinstance(k, str) and k.strip())
+
+    # Ensure core fields always exist.
+    fields.update({"path", "label", "source_dataset"})
+
+    header: list[str] = []
+    for key in PREFERRED_COLUMNS:
+        if key in fields:
+            header.append(key)
+            fields.remove(key)
+
+    # Deterministic order for long-tail fields.
+    header.extend(sorted(fields))
+    return header
+
+
+def write_manifest(path: Path, rows: list[dict[str, str]], header: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = ["path", "label", "source_label", "duration_sec", "source_dataset"]
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
+    with path.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=header, extrasaction="ignore")
+        writer.writeheader()
         for row in rows:
-            writer.writerow(
-                [
-                    row.get("path", ""),
-                    row.get("label", ""),
-                    row.get("source_label", ""),
-                    row.get("duration_sec", ""),
-                    row.get("source_dataset", ""),
-                ]
-            )
+            normalized = {k: row.get(k, "") for k in header}
+            writer.writerow(normalized)
 
 
 def main() -> None:
@@ -81,12 +105,15 @@ def main() -> None:
                 split_counter[split] += 1
                 label_counter[row["label"]] += 1
 
+    merged_rows = merged["train"] + merged["val"] + merged["test"]
+    header = resolve_header(merged_rows)
     for split in ("train", "val", "test"):
-        write_manifest(output_dir / f"{split}.csv", merged[split])
+        write_manifest(output_dir / f"{split}.csv", merged[split], header)
 
     summary = {
         "input_dirs": [str(p) for p in input_dirs],
         "output_dir": str(output_dir),
+        "columns": header,
         "counts": {
             "total": int(sum(split_counter.values())),
             "split": dict(split_counter),

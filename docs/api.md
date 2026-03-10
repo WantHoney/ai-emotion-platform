@@ -1,5 +1,5 @@
 ﻿# API 文档（与代码同步）
-最后同步日期：`2026-03-03`
+最后同步日期：`2026-03-10`
 
 > HTTP 前缀：`/api`  
 > WebSocket 通道：`/ws/tasks/stream`
@@ -8,6 +8,11 @@
 - SER：`hf_wav2vec2`，`SER_HF_ROUTING=language`，`SER_HF_DEFAULT_LANGUAGE=zh`
 - 文本：`TEXT_ENGINE=hf`，`TEXT_HF_ROUTING=language`，`TEXT_HF_DEFAULT_LANGUAGE=zh`
 - 融合：`FUSION_ENABLED=true`，默认模型目录 `training/fusion/models/fusion_exp03_perlang`
+
+当前上线默认仍按稳定链路记录：
+- 中文文本模型：`training/text_models/zh_sentiment_exp03/best_model`
+- 融合模型：`training/fusion/models/fusion_exp03_perlang`
+- `exp04` 的 `gated/mlp` 结果仅作为候选对比，不作为正式上线口径
 
 ## 1. 健康与系统
 - `GET /api/health`
@@ -172,6 +177,49 @@
 - `4403`：无权限访问该任务
 - `4500`：服务端内部错误
 
-## 7. 同步原则
+## 7. 内部 AI 服务契约
+
+以下字段用于 `backend` 与 `backend/ser-service` 之间的契约同步，便于排查跨服务字段不一致问题。
+
+### 7.1 文本情感返回补充字段
+
+`POST /text/sentiment` 在原有 3 类情感字段外，新增兼容字段：
+
+- `emotion4Ready`: 是否来自真实 4 类文本模型；若为 `false`，说明当前结果是从 3 类情感投影得到
+- `emotion4Scores`: 4 类分布，键固定为 `ANG/HAP/NEU/SAD`
+- `emotion4Label`: 4 类 top-1 标签
+- `emotion4Confidence`: 4 类 top-1 置信度
+
+兼容原则：
+
+- 若没有真实 4 类文本模型，服务会保留原有 `scores`，并把 `negative/neutral/positive` 投影为 4 类分布
+- 空文本场景仍返回稳定默认值，不会缺字段
+
+### 7.2 融合请求附加字段
+
+`POST /analyze` 在原有文本特征表单字段外，支持以下可选输入：
+
+- `text4_prob_ang`
+- `text4_prob_hap`
+- `text4_prob_neu`
+- `text4_prob_sad`
+- `text4_confidence`
+- `text4_entropy`
+- `text4_ready`
+
+回退原则：
+
+- 若这些字段全部缺失，SER 服务会用 3 类文本分数自动回填 4 类特征
+- `text4_ready=0` 表示当前 4 类特征是兼容投影，不代表真实 4 类文本模型已上线
+
+### 7.3 融合返回补充字段
+
+融合结果的 `fusion` 对象新增：
+
+- `fusionArch`: 当前融合结构，典型值为 `mlp` 或 `gated`
+
+现阶段默认线上目录仍为 `training/fusion/models/fusion_exp03_perlang`，因此默认结构仍应按该目录实际配置解读。
+
+## 8. 同步原则
 - 文档优先作为目录与字段契约，行为细节以代码与运行响应为准。
 - 数据库迁移同步参考：`docs/db.md`。

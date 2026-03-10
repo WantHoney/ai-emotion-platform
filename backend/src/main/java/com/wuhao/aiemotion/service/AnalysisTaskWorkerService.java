@@ -368,6 +368,11 @@ public class AnalysisTaskWorkerService {
         double neutral = Math.max(0.0D, 1.0D - negative);
         double positive = 0.0D;
         Double negativeScore = null;
+        double text4Ang = negative * 0.5D;
+        double text4Sad = negative * 0.5D;
+        double text4Neu = neutral;
+        double text4Hap = positive;
+        double text4Ready = 0.0D;
 
         if (textSentiment != null) {
             if (textSentiment.negativeScore() != null) {
@@ -389,19 +394,54 @@ public class AnalysisTaskWorkerService {
                 neutral = Math.max(0.0D, 1.0D - negative);
                 positive = 0.0D;
             }
+
+            Map<String, Double> emotion4Scores = textSentiment.emotion4Scores();
+            if (emotion4Scores != null && !emotion4Scores.isEmpty()) {
+                text4Ang = clamp01(scoreFromMap(emotion4Scores, "ANG", text4Ang));
+                text4Hap = clamp01(scoreFromMap(emotion4Scores, "HAP", text4Hap));
+                text4Neu = clamp01(scoreFromMap(emotion4Scores, "NEU", text4Neu));
+                text4Sad = clamp01(scoreFromMap(emotion4Scores, "SAD", text4Sad));
+                double sum = text4Ang + text4Hap + text4Neu + text4Sad;
+                if (sum > 0.0D) {
+                    text4Ang /= sum;
+                    text4Hap /= sum;
+                    text4Neu /= sum;
+                    text4Sad /= sum;
+                }
+                text4Ready = Boolean.TRUE.equals(textSentiment.emotion4Ready()) ? 1.0D : 0.0D;
+            } else {
+                text4Ang = negative * 0.5D;
+                text4Sad = negative * 0.5D;
+                text4Neu = neutral;
+                text4Hap = positive;
+            }
         }
 
         if (negativeScore == null) {
             negativeScore = negative;
         }
         double textLengthNorm = clamp01((transcript == null ? 0.0D : transcript.length() / 256.0D));
+        double text4Confidence = Math.max(Math.max(text4Ang, text4Hap), Math.max(text4Neu, text4Sad));
+        double text4Entropy = -(
+                safeEntropyTerm(text4Ang)
+                        + safeEntropyTerm(text4Hap)
+                        + safeEntropyTerm(text4Neu)
+                        + safeEntropyTerm(text4Sad)
+        );
 
         return new SerClient.FusionTextFeatures(
                 round4(negative),
                 round4(neutral),
                 round4(positive),
                 round4(negativeScore),
-                round4(textLengthNorm)
+                round4(textLengthNorm),
+                round4(text4Ang),
+                round4(text4Hap),
+                round4(text4Neu),
+                round4(text4Sad),
+                round4(text4Confidence),
+                round4(text4Entropy),
+                round4(text4Ready)
         );
     }
 
@@ -414,6 +454,11 @@ public class AnalysisTaskWorkerService {
             value = scores.get(key.toUpperCase());
         }
         return value == null ? fallback : value;
+    }
+
+    private double safeEntropyTerm(double p) {
+        double x = Math.max(1e-12D, Math.min(1.0D, p));
+        return x * Math.log(x);
     }
 
     private double fuseTextNeg(double lexiconScore, Double modelScore) {

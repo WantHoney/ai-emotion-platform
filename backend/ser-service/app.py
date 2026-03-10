@@ -356,6 +356,10 @@ def score_text_by_lexicon(text: str, language_hint: str | None) -> dict[str, Any
             "label": "neutral",
             "negativeScore": 0.0,
             "scores": {"negative": 0.0, "neutral": 1.0, "positive": 0.0},
+            "emotion4Ready": False,
+            "emotion4Scores": {"ANG": 0.0, "HAP": 0.0, "NEU": 1.0, "SAD": 0.0},
+            "emotion4Label": "NEU",
+            "emotion4Confidence": 1.0,
             "hits": [],
             "highRiskHit": False,
         }
@@ -390,6 +394,15 @@ def score_text_by_lexicon(text: str, language_hint: str | None) -> dict[str, Any
             "neutral": float(neutral_score),
             "positive": float(positive_score),
         },
+        "emotion4Ready": False,
+        "emotion4Scores": {
+            "ANG": float(negative_score * 0.5),
+            "HAP": float(positive_score),
+            "NEU": float(neutral_score),
+            "SAD": float(negative_score * 0.5),
+        },
+        "emotion4Label": "ANG" if negative_score >= max(neutral_score, positive_score) else ("NEU" if neutral_score >= positive_score else "HAP"),
+        "emotion4Confidence": float(max(negative_score * 0.5, positive_score, neutral_score)),
         "hits": hits,
         "highRiskHit": high_risk_hit,
     }
@@ -455,6 +468,13 @@ def build_text_feature_inputs(
     text_positive: float | None,
     text_negative_score: float | None,
     text_length_norm: float | None,
+    text4_prob_ang: float | None = None,
+    text4_prob_hap: float | None = None,
+    text4_prob_neu: float | None = None,
+    text4_prob_sad: float | None = None,
+    text4_confidence: float | None = None,
+    text4_entropy: float | None = None,
+    text4_ready: float | None = None,
 ) -> dict[str, float]:
     neg = _to_optional_float(text_negative)
     neu = _to_optional_float(text_neutral)
@@ -493,12 +513,60 @@ def build_text_feature_inputs(
         length_norm = 0.0
     length_norm = clamp01(length_norm)
 
+    t4_ang = _to_optional_float(text4_prob_ang)
+    t4_hap = _to_optional_float(text4_prob_hap)
+    t4_neu = _to_optional_float(text4_prob_neu)
+    t4_sad = _to_optional_float(text4_prob_sad)
+    has_text4_probs = any(v is not None for v in (t4_ang, t4_hap, t4_neu, t4_sad))
+    if not has_text4_probs:
+        t4_ang = neg * 0.5
+        t4_sad = neg * 0.5
+        t4_neu = neu
+        t4_hap = pos
+    else:
+        t4_ang = max(0.0, float(t4_ang or 0.0))
+        t4_hap = max(0.0, float(t4_hap or 0.0))
+        t4_neu = max(0.0, float(t4_neu or 0.0))
+        t4_sad = max(0.0, float(t4_sad or 0.0))
+    t4_total = t4_ang + t4_hap + t4_neu + t4_sad
+    if t4_total <= 0.0:
+        t4_ang, t4_hap, t4_neu, t4_sad = 0.0, 0.0, 1.0, 0.0
+    else:
+        t4_ang, t4_hap, t4_neu, t4_sad = (
+            t4_ang / t4_total,
+            t4_hap / t4_total,
+            t4_neu / t4_total,
+            t4_sad / t4_total,
+        )
+
+    t4_conf = _to_optional_float(text4_confidence)
+    if t4_conf is None:
+        t4_conf = max(t4_ang, t4_hap, t4_neu, t4_sad)
+    t4_conf = clamp01(t4_conf)
+
+    t4_ent = _to_optional_float(text4_entropy)
+    if t4_ent is None:
+        t4_ent = shannon_entropy([t4_ang, t4_hap, t4_neu, t4_sad])
+    t4_ent = max(0.0, float(t4_ent))
+
+    t4_ready_flag = _to_optional_float(text4_ready)
+    if t4_ready_flag is None:
+        t4_ready_flag = 1.0 if has_text4_probs else 0.0
+    t4_ready_flag = 1.0 if t4_ready_flag >= 0.5 else 0.0
+
     return {
         "text_negative": float(neg),
         "text_neutral": float(neu),
         "text_positive": float(pos),
         "text_negative_score": float(neg_score),
         "text_length_norm": float(length_norm),
+        "text4_prob_ang": float(t4_ang),
+        "text4_prob_hap": float(t4_hap),
+        "text4_prob_neu": float(t4_neu),
+        "text4_prob_sad": float(t4_sad),
+        "text4_confidence": float(t4_conf),
+        "text4_entropy": float(t4_ent),
+        "text4_ready": float(t4_ready_flag),
     }
 
 
@@ -576,6 +644,13 @@ def build_fusion_features(
         "text_positive": float(text_features.get("text_positive", 0.0) or 0.0),
         "text_negative_score": float(text_features.get("text_negative_score", 0.0) or 0.0),
         "text_length_norm": float(text_features.get("text_length_norm", 0.0) or 0.0),
+        "text4_prob_ang": float(text_features.get("text4_prob_ang", 0.0) or 0.0),
+        "text4_prob_hap": float(text_features.get("text4_prob_hap", 0.0) or 0.0),
+        "text4_prob_neu": float(text_features.get("text4_prob_neu", 0.0) or 0.0),
+        "text4_prob_sad": float(text_features.get("text4_prob_sad", 0.0) or 0.0),
+        "text4_confidence": float(text_features.get("text4_confidence", 0.0) or 0.0),
+        "text4_entropy": float(text_features.get("text4_entropy", 0.0) or 0.0),
+        "text4_ready": float(text_features.get("text4_ready", 0.0) or 0.0),
         "lang_is_zh": 1.0 if lang_key == "zh" else 0.0,
     }
 
@@ -846,6 +921,13 @@ async def analyze(
     text_positive: float | None = Form(default=None),
     text_negative_score: float | None = Form(default=None),
     text_length_norm: float | None = Form(default=None),
+    text4_prob_ang: float | None = Form(default=None),
+    text4_prob_hap: float | None = Form(default=None),
+    text4_prob_neu: float | None = Form(default=None),
+    text4_prob_sad: float | None = Form(default=None),
+    text4_confidence: float | None = Form(default=None),
+    text4_entropy: float | None = Form(default=None),
+    text4_ready: float | None = Form(default=None),
 ):
     if segment_ms <= 0:
         raise HTTPException(status_code=400, detail="segment_ms must be > 0")
@@ -917,6 +999,13 @@ async def analyze(
             text_positive=text_positive,
             text_negative_score=text_negative_score,
             text_length_norm=text_length_norm,
+            text4_prob_ang=text4_prob_ang,
+            text4_prob_hap=text4_prob_hap,
+            text4_prob_neu=text4_prob_neu,
+            text4_prob_sad=text4_prob_sad,
+            text4_confidence=text4_confidence,
+            text4_entropy=text4_entropy,
+            text4_ready=text4_ready,
         )
         fusion_result = predict_fusion_result(audio_summary, text_features, model_meta["routeLanguage"])
         return {
@@ -1016,6 +1105,10 @@ async def text_sentiment(payload: TextSentimentRequest):
             "label": "neutral",
             "negativeScore": 0.0,
             "scores": {"negative": 0.0, "neutral": 1.0, "positive": 0.0},
+            "emotion4Ready": False,
+            "emotion4Scores": {"ANG": 0.0, "HAP": 0.0, "NEU": 1.0, "SAD": 0.0},
+            "emotion4Label": "NEU",
+            "emotion4Confidence": 1.0,
             "meta": {
                 "engine": TEXT_ENGINE,
                 "model": "empty",

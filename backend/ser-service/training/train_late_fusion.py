@@ -28,6 +28,13 @@ TEXT_FEATURES = (
     "text_positive",
     "text_negative_score",
     "text_length_norm",
+    "text4_prob_ang",
+    "text4_prob_hap",
+    "text4_prob_neu",
+    "text4_prob_sad",
+    "text4_confidence",
+    "text4_entropy",
+    "text4_ready",
     "lang_is_zh",
 )
 
@@ -46,7 +53,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-features", default="")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--mode", default="fusion", choices=["fusion", "audio_only", "text_only"])
+    parser.add_argument("--fusion-arch", default="mlp", choices=["mlp", "gated"])
     parser.add_argument("--hidden-size", type=int, default=64)
+    parser.add_argument("--gate-hidden-size", type=int, default=32)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=128)
@@ -218,19 +227,50 @@ def standardize(train: np.ndarray, x: np.ndarray, eps: float = 1e-6) -> tuple[np
 
 
 class FusionMLP(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, hidden_size: int, dropout: float) -> None:
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        hidden_size: int,
+        dropout: float,
+        arch: str = "mlp",
+        audio_dim: int = 0,
+        text_dim: int = 0,
+        gate_hidden_size: int = 32,
+    ) -> None:
         super().__init__()
+        self.arch = arch
+        self.audio_dim = int(max(0, audio_dim))
+        self.text_dim = int(max(0, text_dim))
+        self.gate = None
+
+        effective_in_dim = in_dim
+        if self.arch == "gated":
+            if self.audio_dim <= 0 or self.text_dim <= 0:
+                raise ValueError("fusion-arch=gated requires audio_dim>0 and text_dim>0")
+            self.gate = nn.Sequential(
+                nn.Linear(self.audio_dim, gate_hidden_size),
+                nn.ReLU(),
+                nn.Linear(gate_hidden_size, self.text_dim),
+            )
+            effective_in_dim = self.audio_dim + self.text_dim
+
         if hidden_size <= 0:
-            self.net = nn.Linear(in_dim, out_dim)
+            self.net = nn.Linear(effective_in_dim, out_dim)
         else:
             self.net = nn.Sequential(
-                nn.Linear(in_dim, hidden_size),
+                nn.Linear(effective_in_dim, hidden_size),
                 nn.ReLU(),
                 nn.Dropout(dropout),
                 nn.Linear(hidden_size, out_dim),
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.gate is not None:
+            audio = x[:, : self.audio_dim]
+            text = x[:, self.audio_dim : self.audio_dim + self.text_dim]
+            gate = torch.sigmoid(self.gate(audio))
+            x = torch.cat([audio, text * gate], dim=-1)
         return self.net(x)
 
 
@@ -478,11 +518,17 @@ def main() -> None:
     x_val = (val.x - mean) / std
     x_test = (test.x - mean) / std if test is not None else None
 
+    is_fusion_mode = args.mode == "fusion"
+    fusion_arch = args.fusion_arch if is_fusion_mode else "mlp"
     model = FusionMLP(
         in_dim=x_train.shape[1],
         out_dim=len(CANONICAL_EMOTIONS),
         hidden_size=args.hidden_size,
         dropout=args.dropout,
+        arch=fusion_arch,
+        audio_dim=len(AUDIO_FEATURES) if is_fusion_mode else 0,
+        text_dim=len(TEXT_FEATURES) if is_fusion_mode else 0,
+        gate_hidden_size=args.gate_hidden_size,
     ).to(device)
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     loss_fn = nn.CrossEntropyLoss()
@@ -576,6 +622,10 @@ def main() -> None:
             "model_state_dict": model.state_dict(),
             "input_dim": int(x_train.shape[1]),
             "hidden_size": args.hidden_size,
+            "fusion_arch": fusion_arch,
+            "audio_dim": len(AUDIO_FEATURES) if is_fusion_mode else 0,
+            "text_dim": len(TEXT_FEATURES) if is_fusion_mode else 0,
+            "gate_hidden_size": args.gate_hidden_size if is_fusion_mode else 0,
             "dropout": args.dropout,
             "labels": list(CANONICAL_EMOTIONS),
             "feature_columns": list(feature_columns(args.mode)),
@@ -605,6 +655,7 @@ def main() -> None:
 
     report = {
         "mode": args.mode,
+        "fusion_arch": fusion_arch,
         "device": str(device),
         "train_samples": int(train.x.shape[0]),
         "val_samples": int(val.x.shape[0]),

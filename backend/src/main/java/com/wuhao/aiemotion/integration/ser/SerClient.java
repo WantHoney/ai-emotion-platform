@@ -65,6 +65,27 @@ public class SerClient {
             if (fusionTextFeatures.textLengthNorm() != null) {
                 body.add("text_length_norm", String.valueOf(fusionTextFeatures.textLengthNorm()));
             }
+            if (fusionTextFeatures.text4ProbAng() != null) {
+                body.add("text4_prob_ang", String.valueOf(fusionTextFeatures.text4ProbAng()));
+            }
+            if (fusionTextFeatures.text4ProbHap() != null) {
+                body.add("text4_prob_hap", String.valueOf(fusionTextFeatures.text4ProbHap()));
+            }
+            if (fusionTextFeatures.text4ProbNeu() != null) {
+                body.add("text4_prob_neu", String.valueOf(fusionTextFeatures.text4ProbNeu()));
+            }
+            if (fusionTextFeatures.text4ProbSad() != null) {
+                body.add("text4_prob_sad", String.valueOf(fusionTextFeatures.text4ProbSad()));
+            }
+            if (fusionTextFeatures.text4Confidence() != null) {
+                body.add("text4_confidence", String.valueOf(fusionTextFeatures.text4Confidence()));
+            }
+            if (fusionTextFeatures.text4Entropy() != null) {
+                body.add("text4_entropy", String.valueOf(fusionTextFeatures.text4Entropy()));
+            }
+            if (fusionTextFeatures.text4Ready() != null) {
+                body.add("text4_ready", String.valueOf(fusionTextFeatures.text4Ready()));
+            }
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -147,7 +168,14 @@ public class SerClient {
             Double textNeutral,
             Double textPositive,
             Double textNegativeScore,
-            Double textLengthNorm
+            Double textLengthNorm,
+            Double text4ProbAng,
+            Double text4ProbHap,
+            Double text4ProbNeu,
+            Double text4ProbSad,
+            Double text4Confidence,
+            Double text4Entropy,
+            Double text4Ready
     ) {
     }
 }

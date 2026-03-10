@@ -37,7 +37,14 @@ public record SerAnalyzeResponse(
             Double text_neutral,
             Double text_positive,
             Double text_negative_score,
-            Double text_length_norm
+            Double text_length_norm,
+            Double text4_prob_ang,
+            Double text4_prob_hap,
+            Double text4_prob_neu,
+            Double text4_prob_sad,
+            Double text4_confidence,
+            Double text4_entropy,
+            Double text4_ready
     ) {}
 
     public record Fusion(

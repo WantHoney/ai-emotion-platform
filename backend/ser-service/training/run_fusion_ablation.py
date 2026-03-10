@@ -21,10 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--hidden-size", type=int, default=64)
+    parser.add_argument("--gate-hidden-size", type=int, default=32)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--patience", type=int, default=12)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    parser.add_argument("--fusion-arch", default="mlp", choices=["mlp", "gated"])
     parser.add_argument(
         "--calibration-mode",
         default="global_temperature",
@@ -66,6 +68,8 @@ def main() -> None:
             str(args.weight_decay),
             "--hidden-size",
             str(args.hidden_size),
+            "--gate-hidden-size",
+            str(args.gate_hidden_size),
             "--dropout",
             str(args.dropout),
             "--patience",
@@ -81,6 +85,8 @@ def main() -> None:
             "--min-language-samples",
             str(args.min_language_samples),
         ]
+        if mode == "fusion":
+            cmd.extend(["--fusion-arch", args.fusion_arch])
         if args.test_features:
             cmd.extend(["--test-features", args.test_features])
 
@@ -98,6 +104,7 @@ def main() -> None:
         summary_rows.append(
             {
                 "mode": mode,
+                "fusion_arch": report.get("fusion_arch"),
                 "calibration_mode": report.get("calibration_mode"),
                 "best_epoch": report.get("best_epoch"),
                 "temperature": report.get("temperature"),

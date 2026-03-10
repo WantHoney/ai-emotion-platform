@@ -88,6 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--whisper-compute-type", default="")
     parser.add_argument("--whisper-cpu-threads", type=int, default=8)
     parser.add_argument("--asr-cache-json", default="")
+    parser.add_argument("--retry-empty-cache", action="store_true")
     parser.add_argument("--max-samples", type=int, default=0)
     return parser.parse_args()
 
@@ -97,25 +98,39 @@ class ManifestRow:
     path: str
     label: str
     language: str | None
+    source_dataset: str | None
     transcript: str
+
+
+def infer_language_from_source(source_dataset: str | None) -> str | None:
+    key = (source_dataset or "").strip().lower()
+    if not key:
+        return None
+    if any(token in key for token in ("casia", "esd", "aishell", "ch")):
+        return "zh"
+    if any(token in key for token in ("iemocap", "ravdess", "meld", "en")):
+        return "en"
+    return None
 
 
 def read_manifest(path: str | Path) -> list[ManifestRow]:
     rows: list[ManifestRow] = []
-    with Path(path).open("r", encoding="utf-8") as f:
+    with Path(path).open("r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             wav_path = (row.get("path") or "").strip()
             if not wav_path:
                 continue
             label = normalize_emotion(row.get("label"))
-            language = normalize_language(row.get("language"))
-            transcript = (row.get("transcript") or "").strip()
+            source_dataset = (row.get("source_dataset") or "").strip().lower() or None
+            language = normalize_language(row.get("language")) or infer_language_from_source(source_dataset)
+            transcript = ((row.get("transcript") or row.get("text") or "")).strip()
             rows.append(
                 ManifestRow(
                     path=wav_path,
                     label=label,
                     language=language,
+                    source_dataset=source_dataset,
                     transcript=transcript,
                 )
             )
@@ -223,6 +238,29 @@ def shannon_entropy(values: list[float]) -> float:
     return float(-sum(p * math.log(max(p, eps)) for p in values))
 
 
+def normalize_prob_dict(values: dict[str, float], labels: tuple[str, ...]) -> dict[str, float]:
+    clipped = {label: float(max(0.0, values.get(label, 0.0))) for label in labels}
+    total = float(sum(clipped.values()))
+    if total <= 0.0:
+        return {label: (1.0 if label == "NEU" else 0.0) for label in labels}
+    return {label: float(clipped[label] / total) for label in labels}
+
+
+def project_text_sentiment_to_emotion4(
+    negative: float,
+    neutral: float,
+    positive: float,
+) -> dict[str, float]:
+    # Keep fallback deterministic when text model is still sentiment-style.
+    projected = {
+        "ANG": negative * 0.5,
+        "SAD": negative * 0.5,
+        "NEU": neutral,
+        "HAP": positive,
+    }
+    return normalize_prob_dict(projected, CANONICAL_EMOTIONS)
+
+
 def build_writer(path: Path) -> tuple[csv.DictWriter, object]:
     fieldnames = [
         "path",
@@ -244,6 +282,13 @@ def build_writer(path: Path) -> tuple[csv.DictWriter, object]:
         "text_top_conf_raw",
         "text_length",
         "text_length_norm",
+        "text4_prob_ang",
+        "text4_prob_hap",
+        "text4_prob_neu",
+        "text4_prob_sad",
+        "text4_confidence",
+        "text4_entropy",
+        "text4_ready",
         "lang_is_zh",
     ]
     f = path.open("w", newline="", encoding="utf-8")
@@ -288,6 +333,7 @@ def process_split(
     text_runtime: TextRuntime,
     asr_runtime: AsrRuntime | None,
     asr_cache: dict[str, dict[str, str]],
+    retry_empty_cache: bool,
     default_language: str,
     max_samples: int,
 ) -> dict:
@@ -297,6 +343,7 @@ def process_split(
     lang_count = {"en": 0, "zh": 0}
     asr_miss = 0
     asr_failed = 0
+    transcript_source_count = {"manifest": 0, "asr_cache": 0, "asr_runtime": 0, "missing": 0}
 
     for idx, row in enumerate(rows):
         if max_samples > 0 and idx >= max_samples:
@@ -308,17 +355,32 @@ def process_split(
         audio_probs = acoustic.predict_probs(row.path)
 
         transcript = row.transcript
-        transcript_language = row.language
+        transcript_language = row.language or infer_language_from_source(row.source_dataset) or language
         if not transcript:
             cached = asr_cache.get(row.path)
             if cached is not None:
                 transcript = cached.get("text", "")
                 transcript_language = normalize_language(cached.get("language"))
+                transcript_source_count["asr_cache"] += 1
                 if not transcript:
                     asr_miss += 1
+                    if retry_empty_cache and asr_runtime is not None:
+                        try:
+                            transcript, transcript_language = asr_runtime.transcribe(row.path, language_hint=language)
+                            asr_cache[row.path] = {
+                                "text": transcript,
+                                "language": transcript_language or "",
+                            }
+                            transcript_source_count["asr_runtime"] += 1
+                        except Exception as exc:
+                            asr_failed += 1
+                            transcript = ""
+                            transcript_language = language
+                            print(f"[warn] asr retry failed for {row.path}: {exc}")
             elif asr_runtime is not None:
                 try:
                     transcript, transcript_language = asr_runtime.transcribe(row.path, language_hint=language)
+                    transcript_source_count["asr_runtime"] += 1
                 except Exception as exc:
                     asr_failed += 1
                     transcript = ""
@@ -332,6 +394,11 @@ def process_split(
                     asr_miss += 1
             else:
                 asr_miss += 1
+        else:
+            transcript_source_count["manifest"] += 1
+
+        if not transcript:
+            transcript_source_count["missing"] += 1
 
         text_lang = transcript_language or language
         text_lang = "zh" if text_lang == "zh" else "en"
@@ -342,6 +409,23 @@ def process_split(
         text_neutral = float(text_scores.get("neutral", 0.0))
         text_positive = float(text_scores.get("positive", 0.0))
         text_negative_score = float(text_result.get("negativeScore", text_negative))
+        emotion4_raw = text_result.get("emotion4Scores", {})
+        text4_ready = bool(text_result.get("emotion4Ready", False))
+        if isinstance(emotion4_raw, dict) and emotion4_raw:
+            text_emotion4 = normalize_prob_dict(
+                {k.upper(): float(v) for k, v in emotion4_raw.items() if isinstance(k, str)},
+                CANONICAL_EMOTIONS,
+            )
+        else:
+            text_emotion4 = project_text_sentiment_to_emotion4(text_negative, text_neutral, text_positive)
+        text4_prob_values = [
+            float(text_emotion4["ANG"]),
+            float(text_emotion4["HAP"]),
+            float(text_emotion4["NEU"]),
+            float(text_emotion4["SAD"]),
+        ]
+        text4_confidence = max(text4_prob_values)
+        text4_entropy = shannon_entropy(text4_prob_values)
         text_length = len(transcript)
         text_length_norm = min(1.0, text_length / 256.0)
 
@@ -372,6 +456,13 @@ def process_split(
                 "text_top_conf_raw": float(text_result.get("topConfidenceRaw", 0.0)),
                 "text_length": text_length,
                 "text_length_norm": text_length_norm,
+                "text4_prob_ang": text4_prob_values[0],
+                "text4_prob_hap": text4_prob_values[1],
+                "text4_prob_neu": text4_prob_values[2],
+                "text4_prob_sad": text4_prob_values[3],
+                "text4_confidence": text4_confidence,
+                "text4_entropy": text4_entropy,
+                "text4_ready": 1.0 if text4_ready else 0.0,
                 "lang_is_zh": lang_is_zh,
             }
         )
@@ -387,6 +478,7 @@ def process_split(
         "count": total,
         "label_count": label_count,
         "language_count": lang_count,
+        "transcript_source_count": transcript_source_count,
         "asr_missing_transcript": asr_miss,
         "asr_failed": asr_failed,
     }
@@ -435,6 +527,7 @@ def main() -> None:
                 text_runtime,
                 asr_runtime,
                 asr_cache,
+                retry_empty_cache=args.retry_empty_cache,
                 default_language=args.default_language,
                 max_samples=args.max_samples,
             ),
@@ -447,6 +540,7 @@ def main() -> None:
                 text_runtime,
                 asr_runtime,
                 asr_cache,
+                retry_empty_cache=args.retry_empty_cache,
                 default_language=args.default_language,
                 max_samples=args.max_samples,
             ),
@@ -461,6 +555,7 @@ def main() -> None:
                 text_runtime,
                 asr_runtime,
                 asr_cache,
+                retry_empty_cache=args.retry_empty_cache,
                 default_language=args.default_language,
                 max_samples=args.max_samples,
             )
@@ -479,6 +574,7 @@ def main() -> None:
         "audio_device": args.audio_device,
         "text_device": args.text_device,
         "asr_enabled": not args.skip_asr,
+        "retry_empty_cache": bool(args.retry_empty_cache),
         "asr_cache_entries": len(asr_cache),
     }
     with (output_dir / "summary.json").open("w", encoding="utf-8") as f:

@@ -225,7 +225,28 @@ Then start service:
 uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
-## 6. Retrain Text Sentiment Branch (Chinese-domain aligned)
+Stable production defaults for the current repo state:
+
+- Chinese text model: `./training/text_models/zh_sentiment_exp03/best_model`
+- Fusion model: `./training/fusion/models/fusion_exp03_perlang`
+- `exp04` remains candidate-only until the real `ser_multilingual_xlsr_stageB_exp04` chain is rerun and passes the non-regression gate.
+
+## 6. Retrain Text Branch (Chinese-domain aligned)
+
+`merge_manifests.py` now preserves extended columns (`text/language/speaker/file_id/...`) so that
+`build_fusion_features.py` can reuse dataset transcripts first and reduce ASR noise.
+
+`build_fusion_features.py` transcript priority:
+
+1. manifest `transcript/text`
+2. ASR cache
+3. live ASR
+
+Useful option:
+
+- `--retry-empty-cache` (retry ASR when cache entry exists but text is empty)
+
+### 6.1 Legacy 3-class sentiment branch (compatible)
 
 Train a 3-class text model (`negative/neutral/positive`) from `features_exp02_esd` transcripts.
 Label alignment:
@@ -257,6 +278,48 @@ TEXT_HF_ROUTING=language
 TEXT_HF_MODEL_ZH=./training/text_models/zh_sentiment_exp02/best_model
 TEXT_HF_MODEL_EN=./text_models/en_roberta_sentiment
 ```
+
+### 6.2 Experimental 4-class text emotion branch (ANG/HAP/NEU/SAD)
+
+This branch is kept for feature experimentation and contract compatibility.
+It is not the current production default.
+
+```bash
+cd backend/ser-service
+python training/train_text_emotion_4class_from_features.py \
+  --train-features training/fusion/features_exp04_seed/train_features.csv \
+  --val-features training/fusion/features_exp04_seed/val_features.csv \
+  --test-features training/fusion/features_exp04_seed/test_features.csv \
+  --output-dir training/text_models/zh_emotion4_exp04 \
+  --base-model ./training/text_models/zh_sentiment_exp03/best_model \
+  --language-filter zh \
+  --epochs 8 \
+  --batch-size 16 \
+  --learning-rate 2e-5 \
+  --device cuda
+```
+
+The runtime now exposes/consumes optional emotion-4 text fields (`text4_prob_*`, `text4_confidence`, `text4_entropy`, `text4_ready`)
+without breaking existing 3-class fields.
+
+Important current-state note:
+
+- `zh_emotion4_exp04` collapsed (`macro-F1 ~= 0.10`) and must not be used for full-pipeline rebuilds.
+- When rebuilding `exp04_full`, keep the stable Chinese text model `./training/text_models/zh_sentiment_exp03/best_model`.
+- The observed `exp04_full` candidate features were built with:
+  - `audio_model_zh = training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+  - `text_model_zh = training/text_models/zh_sentiment_exp03/best_model`
+- Because `training/checkpoints/ser_multilingual_xlsr_stageB_exp04/` is still empty, that `exp04` chain is candidate-only and not a formal production result.
+
+### 6.3 Stable vs candidate branches
+
+- Stable production path:
+  - text zh: `training/text_models/zh_sentiment_exp03/best_model`
+  - fusion: `training/fusion/models/fusion_exp03_perlang`
+- Candidate path under review:
+  - fusion architectures: `fusion_exp04_gated`, `fusion_exp04_mlp`
+  - candidate feature set: `training/fusion/features_exp04_full`
+  - do not promote until the true `ser_multilingual_xlsr_stageB_exp04` rerun is complete and all gate metrics are checked.
 
 ## 7. Build Multimodal Fusion Features (exp02_esd)
 
@@ -301,6 +364,31 @@ python training/train_late_fusion.py \
   --learning-rate 2e-3 \
   --weight-decay 1e-4 \
   --calibration-mode per_language_temperature \
+  --min-language-samples 100 \
+  --device cuda
+```
+
+Candidate `exp04` gated run (evaluation only, not current production default):
+
+```bash
+cd backend/ser-service
+python training/train_late_fusion.py \
+  --train-features training/fusion/features_exp04_full/train_features.csv \
+  --val-features training/fusion/features_exp04_full/val_features.csv \
+  --test-features training/fusion/features_exp04_full/test_features.csv \
+  --output-dir training/fusion/models/fusion_exp04_gated \
+  --mode fusion \
+  --fusion-arch gated \
+  --gate-hidden-size 64 \
+  --epochs 100 \
+  --batch-size 128 \
+  --hidden-size 128 \
+  --dropout 0.2 \
+  --learning-rate 1.5e-3 \
+  --weight-decay 1e-4 \
+  --patience 15 \
+  --calibration-mode per_language_temperature \
+  --calibration-max-iter 300 \
   --min-language-samples 100 \
   --device cuda
 ```

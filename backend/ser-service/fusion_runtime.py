@@ -19,24 +19,62 @@ DEFAULT_FEATURE_COLUMNS = (
     "text_positive",
     "text_negative_score",
     "text_length_norm",
+    "text4_prob_ang",
+    "text4_prob_hap",
+    "text4_prob_neu",
+    "text4_prob_sad",
+    "text4_confidence",
+    "text4_entropy",
+    "text4_ready",
     "lang_is_zh",
 )
 
 
 class FusionMLP(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, hidden_size: int, dropout: float) -> None:
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        hidden_size: int,
+        dropout: float,
+        arch: str = "mlp",
+        audio_dim: int = 0,
+        text_dim: int = 0,
+        gate_hidden_size: int = 32,
+    ) -> None:
         super().__init__()
+        self.arch = arch
+        self.audio_dim = int(max(0, audio_dim))
+        self.text_dim = int(max(0, text_dim))
+        self.gate = None
+
+        effective_in_dim = in_dim
+        if self.arch == "gated":
+            if self.audio_dim <= 0 or self.text_dim <= 0:
+                raise ValueError("fusion_arch=gated requires audio_dim>0 and text_dim>0")
+            self.gate = nn.Sequential(
+                nn.Linear(self.audio_dim, gate_hidden_size),
+                nn.ReLU(),
+                nn.Linear(gate_hidden_size, self.text_dim),
+            )
+            effective_in_dim = self.audio_dim + self.text_dim
+
         if hidden_size <= 0:
-            self.net = nn.Linear(in_dim, out_dim)
+            self.net = nn.Linear(effective_in_dim, out_dim)
         else:
             self.net = nn.Sequential(
-                nn.Linear(in_dim, hidden_size),
+                nn.Linear(effective_in_dim, hidden_size),
                 nn.ReLU(),
                 nn.Dropout(dropout),
                 nn.Linear(hidden_size, out_dim),
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.gate is not None:
+            audio = x[:, : self.audio_dim]
+            text = x[:, self.audio_dim : self.audio_dim + self.text_dim]
+            gate = torch.sigmoid(self.gate(audio))
+            x = torch.cat([audio, text * gate], dim=-1)
         return self.net(x)
 
 
@@ -105,12 +143,20 @@ class FusionRuntime:
 
         input_dim = int(checkpoint.get("input_dim", len(self.feature_columns)))
         hidden_size = int(checkpoint.get("hidden_size", 64))
+        fusion_arch = str(checkpoint.get("fusion_arch", "mlp"))
+        audio_dim = int(checkpoint.get("audio_dim", 0))
+        text_dim = int(checkpoint.get("text_dim", 0))
+        gate_hidden_size = int(checkpoint.get("gate_hidden_size", 32))
         dropout = float(checkpoint.get("dropout", 0.2))
         self.model = FusionMLP(
             in_dim=input_dim,
             out_dim=len(self.labels),
             hidden_size=hidden_size,
             dropout=dropout,
+            arch=fusion_arch,
+            audio_dim=audio_dim,
+            text_dim=text_dim,
+            gate_hidden_size=gate_hidden_size,
         ).to(self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
@@ -169,6 +215,7 @@ class FusionRuntime:
             "confidence": top_conf,
             "temperature": float(effective_temp) if effective_temp is not None else self.temperature,
             "calibrationMode": self.calibration_mode,
+            "fusionArch": self.model.arch,
             "scores": {label: float(probs_cal[idx]) for idx, label in enumerate(self.labels)},
             "scoresUncalibrated": {label: float(probs_uncal[idx]) for idx, label in enumerate(self.labels)},
             "features": used_features,

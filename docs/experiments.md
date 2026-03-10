@@ -1,5 +1,5 @@
 ﻿# 实验记录（毕设主线）
-最后同步日期：`2026-03-03`
+最后同步日期：`2026-03-10`
 
 ## 1. 任务与数据口径
 
@@ -209,7 +209,66 @@ Exp03 回归记录（本轮收尾）：
 
 - `backend/ser-service/training/fusion/models/fusion_exp03_perlang`
 
-## 7. 验收指标达成情况（更新到 Exp03）
+## 7. Exp04 候选结果（gated/mlp，对比用，待复核）
+
+### 7.1 实际产物链与口径
+
+本轮 `exp04` 不是正式上线结论，只作为候选评估保留。
+
+实际跑通并写入 `features_exp04_full/summary.json` 的链路为：
+
+- `audio_model_zh = backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+- `text_model_zh = backend/ser-service/training/text_models/zh_sentiment_exp03/best_model`
+- `features = backend/ser-service/training/fusion/features_exp04_full/`
+- `fusion candidates = fusion_exp04_gated / fusion_exp04_mlp`
+
+同时确认：
+
+- `backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04/` 当前仍为空目录
+- 因此这轮不是“正式 Stage B exp04 完成”的结果，而是 `stageB_exp04_fast` 驱动的候选链路
+- 已塌缩的 `zh_emotion4_exp04` 不再参与 full 流程
+
+### 7.2 Stage-B fast 声学候选
+
+来源：`backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/train_report.json`
+
+| 模型 | train/val/test | best epoch | test macro-F1 | test acc | 说明 |
+|---|---:|---:|---:|---:|---|
+| stageB_exp04_fast | 26707/4139/4349 | 2 | 0.7814 | 0.7777 | 基于 `ser_zh_xlsr_stageA_exp04` 的候选 Stage-B 结果 |
+
+判断：
+
+- 这一步没有出现塌缩，验证集和测试集都保持正常 4 类分布能力
+- 但因为目录名与正式目标不一致，不能直接当正式 `stageB_exp04` 归档
+
+### 7.3 与当前最强稳定基线对比
+
+来源：
+
+- `backend/ser-service/training/fusion/models/fusion_exp03_perlang/train_report.json`
+- `backend/ser-service/training/fusion/models/fusion_exp04_gated/train_report.json`
+- `backend/ser-service/training/fusion/models/fusion_exp04_mlp/train_report.json`
+
+| run | arch | test macro-F1 | test ECE | zh macro-F1 | en macro-F1 | 结论 |
+|---|---|---:|---:|---:|---:|---|
+| fusion_exp03_perlang | mlp | 0.7030 | 0.0562 | 0.7221 | 0.6239 | 当前稳定基线 |
+| fusion_exp04_gated | gated | 0.7761 | 0.0454 | 0.8346 | 0.6219 | 整体最强候选 |
+| fusion_exp04_mlp | mlp | 0.7756 | 0.0489 | 0.8356 | 0.6195 | 次优候选 |
+
+相对 `fusion_exp03_perlang`：
+
+- `fusion_exp04_gated`: `macro-F1 +0.0731`, `ECE -0.0109`, `zhF1 +0.1126`, `enF1 -0.0021`
+- `fusion_exp04_mlp`: `macro-F1 +0.0726`, `ECE -0.0073`, `zhF1 +0.1136`, `enF1 -0.0044`
+
+### 7.4 当前裁决
+
+- `exp04` 没有出现“整体塌缩”，从整体分类与校准看，两个候选都明显强于 `exp03`
+- 但这轮仍不满足“正式上线裁决”：
+  - 实际链路使用的是 `stageB_exp04_fast`，不是目标 `stageB_exp04`
+  - `en macro-F1` 相比稳定基线有小幅回退，不满足“全指标不退步”
+- 因此仓库当前仍以 `fusion_exp03_perlang + zh_sentiment_exp03` 记为稳定默认，`exp04_gated/mlp` 只保留为候选结论
+
+## 8. 验收指标达成情况（更新到 Exp03 稳定口径）
 
 | 指标 | 目标 | Exp03 结果 | 结论 |
 |---|---|---|---|
@@ -218,13 +277,14 @@ Exp03 回归记录（本轮收尾）：
 | 分语言指标 | 必须提供 | `zh=0.7221`, `en=0.6239` | 达成 |
 | 实时压测（30并发40秒） | 不低于历史基线 | `30/30 成功` | 达成 |
 
-## 8. ESD 引用（论文必须带）
+## 9. ESD 引用（论文必须带）
 
 - Zhou et al., ICASSP 2021
 - Zhou et al., Speech Communication 2022
 
-## 9. 已知局限（当前版本）
+## 10. 已知局限（当前版本）
 
 - Exp03 融合模型的 `test ECE=0.0562`，仍高于目标 `<=0.03`。
 - 消融结果显示文本分支仍弱于语音分支：`text_only` 明显低于 `audio_only`。
 - 因此当前版本采用“中文主线 + 分语言校准 + 校准优先”的上线策略，后续重点是文本 4 类情绪对齐增强与校准优化。
+- `exp04` 虽然整体更强，但由于链路仍指向 `stageB_exp04_fast` 且 `enF1` 存在轻微回退，目前只能作为候选记录，不能替代正式稳定结论。

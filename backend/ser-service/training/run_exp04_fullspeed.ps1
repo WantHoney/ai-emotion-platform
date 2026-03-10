@@ -55,20 +55,20 @@ $mlpOutput = "training\fusion\models\fusion_exp04_mlp"
 function Invoke-Step {
     param(
         [string]$Name,
-        [string[]]$Args
+        [string[]]$CommandArgs
     )
 
     Write-Host ""
     Write-Host (">>> {0}" -f $Name)
-    Write-Host ("{0} {1}" -f $PythonExe, ($Args -join " "))
-    & $PythonExe @Args
+    Write-Host ("{0} {1}" -f $PythonExe, ($CommandArgs -join " "))
+    & $PythonExe @CommandArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Step failed: $Name"
     }
 }
 
 if (-not $SkipStageB) {
-    Invoke-Step -Name "Stage B exp04 (formal output dir)" -Args @(
+    Invoke-Step -Name "Stage B exp04 (formal output dir)" -CommandArgs @(
         "-u",
         "training\train_wav2vec2_cls.py",
         "--train-manifest", "training\manifests\multilingual_4class_v3\train.csv",
@@ -90,7 +90,7 @@ if (-not $SkipStageB) {
 }
 
 if (-not $SkipFeatureBuild) {
-    Invoke-Step -Name "Build exp04_full features (stable zh text model)" -Args @(
+    Invoke-Step -Name "Build exp04_full features (stable zh text model)" -CommandArgs @(
         "-u",
         "training\build_fusion_features.py",
         "--train-manifest", "training\manifests\multilingual_4class_v3\train.csv",
@@ -112,7 +112,7 @@ if (-not $SkipFeatureBuild) {
 }
 
 if (-not $SkipFusion) {
-    Invoke-Step -Name "Train fusion_exp04_gated" -Args @(
+    Invoke-Step -Name "Train fusion_exp04_gated" -CommandArgs @(
         "-u",
         "training\train_late_fusion.py",
         "--train-features", "$featureOutput\train_features.csv",
@@ -135,7 +135,7 @@ if (-not $SkipFusion) {
         "--min-language-samples", "100"
     )
 
-    Invoke-Step -Name "Train fusion_exp04_mlp" -Args @(
+    Invoke-Step -Name "Train fusion_exp04_mlp" -CommandArgs @(
         "-u",
         "training\train_late_fusion.py",
         "--train-features", "$featureOutput\train_features.csv",

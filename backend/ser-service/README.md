@@ -9,23 +9,23 @@ uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
 Environment variables:
-- `SER_ENGINE` (default: `speechbrain`, optional: `hf_wav2vec2`)
+- `SER_ENGINE` (default: `hf_wav2vec2`, optional: `speechbrain`)
 - `SER_MODEL_NAME` (default: `speechbrain/emotion-recognition-wav2vec2-IEMOCAP`)
 - `SER_HF_MODEL_DIR` (used when `SER_ENGINE=hf_wav2vec2`)
-- `SER_HF_ROUTING` (default: `single`, optional: `language`)
-- `SER_HF_MODEL_DIR_EN` (used when `SER_HF_ROUTING=language`)
-- `SER_HF_MODEL_DIR_ZH` (used when `SER_HF_ROUTING=language`)
-- `SER_HF_DEFAULT_LANGUAGE` (default: `en`, optional: `zh`)
+- `SER_HF_ROUTING` (default: `language`, optional: `single`)
+- `SER_HF_MODEL_DIR_EN` (default: `./training/checkpoints/ser_multilingual_4class_exp02/best_model`, used when `SER_HF_ROUTING=language`)
+- `SER_HF_MODEL_DIR_ZH` (default: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`, used when `SER_HF_ROUTING=language`)
+- `SER_HF_DEFAULT_LANGUAGE` (default: `zh`, optional: `en`)
 - `SER_HF_DEVICE` (default: `auto`, can be `cpu` or `cuda`)
 - `TEXT_ENGINE` (default: `hf`, optional: `lexicon`)
 - `TEXT_HF_ROUTING` (default: `language`, optional: `single`)
 - `TEXT_HF_MODEL` (used when `TEXT_HF_ROUTING=single`)
 - `TEXT_HF_MODEL_EN` (default: `./text_models/en_roberta_sentiment`)
-- `TEXT_HF_MODEL_ZH` (default: `./text_models/zh_roberta_sentiment`)
+- `TEXT_HF_MODEL_ZH` (default: `./training/text_models/zh_sentiment_exp03/best_model`)
 - `TEXT_HF_DEFAULT_LANGUAGE` (default: `zh`)
 - `TEXT_HF_DEVICE` (default: follow `SER_HF_DEVICE`)
 - `FUSION_ENABLED` (default: `true`)
-- `FUSION_MODEL_DIR` (default: `./training/fusion/models/fusion_best`)
+- `FUSION_MODEL_DIR` (default: `./training/fusion/models/fusion_exp04_gated`)
 - `FUSION_DEVICE` (default: follow `SER_HF_DEVICE`)
 - `WHISPER_MODEL` (default: `small`)
 - `WHISPER_DEVICE` (default: `cpu`, can be `cuda`)
@@ -51,16 +51,28 @@ Example (HF bilingual routing):
 export SER_ENGINE=hf_wav2vec2
 export SER_HF_ROUTING=language
 export SER_HF_MODEL_DIR_EN=./training/checkpoints/ser_multilingual_4class_exp02/best_model
-export SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_casia_ft_exp01/best_model
+export SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model
 export SER_HF_DEFAULT_LANGUAGE=zh
 export SER_HF_DEVICE=cuda
 export TEXT_ENGINE=hf
 export TEXT_HF_ROUTING=language
+export TEXT_HF_MODEL_ZH=./training/text_models/zh_sentiment_exp03/best_model
 export TEXT_HF_DEVICE=cuda
 export FUSION_ENABLED=true
-export FUSION_MODEL_DIR=./training/fusion/models/fusion_best
+export FUSION_MODEL_DIR=./training/fusion/models/fusion_exp04_gated
 export FUSION_DEVICE=cuda
 ```
+
+Current engineering default:
+
+- zh audio runtime uses `ser_multilingual_xlsr_stageB_exp04_fast`
+- zh text runtime uses `zh_sentiment_exp03`
+- fusion runtime uses `fusion_exp04_gated`
+
+Archive note:
+
+- the selected engineering model is `fusion_exp04_gated`
+- the strict experiment archive still records that this chain comes from `stageB_exp04_fast`, not the empty formal `stageB_exp04` directory
 
 Download text models locally:
 

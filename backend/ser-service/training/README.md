@@ -214,9 +214,15 @@ Set environment variables before starting FastAPI service:
 ```bash
 SER_ENGINE=hf_wav2vec2
 SER_HF_MODEL_DIR_EN=./training/checkpoints/ser_multilingual_4class_exp02/best_model
-SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_esd_stageB_exp01/best_model
+SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model
 SER_HF_ROUTING=language
+SER_HF_DEFAULT_LANGUAGE=zh
 SER_HF_DEVICE=auto
+TEXT_ENGINE=hf
+TEXT_HF_ROUTING=language
+TEXT_HF_MODEL_ZH=./training/text_models/zh_sentiment_exp03/best_model
+FUSION_ENABLED=true
+FUSION_MODEL_DIR=./training/fusion/models/fusion_exp04_gated
 ```
 
 Then start service:
@@ -228,8 +234,9 @@ uvicorn app:app --host 0.0.0.0 --port 8001
 Stable production defaults for the current repo state:
 
 - Chinese text model: `./training/text_models/zh_sentiment_exp03/best_model`
-- Fusion model: `./training/fusion/models/fusion_exp03_perlang`
-- `exp04` remains candidate-only until the real `ser_multilingual_xlsr_stageB_exp04` chain is rerun and passes the non-regression gate.
+- Chinese audio model: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+- Fusion model: `./training/fusion/models/fusion_exp04_gated`
+- Engineering default is now `exp04_gated`; the formal experiment caveat is still that this chain came from `stageB_exp04_fast`, not the empty same-name `stageB_exp04` directory.
 
 ## 6. Retrain Text Branch (Chinese-domain aligned)
 
@@ -314,12 +321,12 @@ Important current-state note:
 ### 6.3 Stable vs candidate branches
 
 - Stable production path:
+  - audio zh: `training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
   - text zh: `training/text_models/zh_sentiment_exp03/best_model`
-  - fusion: `training/fusion/models/fusion_exp03_perlang`
-- Candidate path under review:
-  - fusion architectures: `fusion_exp04_gated`, `fusion_exp04_mlp`
-  - candidate feature set: `training/fusion/features_exp04_full`
-  - do not promote until the true `ser_multilingual_xlsr_stageB_exp04` rerun is complete and all gate metrics are checked.
+  - fusion: `training/fusion/models/fusion_exp04_gated`
+- Archive-only caveat:
+  - `features_exp04_full` was built from `stageB_exp04_fast`
+  - if strict paper replay is needed later, rerun the formal same-name `ser_multilingual_xlsr_stageB_exp04`
 
 ## 7. Build Multimodal Fusion Features (exp02_esd)
 
@@ -433,22 +440,27 @@ python training/run_fusion_ablation.py \
   --device cuda
 ```
 
-## 10. Select Production Candidate (`fusion_best`)
+## 10. Select Production Candidate
 
-After tuning, keep one stable directory for deployment and reporting.
+After tuning, keep one explicit deployment target for runtime and reporting.
 
-Current project convention:
+Current engineering convention:
 
-- best model dir: `training/fusion/models/fusion_best/`
-- model ranking files:
-  - `training/fusion/models/model_selection_exp01.csv`
-  - `training/fusion/models/model_selection_exp01.json`
+- active deployment dir: `training/fusion/models/fusion_exp04_gated/`
+- reference baseline dir: `training/fusion/models/fusion_exp03_perlang/`
+- archive note: `fusion_exp04_gated` is the engineering default, while strict paper replay must still record that the chain came from `stageB_exp04_fast`
 
 Recommended selection priority:
 
 1. highest `test_macro_f1`
 2. then lower `test_ece`
 3. then simpler/earlier checkpoint
+
+Current engineering selection:
+
+- keep using `training/fusion/models/fusion_exp04_gated`
+- keep `training/fusion/models/fusion_exp03_perlang` as the reference baseline
+- no further `exp04` retraining is required unless you need a strict archive/paper rerun
 
 ## 11. ESD Citations (required)
 

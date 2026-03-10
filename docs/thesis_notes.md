@@ -1,5 +1,5 @@
 ﻿# 论文技术要点备忘
-最后同步日期：`2026-03-03`
+最后同步日期：`2026-03-10`
 
 ## 1. 题目与研究边界
 
@@ -46,14 +46,16 @@
 - 实时压测证据：`docs/figures/realtime_stress_exp01.md`
 - 实时压测复测：`docs/figures/realtime_stress_exp02.md`
 
-## 5. 当前可写结论（更新到 Exp03）
+## 5. 当前可写结论（工程默认更新到 Exp04 gated）
 
 - Exp01 融合测试：`macro-F1=0.6317`, `ECE=0.0250`。
 - Exp03 融合主候选（per-language calibrated）：`macro-F1=0.7030`, `ECE=0.0562`。
 - Exp03 分语言指标：`zh F1=0.7221`, `en F1=0.6239`。
 - Exp03 消融：`audio_only(F1=0.7049, ECE=0.0502)` 略优于 `fusion(F1=0.7030, ECE=0.0562)`。
 - Exp03 校准对比：`vector_scaling` 虽提升 F1（`0.7129`）但 ECE 恶化（`0.1297`），不满足上线约束。
-- 因此上线选择 `fusion_exp03_perlang`，并将“文本分支 4 类对齐增强”作为后续优化方向。
+- Exp04 gated（工程最终使用模型）：`macro-F1=0.7761`, `ECE=0.0454`, `zh F1=0.8346`, `en F1=0.6219`。
+- 工程最终选择 `fusion_exp04_gated`，因为整体 F1、ECE 和中文主场景能力都明显优于 `fusion_exp03_perlang`。
+- 论文/严格实验备注：该链路来自 `stageB_exp04_fast -> features_exp04_full -> fusion_exp04_gated`，英文侧 `en F1` 有轻微回退，因此正式归档时要保留这一风险说明。
 
 ## 5.1 已实现的实验能力（可直接写方法章节）
 
@@ -82,9 +84,9 @@
 
 ## 7.1 下一步优化项（可放展望）
 
-- 文本分支做 4 类情绪对齐训练（`ANG/HAP/NEU/SAD`），减少文本模态噪声。
-- 优先优化分语言校准（per-language calibration），目标进一步压低 ECE。
-- 在保证 ECE 的前提下再追求融合 F1 提升，维持“风险预警场景校准优先”的路线。
+- 若论文需要严格同名复现实验，可补跑正式 `ser_multilingual_xlsr_stageB_exp04`。
+- 英文侧小幅回退仍值得单独分析，后续可围绕 `en F1` 做有针对性的再平衡。
+- 继续优先优化分语言校准，在维持当前 F1 的同时进一步压低 ECE。
 
 ## 8. ESD 引用（中文语音增强实验）
 

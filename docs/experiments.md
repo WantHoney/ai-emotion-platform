@@ -266,15 +266,31 @@ Exp03 回归记录（本轮收尾）：
 - 但这轮仍不满足“正式上线裁决”：
   - 实际链路使用的是 `stageB_exp04_fast`，不是目标 `stageB_exp04`
   - `en macro-F1` 相比稳定基线有小幅回退，不满足“全指标不退步”
-- 因此仓库当前仍以 `fusion_exp03_perlang + zh_sentiment_exp03` 记为稳定默认，`exp04_gated/mlp` 只保留为候选结论
+- 因此结论分成两条：
+  - 工程最终使用模型：`fusion_exp04_gated + zh_sentiment_exp03 + ser_multilingual_xlsr_stageB_exp04_fast`
+  - 论文/严格实验归档：仍需注明该链路来自 `stageB_exp04_fast`，不是正式同名 `stageB_exp04`
 
-## 8. 验收指标达成情况（更新到 Exp03 稳定口径）
+### 7.5 工程最终模型选择
 
-| 指标 | 目标 | Exp03 结果 | 结论 |
+最终工程选择：
+
+- zh audio：`backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+- zh text：`backend/ser-service/training/text_models/zh_sentiment_exp03/best_model`
+- fusion：`backend/ser-service/training/fusion/models/fusion_exp04_gated/`
+
+工程选择理由：
+
+- 整体指标显著优于 `fusion_exp03_perlang`
+- `ECE` 也同步下降，更适合风险预警场景
+- 中文主场景收益非常明显，且收益幅度远大于英文侧轻微回退
+
+## 8. 验收指标达成情况（工程最终口径）
+
+| 指标 | 目标 | 工程最终结果 | 结论 |
 |---|---|---|---|
-| 融合 test macro-F1 | `>= 0.64` | `0.7030` | 达成 |
-| 融合 test ECE | `<= 0.03` | `0.0562` | 未达成 |
-| 分语言指标 | 必须提供 | `zh=0.7221`, `en=0.6239` | 达成 |
+| 融合 test macro-F1 | `>= 0.64` | `0.7761` | 达成 |
+| 融合 test ECE | `<= 0.03` | `0.0454` | 未达成 |
+| 分语言指标 | 必须提供 | `zh=0.8346`, `en=0.6219` | 达成 |
 | 实时压测（30并发40秒） | 不低于历史基线 | `30/30 成功` | 达成 |
 
 ## 9. ESD 引用（论文必须带）
@@ -284,7 +300,7 @@ Exp03 回归记录（本轮收尾）：
 
 ## 10. 已知局限（当前版本）
 
-- Exp03 融合模型的 `test ECE=0.0562`，仍高于目标 `<=0.03`。
-- 消融结果显示文本分支仍弱于语音分支：`text_only` 明显低于 `audio_only`。
-- 因此当前版本采用“中文主线 + 分语言校准 + 校准优先”的上线策略，后续重点是文本 4 类情绪对齐增强与校准优化。
-- `exp04` 虽然整体更强，但由于链路仍指向 `stageB_exp04_fast` 且 `enF1` 存在轻微回退，目前只能作为候选记录，不能替代正式稳定结论。
+- 工程最终模型 `fusion_exp04_gated` 的 `test ECE=0.0454`，仍高于目标 `<=0.03`。
+- `exp04` 工程链路来自 `stageB_exp04_fast`，不是正式同名 `stageB_exp04`，论文归档时必须写明。
+- 英文侧 `enF1` 相比 `fusion_exp03_perlang` 存在轻微回退，需要在答辩/报告中说明取舍。
+- 文本分支仍不是主增益来源，后续重点依然是校准优化与跨语言均衡。

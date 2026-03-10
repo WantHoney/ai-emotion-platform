@@ -36,10 +36,10 @@ function Set-DefaultEnv {
 }
 
 $defaultSerModelEn = Join-Path $serDir "training\checkpoints\ser_multilingual_4class_exp02\best_model"
-$defaultSerModelZh = Join-Path $serDir "training\checkpoints\ser_multilingual_esd_stageB_exp01\best_model"
+$defaultSerModelZh = Join-Path $serDir "training\checkpoints\ser_multilingual_xlsr_stageB_exp04_fast\best_model"
 $defaultTextModelEn = Join-Path $serDir "text_models\en_roberta_sentiment"
 $defaultTextModelZh = Join-Path $serDir "training\text_models\zh_sentiment_exp03\best_model"
-$defaultFusionModel = Join-Path $serDir "training\fusion\models\fusion_exp03_perlang"
+$defaultFusionModel = Join-Path $serDir "training\fusion\models\fusion_exp04_gated"
 
 Set-DefaultEnv -Name "SER_ENGINE" -Value "hf_wav2vec2"
 Set-DefaultEnv -Name "SER_HF_ROUTING" -Value "language"

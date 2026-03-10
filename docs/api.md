@@ -7,12 +7,14 @@
 默认运行口径（中文主系统）：
 - SER：`hf_wav2vec2`，`SER_HF_ROUTING=language`，`SER_HF_DEFAULT_LANGUAGE=zh`
 - 文本：`TEXT_ENGINE=hf`，`TEXT_HF_ROUTING=language`，`TEXT_HF_DEFAULT_LANGUAGE=zh`
-- 融合：`FUSION_ENABLED=true`，默认模型目录 `training/fusion/models/fusion_exp03_perlang`
+- 融合：`FUSION_ENABLED=true`，默认模型目录 `training/fusion/models/fusion_exp04_gated`
 
-当前上线默认仍按稳定链路记录：
+当前工程上线默认链路：
 - 中文文本模型：`training/text_models/zh_sentiment_exp03/best_model`
-- 融合模型：`training/fusion/models/fusion_exp03_perlang`
-- `exp04` 的 `gated/mlp` 结果仅作为候选对比，不作为正式上线口径
+- 中文语音模型：`training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+- 融合模型：`training/fusion/models/fusion_exp04_gated`
+- 工程默认已经切到 `exp04_gated`
+- 论文/严格实验归档仍需保留“来自 `stageB_exp04_fast`”的说明
 
 ## 1. 健康与系统
 - `GET /api/health`
@@ -218,7 +220,7 @@
 
 - `fusionArch`: 当前融合结构，典型值为 `mlp` 或 `gated`
 
-现阶段默认线上目录仍为 `training/fusion/models/fusion_exp03_perlang`，因此默认结构仍应按该目录实际配置解读。
+现阶段工程默认线上目录为 `training/fusion/models/fusion_exp04_gated`，默认结构应按 `gated` 解读。
 
 ## 8. 同步原则
 - 文档优先作为目录与字段契约，行为细节以代码与运行响应为准。

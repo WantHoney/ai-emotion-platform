@@ -1,5 +1,5 @@
 ﻿# 论文图表源数据
-最后同步日期：`2026-03-01`
+最后同步日期：`2026-03-10`
 
 本目录用于保存论文图表的可复现实验数据源，避免手工抄写带来的口径漂移。
 
@@ -66,3 +66,16 @@ python scripts/export_experiment_assets.py
 - 图 6：`model_selection_exp03.csv` 绘制 `perlang`、`vector`、`shrink` 模型选择。
 - 图 7：`calibration_metrics_exp03.csv` 绘制校准策略前后对比（NLL/Brier/ECE）。
 - 图 8：`text_shrink_exp03.csv` 绘制低改动文本缩放实验结论。
+
+## 6. 当前工程最终模型参考源
+
+当前工程最终模型选用 `fusion_exp04_gated`，关键报告来源：
+
+- `training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/train_report.json`
+- `training/fusion/features_exp04_full/summary.json`
+- `training/fusion/models/fusion_exp04_gated/train_report.json`
+
+归档说明：
+
+- 该工程选择可直接用于系统默认模型
+- 论文/严格实验口径仍需注明它来自 `stageB_exp04_fast`，不是正式同名 `stageB_exp04`

@@ -129,13 +129,24 @@ Default one-command runtime is the Chinese-main pipeline:
 - `SER_HF_ROUTING=language`
 - `SER_HF_DEFAULT_LANGUAGE=zh`
 - `SER_HF_MODEL_DIR_EN=backend/ser-service/training/checkpoints/ser_multilingual_4class_exp02/best_model`
-- `SER_HF_MODEL_DIR_ZH=backend/ser-service/training/checkpoints/ser_multilingual_esd_stageB_exp01/best_model`
+- `SER_HF_MODEL_DIR_ZH=backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
 - `TEXT_ENGINE=hf`
 - `TEXT_HF_ROUTING=language`
 - `TEXT_HF_DEFAULT_LANGUAGE=zh`
 - `TEXT_HF_MODEL_ZH=backend/ser-service/training/text_models/zh_sentiment_exp03/best_model`
 - `FUSION_ENABLED=true`
-- `FUSION_MODEL_DIR=backend/ser-service/training/fusion/models/fusion_exp03_perlang`
+- `FUSION_MODEL_DIR=backend/ser-service/training/fusion/models/fusion_exp04_gated`
+
+Engineering default now uses the strongest currently validated chain:
+
+- zh audio runtime: `ser_multilingual_xlsr_stageB_exp04_fast`
+- zh text runtime: `zh_sentiment_exp03`
+- fusion runtime: `fusion_exp04_gated`
+
+Experiment caveat:
+
+- this is the final engineering choice for the current repo
+- the strict paper/archive note remains that `exp04_gated` was built from `stageB_exp04_fast`, not the formal same-name `stageB_exp04` directory
 
 All defaults can be overridden by external environment variables.
 

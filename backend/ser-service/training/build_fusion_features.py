@@ -77,7 +77,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--audio-model-en", required=True)
     parser.add_argument("--audio-model-zh", required=True)
     parser.add_argument("--text-model-en", default="./text_models/en_roberta_sentiment")
-    parser.add_argument("--text-model-zh", default="./text_models/zh_roberta_sentiment")
+    parser.add_argument("--text-model-zh", default="./training/text_models/zh_sentiment_exp03/best_model")
     parser.add_argument("--sample-rate", type=int, default=16000)
     parser.add_argument("--audio-device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--text-device", default="auto", choices=["auto", "cpu", "cuda"])

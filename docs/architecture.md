@@ -1,5 +1,5 @@
 ﻿# 架构与模块说明（与代码同步）
-最后同步日期：`2026-03-03`
+最后同步日期：`2026-03-10`
 
 ## 1. 总体拓扑
 
@@ -21,7 +21,11 @@ MySQL
 - 默认是本地模型链路（不开外部大模型即可运行）。
 - 外部 LLM（如 OpenRouter）仅作可选增强，不是主路径。
 - 默认启动口径为“中文主系统”：`zh` 主、`en` 辅。
-- 默认融合候选模型：`training/fusion/models/fusion_exp03_perlang`。
+- 工程默认链路：
+  - zh audio：`training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast`
+  - zh text：`training/text_models/zh_sentiment_exp03`
+  - fusion：`training/fusion/models/fusion_exp04_gated`
+- 论文/严格实验归档仍保留 `stageB_exp04_fast` 的链路说明。
 
 ## 2. 指标口径说明（答辩统一）
 

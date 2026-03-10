@@ -28,10 +28,10 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 DEFAULT_SER_MODEL_EN="$SER_DIR/training/checkpoints/ser_multilingual_4class_exp02/best_model"
-DEFAULT_SER_MODEL_ZH="$SER_DIR/training/checkpoints/ser_multilingual_esd_stageB_exp01/best_model"
+DEFAULT_SER_MODEL_ZH="$SER_DIR/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model"
 DEFAULT_TEXT_MODEL_EN="$SER_DIR/text_models/en_roberta_sentiment"
 DEFAULT_TEXT_MODEL_ZH="$SER_DIR/training/text_models/zh_sentiment_exp03/best_model"
-DEFAULT_FUSION_MODEL="$SER_DIR/training/fusion/models/fusion_exp03_perlang"
+DEFAULT_FUSION_MODEL="$SER_DIR/training/fusion/models/fusion_exp04_gated"
 
 : "${SER_ENGINE:=hf_wav2vec2}"
 : "${SER_HF_ROUTING:=language}"

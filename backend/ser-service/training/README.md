@@ -393,6 +393,19 @@ python training/train_late_fusion.py \
   --device cuda
 ```
 
+Windows helper for the formal rerun chain:
+
+- `training/run_exp04_fullspeed.ps1`
+- defaults are tuned for an `8 GB` laptop GPU + `32` logical CPU threads:
+  - `Stage B`: `--fp16`, `--batch-size 8`, `--num-workers 8`
+  - feature build: `--whisper-cpu-threads 24`
+  - fusion: keep the documented hyperparameters for comparability
+- the script runs the full sequence:
+  - `ser_multilingual_xlsr_stageB_exp04`
+  - `features_exp04_full`
+  - `fusion_exp04_gated`
+  - `fusion_exp04_mlp`
+
 Calibration modes:
 
 - `global_temperature` (legacy)

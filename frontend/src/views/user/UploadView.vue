@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
           <LoreCard title="实时录音" subtitle="直接调用浏览器麦克风进行采集。">
             <el-alert
               v-if="!recorderSupported"
-              title="当前浏览器不支持 MediaRecorder，请改用文件上传模式。"
+              title="当前浏览器不支持网页录音，请改用文件上传模式。"
               type="warning"
               :closable="false"
               show-icon
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <p v-if="recordedFile" class="recording-file">
-              已就绪：{{ recordedFile.name }} ({{ recordedFile.type || 'audio/*' }})
+              已就绪：{{ recordedFile.name }}（{{ recordedFile.type || '音频文件' }}）
             </p>
           </LoreCard>
 

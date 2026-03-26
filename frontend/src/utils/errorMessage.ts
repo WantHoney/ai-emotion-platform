@@ -2,7 +2,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null
 }
 
-export const toErrorMessage = (value: unknown, fallback = 'Request failed'): string => {
+export const toErrorMessage = (value: unknown, fallback = '请求失败，请稍后重试。'): string => {
   if (typeof value === 'string') {
     const message = value.trim()
     return message || fallback

@@ -9,6 +9,13 @@ import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import {
+  TASK_STATUS_LABELS,
+  TRACE_ID_LABEL,
+  formatSortOrder,
+  formatTaskSortBy,
+  formatTaskStatus,
+} from '@/utils/uiText'
 
 const router = useRouter()
 const loading = ref(false)
@@ -18,6 +25,10 @@ const errorState = ref<ErrorStatePayload | null>(null)
 let refreshTimer: number | null = null
 let isRequestInFlight = false
 let queuedLoadMode: 'silent' | 'normal' | null = null
+
+const statusOptions: Array<{ label: string; value: TaskStatus }> = Object.entries(TASK_STATUS_LABELS).map(
+  ([value, label]) => ({ label, value: value as TaskStatus }),
+)
 
 const query = reactive({
   page: 1,
@@ -60,7 +71,7 @@ const loadTasks = async (options: { silent?: boolean } = {}) => {
     }
   } catch (error) {
     if (!silent) {
-      errorState.value = parseError(error, 'Task list load failed')
+      errorState.value = parseError(error, '任务列表加载失败')
     }
   } finally {
     if (!silent) {
@@ -76,14 +87,14 @@ const loadTasks = async (options: { silent?: boolean } = {}) => {
   }
 }
 
-const displayTaskNo = (row: AnalysisTask) => row.taskNo || `TASK-${row.id}`
+const displayTaskNo = (row: AnalysisTask) => row.taskNo || `任务-${row.id}`
 
 const copyTaskNo = async (row: AnalysisTask) => {
   try {
     await navigator.clipboard.writeText(displayTaskNo(row))
-    ElMessage.success('Task number copied')
+    ElMessage.success('任务编号已复制')
   } catch {
-    ElMessage.warning('Copy failed, please copy manually')
+    ElMessage.warning('复制失败，请手动复制')
   }
 }
 
@@ -104,35 +115,30 @@ onUnmounted(() => {
 
 <template>
   <el-card>
-    <template #header>Task Center</template>
-    <p class="auto-refresh-tip">Auto refresh runs every 5 seconds without request re-entry.</p>
+    <template #header>任务中心</template>
+    <p class="auto-refresh-tip">列表每 5 秒自动刷新一次，处理中任务会自动追踪状态变化。</p>
 
     <el-form inline>
-      <el-form-item label="Status">
+      <el-form-item label="状态">
         <el-select v-model="query.status" clearable style="width: 140px">
-          <el-option label="PENDING" value="PENDING" />
-          <el-option label="RUNNING" value="RUNNING" />
-          <el-option label="RETRY_WAIT" value="RETRY_WAIT" />
-          <el-option label="SUCCESS" value="SUCCESS" />
-          <el-option label="FAILED" value="FAILED" />
-          <el-option label="CANCELED" value="CANCELED" />
+          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
-      <el-form-item label="Search">
-        <el-input v-model="query.keyword" placeholder="Task No / 任务ID / traceId" clearable />
+      <el-form-item label="搜索">
+        <el-input v-model="query.keyword" placeholder="任务编号 / 任务 ID / 链路 ID" clearable />
       </el-form-item>
-      <el-form-item label="Sort">
+      <el-form-item label="排序">
         <el-select v-model="query.sortBy" style="width: 140px">
-          <el-option label="Created" value="createdAt" />
-          <el-option label="Updated" value="updatedAt" />
-          <el-option label="Status" value="status" />
+          <el-option :label="formatTaskSortBy('createdAt')" value="createdAt" />
+          <el-option :label="formatTaskSortBy('updatedAt')" value="updatedAt" />
+          <el-option :label="formatTaskSortBy('status')" value="status" />
         </el-select>
         <el-select v-model="query.sortOrder" style="width: 100px; margin-left: 8px">
-          <el-option label="Desc" value="desc" />
-          <el-option label="Asc" value="asc" />
+          <el-option :label="formatSortOrder('desc')" value="desc" />
+          <el-option :label="formatSortOrder('asc')" value="asc" />
         </el-select>
       </el-form-item>
-      <el-button type="primary" @click="loadTasks">Query</el-button>
+      <el-button type="primary" @click="loadTasks">查询</el-button>
     </el-form>
 
     <LoadingState v-if="loading" />
@@ -145,32 +151,34 @@ onUnmounted(() => {
     />
     <EmptyState
       v-else-if="rows.length === 0"
-      title="No Tasks"
-      description="No task records under current filter conditions."
-      action-text="Refresh"
+      title="暂无任务"
+      description="当前筛选条件下没有找到任务记录。"
+      action-text="刷新列表"
       @action="loadTasks"
     />
     <template v-else>
       <el-table :data="rows" border>
-        <el-table-column label="Task No" min-width="260">
+        <el-table-column label="任务编号" min-width="260">
           <template #default="scope">
             <div class="task-no-cell">
               <div class="task-no-row">
                 <strong>{{ displayTaskNo(scope.row) }}</strong>
-                <el-button link type="primary" :icon="DocumentCopy" @click="copyTaskNo(scope.row)">Copy</el-button>
+                <el-button link type="primary" :icon="DocumentCopy" @click="copyTaskNo(scope.row)">复制</el-button>
               </div>
-              <span>任务ID: {{ scope.row.id }}</span>
+              <span>任务 ID：{{ scope.row.id }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="Status" width="120" />
-        <el-table-column prop="attemptCount" label="Retries" width="100" />
-        <el-table-column prop="traceId" label="traceId" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="updatedAt" label="Updated At" min-width="180" />
-        <el-table-column label="Actions" width="200">
+        <el-table-column label="状态" width="120">
+          <template #default="scope">{{ formatTaskStatus(scope.row.status) }}</template>
+        </el-table-column>
+        <el-table-column prop="attemptCount" label="重试次数" width="100" />
+        <el-table-column prop="traceId" :label="TRACE_ID_LABEL" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
+        <el-table-column label="操作" width="200">
           <template #default="scope">
-            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">Detail</el-button>
-            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}/timeline`)">Timeline</el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}`)">查看详情</el-button>
+            <el-button link type="primary" @click="router.push(`/app/tasks/${scope.row.id}/timeline`)">查看时间线</el-button>
           </template>
         </el-table-column>
       </el-table>

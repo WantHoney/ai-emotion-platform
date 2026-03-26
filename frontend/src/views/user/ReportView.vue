@@ -2,17 +2,18 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getReportDetail, type ReportDetail } from '@/api/report'
 import { getHomeContent, type HomePayload } from '@/api/home'
+import { getReportDetail, type ReportDetail } from '@/api/report'
 import { getResult, type AnalysisTaskResultDetail, type RiskAssessmentPayload } from '@/api/task'
-import SectionBlock from '@/components/ui/SectionBlock.vue'
-import LoreCard from '@/components/ui/LoreCard.vue'
-import KpiGrid, { type KpiItem } from '@/components/ui/KpiGrid.vue'
-import BadgeTag from '@/components/ui/BadgeTag.vue'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
+import BadgeTag from '@/components/ui/BadgeTag.vue'
+import KpiGrid, { type KpiItem } from '@/components/ui/KpiGrid.vue'
+import LoreCard from '@/components/ui/LoreCard.vue'
+import SectionBlock from '@/components/ui/SectionBlock.vue'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { PSI_LABEL, SER_LABEL, TEXT_NEG_LABEL, formatEmotion, formatRiskLevel } from '@/utils/uiText'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,6 +40,8 @@ const toNumber = (value: unknown): number | undefined => {
   return undefined
 }
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
 const extractFusionConfidence = (rawJson?: string | null): number | undefined => {
   if (!rawJson) return undefined
   try {
@@ -55,11 +58,7 @@ const extractFusionConfidence = (rawJson?: string | null): number | undefined =>
   return undefined
 }
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
-
-const riskAssessment = computed<RiskAssessmentPayload | null>(() => {
-  return taskResult.value?.riskAssessment ?? null
-})
+const riskAssessment = computed<RiskAssessmentPayload | null>(() => taskResult.value?.riskAssessment ?? null)
 
 const normalizedRiskScore = computed(() => {
   const score = riskAssessment.value?.risk_score ?? report.value?.riskScore
@@ -75,41 +74,11 @@ const confidencePercent = computed(() => {
   return `${normalized.toFixed(2)}%`
 })
 
-const confidenceGaugeValue = computed(() => {
-  const fusionConfidence = extractFusionConfidence(taskResult.value?.rawJson)
-  const confidence = fusionConfidence ?? report.value?.confidence ?? taskResult.value?.overallConfidence
-  if (confidence == null || Number.isNaN(confidence)) return 0
-  const normalized = confidence <= 1 ? confidence * 100 : confidence
-  return clamp(normalized, 0, 100)
-})
-
-const riskGaugeValue = computed(() => clamp(normalizedRiskScore.value, 0, 100))
-const textGaugeValue = computed(() => clamp(textRiskScore.value, 0, 100))
-
-const confidenceGaugeColor = computed(() => {
-  if (confidenceGaugeValue.value >= 80) return '#67c23a'
-  if (confidenceGaugeValue.value >= 60) return '#e6a23c'
-  return '#f56c6c'
-})
-
-const riskGaugeColor = computed(() => {
-  if (riskGaugeValue.value >= 70) return '#f56c6c'
-  if (riskGaugeValue.value >= 40) return '#e6a23c'
-  return '#67c23a'
-})
-
-const textGaugeColor = computed(() => {
-  if (textGaugeValue.value >= 60) return '#f56c6c'
-  if (textGaugeValue.value >= 30) return '#e6a23c'
-  return '#409eff'
-})
-
-const riskLevel = computed(() => {
-  return riskAssessment.value?.risk_level ?? report.value?.riskLevel ?? ''
-})
+const rawRiskLevel = computed(() => riskAssessment.value?.risk_level ?? report.value?.riskLevel ?? '')
+const riskLevel = computed(() => formatRiskLevel(rawRiskLevel.value))
 
 const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
-  const level = riskLevel.value.toLowerCase()
+  const level = rawRiskLevel.value.toLowerCase()
   if (level.includes('high')) return 'high'
   if (level.includes('attention') || level.includes('medium')) return 'medium'
   if (level.includes('low') || level.includes('normal')) return 'low'
@@ -118,33 +87,17 @@ const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
 
 const formattedCreatedAt = computed(() => {
   const value = report.value?.createdAt
-  if (!value) return '鏈煡'
+  if (!value) return '未知'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
-})
-
-const voiceRiskScore = computed(() => {
-  const source = riskAssessment.value
-  if (!source) return 0
-  return (
-    100 *
-    (WEIGHT_SAD * source.p_sad + WEIGHT_ANGRY * source.p_angry + WEIGHT_VAR_CONF * source.var_conf)
-  )
-})
-
-const textRiskScore = computed(() => {
-  const source = riskAssessment.value
-  if (!source) return 0
-  return 100 * source.text_neg
 })
 
 const parsedRawJson = computed<Record<string, unknown> | null>(() => {
   const raw = taskResult.value?.rawJson
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    return parsed
+    return JSON.parse(raw) as Record<string, unknown>
   } catch {
     return null
   }
@@ -164,25 +117,25 @@ const textFusionItems = computed<KpiItem[]>(() => {
 
   return [
     {
-      label: '词典负向分',
+      label: '词典负向值',
       value: lexiconScore != null ? lexiconScore.toFixed(4) : '--',
       helper: '词典情绪负向得分',
     },
     {
-      label: '模型负向分',
+      label: '模型负向值',
       value: modelScore != null ? modelScore.toFixed(4) : '--',
       helper: '文本模型负向得分',
     },
     {
-      label: '融合负向分',
+      label: '融合后负向值',
       value: fusedScore != null ? fusedScore.toFixed(4) : '--',
-      helper: '融合后 text_neg',
+      helper: `融合后${TEXT_NEG_LABEL}`,
     },
     {
       label: '融合权重',
       value:
         lexiconWeight != null && modelWeight != null
-          ? `${lexiconWeight.toFixed(2)}:${modelWeight.toFixed(2)}`
+          ? `${lexiconWeight.toFixed(2)} : ${modelWeight.toFixed(2)}`
           : '--',
       helper: '词典权重 : 模型权重',
     },
@@ -215,7 +168,7 @@ const serProbabilityRings = computed(() => {
   return [
     {
       key: 'happy',
-      label: '喜概率',
+      label: '高兴概率',
       percentage: Number(toPercent(serFusionInfo.value.scoreHappy).toFixed(1)),
       valueText: toDisplay(serFusionInfo.value.scoreHappy),
       color: '#67c23a',
@@ -229,14 +182,14 @@ const serProbabilityRings = computed(() => {
     },
     {
       key: 'angry',
-      label: '怒概率',
+      label: '愤怒概率',
       percentage: Number(toPercent(serFusionInfo.value.scoreAngry).toFixed(1)),
       valueText: toDisplay(serFusionInfo.value.scoreAngry),
       color: '#f56c6c',
     },
     {
       key: 'neutral',
-      label: '中性概率',
+      label: '平静概率',
       percentage: Number(toPercent(serFusionInfo.value.scoreNeutral).toFixed(1)),
       valueText: toDisplay(serFusionInfo.value.scoreNeutral),
       color: '#e6a23c',
@@ -246,25 +199,24 @@ const serProbabilityRings = computed(() => {
 
 const serFusionItems = computed<KpiItem[]>(() => [
   {
-    label: 'SER融合就绪',
-    value: serFusionInfo.value.ready ? '是' : serFusionInfo.value.enabled ? '否' : '已禁用',
-    helper: '在线融合运行状态',
+    label: '语音融合状态',
+    value: serFusionInfo.value.ready ? '已就绪' : serFusionInfo.value.enabled ? '处理中' : '未启用',
+    helper: '在线语音融合运行状态',
   },
   {
-    label: 'SER融合标签',
-    value: serFusionInfo.value.label ?? '--',
-    helper: '融合后预测类别',
+    label: '语音融合标签',
+    value: formatEmotion(serFusionInfo.value.label),
+    helper: '融合后的语音情绪结果',
   },
   {
-    label: 'SER融合置信度',
-    value:
-      serFusionInfo.value.confidence != null ? `${(serFusionInfo.value.confidence * 100).toFixed(2)}%` : '--',
-    helper: '校准后的置信度',
+    label: '语音融合置信度',
+    value: serFusionInfo.value.confidence != null ? `${(serFusionInfo.value.confidence * 100).toFixed(2)}%` : '--',
+    helper: '融合后的语音置信度',
   },
   {
-    label: 'SER融合错误',
-    value: serFusionInfo.value.error ? '有' : '无',
-    helper: serFusionInfo.value.error ?? '无',
+    label: '语音融合异常',
+    value: serFusionInfo.value.error ? '有异常' : '正常',
+    helper: serFusionInfo.value.error ?? '暂无异常',
   },
 ])
 
@@ -278,10 +230,10 @@ const psiContributionRows = computed(() => {
   const textPart = 100 * WEIGHT_TEXT_IN_PSI * source.text_neg
 
   const rows = [
-    { key: 'sad', label: '悲伤贡献', value: sadPart, helper: '0.6*100*0.45*p_sad' },
-    { key: 'angry', label: '愤怒贡献', value: angryPart, helper: '0.6*100*0.25*p_angry' },
-    { key: 'var', label: '波动贡献', value: varPart, helper: '0.6*100*0.10*var_conf' },
-    { key: 'text', label: '文本贡献', value: textPart, helper: '0.4*100*text_neg' },
+    { key: 'sad', label: '悲伤贡献', value: sadPart, helper: '语音权重 × 悲伤概率' },
+    { key: 'angry', label: '愤怒贡献', value: angryPart, helper: '语音权重 × 愤怒概率' },
+    { key: 'var', label: '波动贡献', value: varPart, helper: '语音权重 × 波动系数' },
+    { key: 'text', label: '文本贡献', value: textPart, helper: '文本权重 × 文本负向值' },
   ]
 
   const total = Math.max(normalizedRiskScore.value, 0.0001)
@@ -294,10 +246,10 @@ const psiContributionRows = computed(() => {
 const kpiItems = computed<KpiItem[]>(() => {
   if (!report.value) return []
   return [
-    { label: '综合情绪', value: report.value.overall || '-' },
+    { label: '综合情绪', value: formatEmotion(report.value.overall) },
     { label: '置信度', value: confidencePercent.value },
-    { label: '风险分数', value: `${normalizedRiskScore.value.toFixed(0)}/100` },
-    { label: '任务编号', value: report.value.taskNo || `TASK-${report.value.taskId}` },
+    { label: PSI_LABEL, value: `${normalizedRiskScore.value.toFixed(0)}/100` },
+    { label: '任务编号', value: report.value.taskNo || `任务-${report.value.taskId}` },
   ]
 })
 
@@ -308,16 +260,16 @@ const displaySegments = computed(() => {
 
 const adviceBuckets = computed(() => {
   const fallbackByRisk = {
-    instant: ['先暂停 2-3 分钟，进行深呼吸与地面化练习。'],
-    longTerm: ['保持规律作息，并每周进行一次情绪自检。'],
-    resource: ['如有持续困扰，联系学校或本地心理支持资源。'],
+    instant: ['先暂停 2 到 3 分钟，做几次缓慢深呼吸，让情绪先稳定下来。'],
+    longTerm: ['保持规律作息，并每周记录一次情绪变化，观察波动趋势。'],
+    resource: ['如果困扰持续存在，建议联系学校或本地心理支持资源。'],
   }
 
   const source = riskAssessment.value?.advice_text?.trim() || report.value?.adviceText?.trim()
   if (!source) return fallbackByRisk
 
   const items = source
-    .split(/[\n;；。]+/)
+    .split(/[\n;；]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 
@@ -332,23 +284,24 @@ const contributionFactors = computed(() => {
   const factors: string[] = []
   if (!report.value) return factors
 
-  factors.push(`综合情绪：${report.value.overall ?? '未知'}`)
-  factors.push(`PSI：${normalizedRiskScore.value.toFixed(2)}`)
+  factors.push(`综合情绪：${formatEmotion(report.value.overall)}`)
+  factors.push(`${PSI_LABEL}：${normalizedRiskScore.value.toFixed(2)}`)
   if (riskAssessment.value) {
     factors.push(
-      `风险因子：p_sad=${riskAssessment.value.p_sad}, p_angry=${riskAssessment.value.p_angry}, var_conf=${riskAssessment.value.var_conf}, text_neg=${riskAssessment.value.text_neg}`,
+      `风险因子：悲伤概率 ${riskAssessment.value.p_sad}，愤怒概率 ${riskAssessment.value.p_angry}，波动系数 ${riskAssessment.value.var_conf}，文本负向值 ${riskAssessment.value.text_neg}`,
     )
   }
 
   const topSegments = [...displaySegments.value].sort((a, b) => b.confidence - a.confidence).slice(0, 3)
   topSegments.forEach((segment, index) => {
     factors.push(
-      `第${index + 1}条：${segment.emotion}，置信度 ${(segment.confidence * 100).toFixed(1)}%，窗口 ${segment.start}ms-${segment.end}ms`,
+      `片段 ${index + 1}：${formatEmotion(segment.emotion)}，置信度 ${(segment.confidence * 100).toFixed(1)}%，时间窗 ${segment.start}ms - ${segment.end}ms`,
     )
   })
 
   return factors
 })
+
 const openArticle = (url?: string) => {
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -375,7 +328,7 @@ const loadReport = async () => {
     homeContent.value = homeResp
     taskResult.value = resultResp?.data ?? null
   } catch (error) {
-    errorState.value = parseError(error, '鎶ュ憡璇︽儏鍔犺浇澶辫触')
+    errorState.value = parseError(error, '报告详情加载失败')
   } finally {
     loading.value = false
   }
@@ -399,26 +352,26 @@ onMounted(() => {
     <EmptyState
       v-else-if="!report"
       title="报告不可用"
-      description="当前暂时无法显示该报告。"
+      description="当前暂时无法显示这份报告。"
       action-text="重新加载"
       @action="loadReport"
     />
     <template v-else>
       <SectionBlock
         eyebrow="报告总览"
-        :title="report.reportNo || `REPORT-${report.id}`"
+        :title="report.reportNo || `报告-${report.id}`"
         description="多模态情绪分析结果汇总。"
       >
         <div class="top-meta">
-          <p>报告ID: {{ report.id }} | 任务ID: {{ report.taskId }} | 生成时间: {{ formattedCreatedAt }}</p>
-          <BadgeTag :tone="riskTone" :text="riskLevel || '风险未知'" />
+          <p>报告 ID：{{ report.id }} | 任务 ID：{{ report.taskId }} | 生成时间：{{ formattedCreatedAt }}</p>
+          <BadgeTag :tone="riskTone" :text="rawRiskLevel ? riskLevel : '风险待评估'" />
         </div>
         <KpiGrid :items="kpiItems" />
       </SectionBlock>
 
       <div class="report-grid">
-        <SectionBlock title="融合看板" description="语音/文本/融合(PSI)与贡献细项。">
-          <LoreCard title="可视化总览" subtitle="SER 概率环图">
+        <SectionBlock title="融合看板" description="汇总语音、文本与心理风险指数的核心结果。">
+          <LoreCard title="可视化总览" :subtitle="`${SER_LABEL}概率环图`">
             <div class="viz-ring-grid">
               <article v-for="ring in serProbabilityRings" :key="ring.key" class="viz-ring-item">
                 <el-progress
@@ -433,14 +386,14 @@ onMounted(() => {
             </div>
           </LoreCard>
 
-          <LoreCard title="文本融合细项" subtitle="词典 + 文本模型">
+          <LoreCard title="文本融合详情" subtitle="词典与文本模型">
             <KpiGrid :items="textFusionItems" />
           </LoreCard>
-          <LoreCard title="SER 融合输出" subtitle="在线融合预测">
+          <LoreCard :title="`${SER_LABEL}输出`" subtitle="在线语音融合预测">
             <KpiGrid :items="serFusionItems" />
           </LoreCard>
 
-          <LoreCard title="PSI 贡献项">
+          <LoreCard :title="`${PSI_LABEL}贡献项`">
             <div v-if="psiContributionRows.length" class="psi-list">
               <article v-for="row in psiContributionRows" :key="row.key" class="psi-item">
                 <div class="psi-row-head">
@@ -453,11 +406,11 @@ onMounted(() => {
                 <small>{{ row.helper }}</small>
               </article>
             </div>
-            <p v-else class="muted">暂无 PSI 贡献数据。</p>
+            <p v-else class="muted">暂无心理风险指数贡献数据。</p>
           </LoreCard>
         </SectionBlock>
 
-        <SectionBlock title="建议方案" description="按干预阶段给出可执行建议。">
+        <SectionBlock title="建议方案" description="按干预阶段给出可直接执行的建议。">
           <div class="bucket-grid">
             <LoreCard title="即时行动">
               <ul>
@@ -479,21 +432,21 @@ onMounted(() => {
       </div>
 
       <div class="report-grid">
-        <SectionBlock title="可解释性" description="本次评分的关键依据。">
+        <SectionBlock title="可解释依据" description="展示本次评分的关键依据。">
           <LoreCard title="评分因素">
             <ul>
               <li v-for="item in contributionFactors" :key="item">{{ item }}</li>
             </ul>
           </LoreCard>
 
-          <LoreCard title="情绪片段" subtitle="本次记录中置信度最高的窗口">
+          <LoreCard title="情绪片段" subtitle="本次记录中置信度较高的片段">
             <div v-if="displaySegments.length" class="segment-grid">
               <article
                 v-for="(segment, index) in displaySegments"
                 :key="`${segment.start}-${segment.end}-${index}`"
                 class="segment-item"
               >
-                <strong>{{ segment.emotion }}</strong>
+                <strong>{{ formatEmotion(segment.emotion) }}</strong>
                 <span>{{ (segment.confidence * 100).toFixed(1) }}%</span>
                 <span>{{ segment.start }}ms - {{ segment.end }}ms</span>
               </article>
@@ -526,7 +479,9 @@ onMounted(() => {
 
       <div class="footer-actions">
         <el-button @click="router.push('/app/reports')">返回报告中心</el-button>
-        <el-button type="primary" plain @click="report && router.push(`/app/tasks/${report.taskId}`)">查看任务</el-button>
+        <el-button type="primary" plain @click="report && router.push(`/app/tasks/${report.taskId}`)">
+          查看关联任务
+        </el-button>
       </div>
     </template>
   </div>
@@ -727,7 +682,3 @@ ul {
   }
 }
 </style>
-
-
-
-

@@ -79,7 +79,7 @@ const roleText = computed(() => {
       <slot />
     </main>
 
-    <footer class="shell-footer">AI 语音情绪分析与心理状态预警平台</footer>
+    <footer class="shell-footer">语音情绪分析与心理状态预警平台</footer>
   </div>
 </template>
 

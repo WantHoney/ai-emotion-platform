@@ -9,6 +9,7 @@ import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
 import { useTaskPolling } from '@/composables/useTaskPolling'
 import { useTaskRealtimeStream } from '@/composables/useTaskRealtimeStream'
+import { PSI_LABEL, TRACE_ID_LABEL, formatRiskLevel, formatTaskStatus } from '@/utils/uiText'
 
 type TimelineNode = {
   key: string
@@ -16,15 +17,6 @@ type TimelineNode = {
   timestamp?: string
   type: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   detail?: string
-}
-
-const STATUS_LABEL_MAP: Record<string, string> = {
-  PENDING: '待处理',
-  RUNNING: '处理中',
-  RETRY_WAIT: '等待重试',
-  SUCCESS: '处理成功',
-  FAILED: '处理失败',
-  CANCELED: '已取消',
 }
 
 const STREAM_LABEL_MAP: Record<string, string> = {
@@ -52,14 +44,11 @@ const streamState = computed(() => realtime.state.value)
 const streamError = computed(() => realtime.errorMessage.value)
 
 const displayTaskNo = computed(
-  () => streamSnapshot.value?.taskNo || task.value?.taskNo || `TASK-${taskId.value}`,
+  () => streamSnapshot.value?.taskNo || task.value?.taskNo || `任务-${taskId.value}`,
 )
 
 const latestStatus = computed(() => streamSnapshot.value?.status ?? task.value?.status ?? 'PENDING')
-const latestStatusText = computed(() => {
-  const code = latestStatus.value
-  return `${STATUS_LABEL_MAP[code] ?? '处理中'} (${code})`
-})
+const latestStatusText = computed(() => formatTaskStatus(latestStatus.value))
 
 const flowStep = computed(() => {
   const status = latestStatus.value
@@ -129,7 +118,7 @@ const timelineNodes = computed<TimelineNode[]>(() => {
       title: '任务创建',
       timestamp: task.value.createdAt,
       type: 'primary',
-      detail: `任务已入队，当前状态：${latestStatus.value}`,
+      detail: `任务已入队，当前状态：${latestStatusText.value}`,
     })
   }
 
@@ -197,7 +186,7 @@ onMounted(() => {
         <div>
           <p class="subtitle">任务实时轨迹</p>
           <h2>任务编号 {{ displayTaskNo }}</h2>
-          <p class="tip">任务ID: {{ taskId }}</p>
+          <p class="tip">任务 ID：{{ taskId }}</p>
         </div>
         <div class="header-actions">
           <el-tag effect="dark" type="primary">{{ latestStatusText }}</el-tag>
@@ -243,14 +232,14 @@ onMounted(() => {
         <el-row :gutter="12" class="metrics-row">
           <el-col :xs="24" :md="8">
             <el-card shadow="hover" class="metric-card">
-              <p>风险分数(PSI)</p>
+              <p>{{ PSI_LABEL }}</p>
               <h3>{{ riskSummary ? (riskSummary.riskScore * 100).toFixed(2) : '-' }}</h3>
             </el-card>
           </el-col>
           <el-col :xs="24" :md="8">
             <el-card shadow="hover" class="metric-card">
               <p>风险等级</p>
-              <h3>{{ riskSummary?.riskLevel || '-' }}</h3>
+              <h3>{{ formatRiskLevel(riskSummary?.riskLevel) }}</h3>
             </el-card>
           </el-col>
           <el-col :xs="24" :md="8">
@@ -262,7 +251,7 @@ onMounted(() => {
         </el-row>
 
         <el-card shadow="hover" class="curve-card">
-          <template #header>风险时间轴曲线</template>
+          <template #header>风险曲线</template>
           <div v-if="curveRows.length" class="chart-wrap">
             <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none" class="chart">
               <line
@@ -327,7 +316,7 @@ onMounted(() => {
             {{ streamSnapshot?.maxAttempts ?? task?.maxAttempts ?? '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="下一次执行">{{ streamSnapshot?.nextRunAt ?? task?.nextRunAt ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="Trace ID">{{ streamSnapshot?.traceId ?? task?.traceId ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="TRACE_ID_LABEL">{{ streamSnapshot?.traceId ?? task?.traceId ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="最近阶段" :span="2">
             {{ progressSummary ? `${progressSummary.phase} - ${progressSummary.message}` : '-' }}
           </el-descriptions-item>

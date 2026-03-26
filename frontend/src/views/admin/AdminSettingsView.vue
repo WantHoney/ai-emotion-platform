@@ -13,6 +13,7 @@ import {
   type WarningRuleItem,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { JSON_LABEL, SLA_LABEL, formatEnv, formatModelStatus, formatModelType } from '@/utils/uiText'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -40,6 +41,8 @@ const ruleForm = reactive({
 })
 
 const selectedRule = computed(() => rules.value.find((item) => item.id === selectedRuleId.value) ?? null)
+
+const thresholdHint = '请保持低风险阈值不高于中风险阈值，中风险阈值不高于高风险阈值。'
 
 const syncFormFromRule = (rule: WarningRuleItem) => {
   selectedRuleId.value = rule.id
@@ -90,7 +93,7 @@ const loadData = async () => {
 const saveRule = async () => {
   if (!selectedRule.value) return
   if (!(ruleForm.lowThreshold <= ruleForm.mediumThreshold && ruleForm.mediumThreshold <= ruleForm.highThreshold)) {
-    ElMessage.warning('阈值需满足 low <= medium <= high')
+    ElMessage.warning(thresholdHint)
     return
   }
 
@@ -98,7 +101,7 @@ const saveRule = async () => {
   try {
     emotionCombo = JSON.parse(ruleForm.emotionComboJson || '{}') as Record<string, unknown>
   } catch {
-    ElMessage.warning('情绪组合 JSON 格式不合法')
+    ElMessage.warning(`情绪组合配置格式不正确，请检查 ${JSON_LABEL} 内容。`)
     return
   }
 
@@ -181,7 +184,7 @@ onMounted(async () => {
             <el-form-item label="启用">
               <el-switch v-model="ruleForm.enabled" />
             </el-form-item>
-            <el-form-item label="阈值 (低/中/高)">
+            <el-form-item label="阈值（低/中/高）">
               <el-input-number v-model="ruleForm.lowThreshold" :min="0" :max="100" />
               <el-input-number v-model="ruleForm.mediumThreshold" :min="0" :max="100" />
               <el-input-number v-model="ruleForm.highThreshold" :min="0" :max="100" />
@@ -190,7 +193,7 @@ onMounted(async () => {
               <el-input-number v-model="ruleForm.trendWindowDays" :min="1" :max="180" />
               <el-input-number v-model="ruleForm.triggerCount" :min="1" :max="100" />
             </el-form-item>
-            <el-form-item label="SLA (低/中/高 分钟)">
+            <el-form-item :label="`${SLA_LABEL}时限（低/中/高，分钟）`">
               <el-input-number v-model="ruleForm.slaLowMinutes" :min="1" :max="20160" />
               <el-input-number v-model="ruleForm.slaMediumMinutes" :min="1" :max="20160" />
               <el-input-number v-model="ruleForm.slaHighMinutes" :min="1" :max="20160" />
@@ -198,7 +201,7 @@ onMounted(async () => {
             <el-form-item label="建议模板编码">
               <el-input v-model="ruleForm.suggestTemplateCode" />
             </el-form-item>
-            <el-form-item label="情绪组合 JSON">
+            <el-form-item :label="`情绪组合配置（${JSON_LABEL}）`">
               <el-input v-model="ruleForm.emotionComboJson" type="textarea" :rows="5" />
             </el-form-item>
           </el-form>
@@ -220,10 +223,16 @@ onMounted(async () => {
         <el-table v-else :data="models" border>
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="model_name" label="模型名称" min-width="160" />
-          <el-table-column prop="model_type" label="模型类型" width="130" />
+          <el-table-column label="模型类型" width="130">
+            <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
+          </el-table-column>
           <el-table-column prop="version" label="版本" width="130" />
-          <el-table-column prop="env" label="环境" width="90" />
-          <el-table-column prop="status" label="状态" width="110" />
+          <el-table-column label="环境" width="90">
+            <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="scope">{{ formatModelStatus(scope.row.status) }}</template>
+          </el-table-column>
           <el-table-column prop="published_at" label="发布时间" min-width="170" />
         </el-table>
       </el-card>

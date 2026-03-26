@@ -10,6 +10,7 @@ import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { formatEmotion, formatRiskLevel } from '@/utils/uiText'
 
 const router = useRouter()
 const loading = ref(false)
@@ -58,14 +59,14 @@ void loadReports()
       description="按条件筛选历史报告，避免信息拥挤。"
     >
       <div class="filters">
-        <el-input v-model="query.keyword" placeholder="按报告ID/任务ID搜索" clearable />
-        <el-input v-model="query.emotion" placeholder="按情绪筛选，例如 SAD" clearable />
+        <el-input v-model="query.keyword" placeholder="按报告 ID / 任务 ID 搜索" clearable />
+        <el-input v-model="query.emotion" placeholder="按情绪筛选，例如悲伤" clearable />
         <el-select v-model="query.riskLevel" clearable placeholder="风险等级" style="width: 140px">
           <el-option label="低风险" value="low" />
           <el-option label="中风险" value="medium" />
           <el-option label="高风险" value="high" />
         </el-select>
-        <el-button @click="router.push('/app/tasks')">进行中任务</el-button>
+        <el-button @click="router.push('/app/tasks')">查看任务中心</el-button>
         <el-button type="primary" @click="loadReports">查询</el-button>
       </div>
 
@@ -89,17 +90,17 @@ void loadReports()
           <LoreCard
             v-for="item in rows"
             :key="item.id"
-            :title="item.reportNo || `REPORT-${item.id}`"
-            :subtitle="item.taskNo || `TASK-${item.taskId}`"
+            :title="item.reportNo || `报告-${item.id}`"
+            :subtitle="item.taskNo || `任务-${item.taskId}`"
             interactive
             @click="router.push(`/app/reports/${item.id}`)"
           >
             <div class="card-meta">
-              <BadgeTag :tone="toTone(item.riskLevel)" :text="item.riskLevel || '风险未知'" />
-              <span>{{ item.overall || '情绪未知' }}</span>
+              <BadgeTag :tone="toTone(item.riskLevel)" :text="item.riskLevel ? formatRiskLevel(item.riskLevel) : '风险待评估'" />
+              <span>{{ item.overall ? formatEmotion(item.overall) : '情绪待识别' }}</span>
             </div>
             <p class="created-at">{{ item.createdAt || '时间未知' }}</p>
-            <p class="id-hint">报告ID: {{ item.id }} | 任务ID: {{ item.taskId }}</p>
+            <p class="id-hint">报告 ID：{{ item.id }} | 任务 ID：{{ item.taskId }}</p>
             <template #footer>
               <el-button type="primary" text @click.stop="router.push(`/app/reports/${item.id}`)">查看详情</el-button>
             </template>

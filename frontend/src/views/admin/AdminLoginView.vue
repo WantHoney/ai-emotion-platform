@@ -45,7 +45,7 @@ const handleAdminLogin = async () => {
         <template #header>
           <div class="header-row">
             <div>
-              <p class="eyebrow">Admin Console</p>
+              <p class="eyebrow">管理控制台</p>
               <h2>管理端登录</h2>
             </div>
             <el-button text @click="router.push('/app/login')">前往用户端</el-button>

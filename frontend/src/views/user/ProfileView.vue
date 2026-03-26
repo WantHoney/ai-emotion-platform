@@ -40,6 +40,13 @@ const summary = computed(() => {
   }
 })
 
+const displayRole = computed(() => {
+  if (!authStore.userRole) return '-'
+  if (authStore.userRole === 'USER') return '用户'
+  if (authStore.userRole === 'ADMIN') return '管理员'
+  return authStore.userRole
+})
+
 const loadProfileSummary = async () => {
   loading.value = true
   errorState.value = null
@@ -81,7 +88,7 @@ onMounted(() => {
           </div>
           <div>
             <p class="label">角色</p>
-            <strong>{{ authStore.userRole || '-' }}</strong>
+            <strong>{{ displayRole }}</strong>
           </div>
         </div>
 

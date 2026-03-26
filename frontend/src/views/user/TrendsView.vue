@@ -122,7 +122,7 @@ onMounted(() => {
         <div class="summary-grid">
           <LoreCard title="报告总数" :subtitle="`统计周期：近 ${days} 天`">{{ totalReports }}</LoreCard>
           <LoreCard title="平均风险分" subtitle="0-100 标准化">{{ avgRisk }}</LoreCard>
-          <LoreCard title="高风险天数" subtitle="当天至少有 1 条高风险（HIGH）报告">{{ highRiskDays }}</LoreCard>
+          <LoreCard title="高风险天数" subtitle="当天至少有 1 条高风险报告">{{ highRiskDays }}</LoreCard>
         </div>
 
         <LoreCard title="风险曲线与报告数量" subtitle="折线=平均风险分，柱状=报告数">

@@ -9,6 +9,15 @@ import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
 import { useTaskPolling } from '@/composables/useTaskPolling'
+import {
+  PSI_LABEL,
+  SER_LABEL,
+  TEXT_NEG_LABEL,
+  TRACE_ID_LABEL,
+  formatEmotion,
+  formatRiskLevel,
+  formatTaskStatus,
+} from '@/utils/uiText'
 
 const route = useRoute()
 const router = useRouter()
@@ -88,7 +97,7 @@ watch(
   },
 )
 
-const displayTaskNo = computed(() => task.value?.taskNo || `TASK-${taskId.value}`)
+const displayTaskNo = computed(() => task.value?.taskNo || `任务-${taskId.value}`)
 const durationSeconds = computed(() => ((task.value?.durationMs ?? 0) / 1000).toFixed(2))
 
 const riskAssessment = computed<RiskAssessmentPayload | null>(() => taskResult.value?.riskAssessment ?? null)
@@ -119,7 +128,9 @@ const textRiskScore = computed(() => {
   return 100 * source.text_neg
 })
 
-const riskLevel = computed(() => riskAssessment.value?.risk_level ?? task.value?.result?.risk_level ?? '-')
+const riskLevel = computed(() =>
+  formatRiskLevel(riskAssessment.value?.risk_level ?? task.value?.result?.risk_level),
+)
 
 const confidenceColor = computed(() => {
   if (confidencePercent.value >= 80) return '#67c23a'
@@ -193,10 +204,10 @@ const psiContributionRows = computed(() => {
   const textPart = 100 * WEIGHT_TEXT_IN_PSI * source.text_neg
 
   const rows = [
-    { key: 'sad', label: '悲伤', value: sadPart, formula: '0.6*100*0.45*p_sad' },
-    { key: 'angry', label: '愤怒', value: angryPart, formula: '0.6*100*0.25*p_angry' },
-    { key: 'var', label: '波动', value: varPart, formula: '0.6*100*0.10*var_conf' },
-    { key: 'text', label: '文本', value: textPart, formula: '0.4*100*text_neg' },
+    { key: 'sad', label: '悲伤', value: sadPart, formula: '语音权重 × 悲伤概率' },
+    { key: 'angry', label: '愤怒', value: angryPart, formula: '语音权重 × 愤怒概率' },
+    { key: 'var', label: '波动', value: varPart, formula: '语音权重 × 波动系数' },
+    { key: 'text', label: '文本', value: textPart, formula: '文本权重 × 文本负向值' },
   ]
 
   const total = Math.max(riskScorePercent.value, 0.0001)
@@ -233,7 +244,7 @@ onMounted(() => {
         <div>
           <p class="hero-subtitle">情绪分析任务</p>
           <h2>任务编号 {{ displayTaskNo }}</h2>
-          <p class="task-id-tip">任务ID: {{ taskId }}</p>
+          <p class="task-id-tip">任务 ID：{{ taskId }}</p>
         </div>
         <div class="header-actions">
           <el-tag effect="dark" :type="statusTagType">{{ statusText }}</el-tag>
@@ -259,7 +270,7 @@ onMounted(() => {
       <div v-else class="metric-grid">
         <el-card class="metric-item" shadow="hover">
           <p>综合情绪</p>
-          <h3>{{ task.result?.overall ?? '-' }}</h3>
+          <h3>{{ formatEmotion(task.result?.overall) }}</h3>
         </el-card>
         <el-card class="metric-item" shadow="hover">
           <p>风险等级</p>
@@ -267,7 +278,7 @@ onMounted(() => {
         </el-card>
         <el-card class="metric-item" shadow="hover">
           <p>处理耗时</p>
-          <h3>{{ durationSeconds }}s</h3>
+          <h3>{{ durationSeconds }} 秒</h3>
         </el-card>
         <el-card class="metric-item" shadow="hover">
           <p>重试次数</p>
@@ -286,7 +297,7 @@ onMounted(() => {
         </el-col>
         <el-col :xs="24" :md="12">
           <el-card shadow="hover">
-            <template #header>风险分数</template>
+            <template #header>{{ PSI_LABEL }}</template>
             <el-progress type="dashboard" :percentage="riskScorePercent" :color="riskColor" :stroke-width="12" />
           </el-card>
         </el-col>
@@ -295,25 +306,25 @@ onMounted(() => {
       <el-row :gutter="16" class="fusion-row">
         <el-col :xs="24" :lg="12">
           <el-card shadow="hover">
-            <template #header>融合结果（语音分 / 文本分 / PSI）</template>
+            <template #header>融合结果（语音分 / 文本分 / 心理风险指数）</template>
             <el-descriptions border :column="1">
               <el-descriptions-item label="语音分">{{ voiceRiskScore.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="文本分">{{ textRiskScore.toFixed(2) }}</el-descriptions-item>
-              <el-descriptions-item label="融合分(PSI)">{{ riskScorePercent.toFixed(2) }}</el-descriptions-item>
+              <el-descriptions-item label="融合分">{{ riskScorePercent.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="风险等级">{{ riskLevel }}</el-descriptions-item>
-              <el-descriptions-item label="text_neg(负向)">
+              <el-descriptions-item :label="TEXT_NEG_LABEL">
                 {{ riskAssessment?.text_neg != null ? riskAssessment.text_neg.toFixed(4) : '-' }}
               </el-descriptions-item>
-              <el-descriptions-item label="SER融合就绪">
-                {{ serFusionInfo.ready ? '是' : serFusionInfo.enabled ? '否' : '已禁用' }}
+              <el-descriptions-item label="语音融合已就绪">
+                {{ serFusionInfo.ready ? '是' : serFusionInfo.enabled ? '否' : '未启用' }}
               </el-descriptions-item>
-              <el-descriptions-item label="SER融合标签">
-                {{ serFusionInfo.label ?? '-' }}
+              <el-descriptions-item label="语音融合标签">
+                {{ formatEmotion(serFusionInfo.label) }}
               </el-descriptions-item>
-              <el-descriptions-item label="SER融合置信度">
+              <el-descriptions-item label="语音融合置信度">
                 {{ serFusionInfo.confidence != null ? `${(serFusionInfo.confidence * 100).toFixed(2)}%` : '-' }}
               </el-descriptions-item>
-              <el-descriptions-item label="SER概率(怒/喜/中/悲)">
+              <el-descriptions-item label="语音融合概率（怒/喜/中/悲）">
                 {{
                   serFusionInfo.scoreAngry != null &&
                   serFusionInfo.scoreHappy != null &&
@@ -323,7 +334,7 @@ onMounted(() => {
                     : '-'
                 }}
               </el-descriptions-item>
-              <el-descriptions-item v-if="serFusionInfo.error" label="SER融合错误">
+              <el-descriptions-item v-if="serFusionInfo.error" label="语音融合错误">
                 {{ serFusionInfo.error }}
               </el-descriptions-item>
             </el-descriptions>
@@ -351,13 +362,13 @@ onMounted(() => {
                 }}
               </el-descriptions-item>
             </el-descriptions>
-            <p v-if="resultLoading" class="loading-tip">正在同步任务结果细节...</p>
+            <p v-if="resultLoading" class="loading-tip">正在同步任务结果详情...</p>
           </el-card>
         </el-col>
       </el-row>
 
       <el-card shadow="hover">
-        <template #header>PSI 贡献项</template>
+        <template #header>{{ `${PSI_LABEL}贡献项` }}</template>
         <div v-if="psiContributionRows.length" class="psi-list">
           <article v-for="row in psiContributionRows" :key="row.key" class="psi-item">
             <div class="psi-header">
@@ -380,10 +391,10 @@ onMounted(() => {
       <el-card shadow="hover">
         <template #header>任务详情</template>
         <el-descriptions border :column="2">
-          <el-descriptions-item label="任务状态">{{ task.status ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="任务状态">{{ formatTaskStatus(task.status) }}</el-descriptions-item>
           <el-descriptions-item label="错误信息">{{ task.errorMessage ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="Trace ID">{{ task.traceId ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="SER 延迟">{{ task.serLatencyMs ?? '-' }}ms</el-descriptions-item>
+          <el-descriptions-item :label="TRACE_ID_LABEL">{{ task.traceId ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="`${SER_LABEL}延迟`">{{ task.serLatencyMs ?? '-' }} 毫秒</el-descriptions-item>
           <el-descriptions-item label="建议" :span="2">{{ task.result?.advice_text ?? '-' }}</el-descriptions-item>
         </el-descriptions>
 

@@ -71,7 +71,7 @@ const handleRegister = async () => {
     <section class="login-shell">
       <aside class="login-story">
         <p class="eyebrow">情绪档案库</p>
-        <h1>AI 语音情绪分析与心理状态预警</h1>
+        <h1>语音情绪分析与心理状态预警</h1>
         <p class="summary">
           用户端面向自助评估与长期追踪，支持上传/录音分析、报告查看、趋势追踪与资源引导。
         </p>

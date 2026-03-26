@@ -13,6 +13,7 @@ import {
   type WarningRuleItem,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { JSON_LABEL, SLA_LABEL } from '@/utils/uiText'
 
 const loading = ref(false)
 const rows = ref<WarningRuleItem[]>([])
@@ -111,15 +112,15 @@ const openEdit = (row: WarningRuleItem) => {
 
 const saveRule = async () => {
   if (!form.ruleName || (editMode.value === 'create' && !form.ruleCode)) {
-    ElMessage.warning('ruleCode/ruleName 为必填项')
+    ElMessage.warning('规则编码和规则名称不能为空')
     return
   }
   if (!(form.lowThreshold <= form.mediumThreshold && form.mediumThreshold <= form.highThreshold)) {
-    ElMessage.warning('阈值需满足 low <= medium <= high')
+    ElMessage.warning('请保持低风险阈值不高于中风险阈值，中风险阈值不高于高风险阈值。')
     return
   }
   if (!(form.slaLowMinutes > 0 && form.slaMediumMinutes > 0 && form.slaHighMinutes > 0)) {
-    ElMessage.warning('SLA 分钟值必须为正数')
+    ElMessage.warning(`${SLA_LABEL}时限必须为正数`)
     return
   }
 
@@ -127,7 +128,7 @@ const saveRule = async () => {
   try {
     emotionCombo = safeParseJson(form.emotionComboText)
   } catch {
-    ElMessage.warning('emotionCombo 必须是合法 JSON')
+    ElMessage.warning(`情绪组合配置必须是合法的 ${JSON_LABEL}`)
     return
   }
 
@@ -229,13 +230,13 @@ onMounted(async () => {
       <el-table-column prop="priority" label="优先级" width="90" />
       <el-table-column label="阈值" min-width="200">
         <template #default="scope">
-          low={{ scope.row.low_threshold }}, medium={{ scope.row.medium_threshold }}, high={{ scope.row.high_threshold }}
+          低：{{ scope.row.low_threshold }}，中：{{ scope.row.medium_threshold }}，高：{{ scope.row.high_threshold }}
         </template>
       </el-table-column>
-      <el-table-column label="SLA(分钟)" min-width="180">
+      <el-table-column :label="`${SLA_LABEL}时限（分钟）`" min-width="180">
         <template #default="scope">
-          L={{ scope.row.sla_low_minutes ?? 1440 }}, M={{ scope.row.sla_medium_minutes ?? 720 }},
-          H={{ scope.row.sla_high_minutes ?? 240 }}
+          低：{{ scope.row.sla_low_minutes ?? 1440 }}，中：{{ scope.row.sla_medium_minutes ?? 720 }}，
+          高：{{ scope.row.sla_high_minutes ?? 240 }}
         </template>
       </el-table-column>
       <el-table-column prop="trend_window_days" label="窗口天数" width="100" />
@@ -287,7 +288,7 @@ onMounted(async () => {
         <el-form-item label="高风险阈值">
           <el-input-number v-model="form.highThreshold" :min="0" :max="100" :step="1" />
         </el-form-item>
-        <el-form-item label="情绪组合 JSON">
+        <el-form-item :label="`情绪组合配置（${JSON_LABEL}）`">
           <el-input v-model="form.emotionComboText" type="textarea" :rows="4" />
         </el-form-item>
         <el-form-item label="趋势窗口（天）">
@@ -296,13 +297,13 @@ onMounted(async () => {
         <el-form-item label="触发次数">
           <el-input-number v-model="form.triggerCount" :min="1" :max="100" />
         </el-form-item>
-        <el-form-item label="低风险 SLA（分钟）">
+        <el-form-item :label="`低风险${SLA_LABEL}时限（分钟）`">
           <el-input-number v-model="form.slaLowMinutes" :min="1" :max="20160" />
         </el-form-item>
-        <el-form-item label="中风险 SLA（分钟）">
+        <el-form-item :label="`中风险${SLA_LABEL}时限（分钟）`">
           <el-input-number v-model="form.slaMediumMinutes" :min="1" :max="20160" />
         </el-form-item>
-        <el-form-item label="高风险 SLA（分钟）">
+        <el-form-item :label="`高风险${SLA_LABEL}时限（分钟）`">
           <el-input-number v-model="form.slaHighMinutes" :min="1" :max="20160" />
         </el-form-item>
         <el-form-item label="建议模板编码">

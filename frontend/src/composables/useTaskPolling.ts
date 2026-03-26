@@ -2,6 +2,7 @@ import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 
 import { getTask, type AnalysisTask } from '@/api/task'
 import type { ApiError } from '@/api/http'
+import { formatTaskStatus } from '@/utils/uiText'
 
 type PollingState = 'idle' | 'loading' | 'success' | 'error'
 
@@ -13,15 +14,6 @@ interface UseTaskPollingOptions {
 }
 
 const FINAL_STATES = ['SUCCESS', 'FAILED', 'CANCELED'] as const
-const STATUS_TEXT_MAP: Record<string, string> = {
-  PENDING: '待处理',
-  RUNNING: '处理中',
-  RETRY_WAIT: '等待重试',
-  SUCCESS: '处理成功',
-  FAILED: '处理失败',
-  CANCELED: '已取消',
-}
-
 const classifyPollingError = (error: ApiError) => {
   switch (error.code) {
     case 'NETWORK':
@@ -145,9 +137,7 @@ export const useTaskPolling = (taskIdRef: Ref<number>, options: UseTaskPollingOp
 
   const statusText = computed(() => {
     if (!task.value) return '等待任务启动'
-    const code = task.value.status || '-'
-    const localized = STATUS_TEXT_MAP[code] ?? '处理中'
-    return `${localized} (${code})`
+    return formatTaskStatus(task.value.status)
   })
 
   return {

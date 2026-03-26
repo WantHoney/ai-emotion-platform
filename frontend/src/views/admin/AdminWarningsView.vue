@@ -13,6 +13,7 @@ import {
   type WarningEventItem,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { SLA_LABEL, formatRiskLevel, formatWarningActionType, formatWarningStatus } from '@/utils/uiText'
 
 type WarningStatus = '' | 'NEW' | 'ACKED' | 'FOLLOWING' | 'RESOLVED' | 'CLOSED'
 type RiskLevel = '' | 'LOW' | 'MEDIUM' | 'HIGH'
@@ -50,18 +51,18 @@ const query = reactive({
 
 const statusOptions = [
   { label: '全部状态', value: '' },
-  { label: 'NEW', value: 'NEW' },
-  { label: 'ACKED', value: 'ACKED' },
-  { label: 'FOLLOWING', value: 'FOLLOWING' },
-  { label: 'RESOLVED', value: 'RESOLVED' },
-  { label: 'CLOSED', value: 'CLOSED' },
+  { label: '新建', value: 'NEW' },
+  { label: '已确认', value: 'ACKED' },
+  { label: '跟进中', value: 'FOLLOWING' },
+  { label: '已结案', value: 'RESOLVED' },
+  { label: '已关闭', value: 'CLOSED' },
 ]
 
 const riskOptions = [
   { label: '全部风险', value: '' },
-  { label: 'LOW', value: 'LOW' },
-  { label: 'MEDIUM', value: 'MEDIUM' },
-  { label: 'HIGH', value: 'HIGH' },
+  { label: '低风险', value: 'LOW' },
+  { label: '中风险', value: 'MEDIUM' },
+  { label: '高风险', value: 'HIGH' },
 ]
 
 const flowLabels = ['新建', '已确认', '跟进中', '已结案']
@@ -110,7 +111,7 @@ const currentFlowStep = computed(() => {
 
 const currentSummary = computed(() => {
   if (!currentWarning.value) return '-'
-  return `风险=${currentWarning.value.risk_level}，评分=${currentWarning.value.risk_score}，状态=${currentWarning.value.status}`
+  return `风险等级：${formatRiskLevel(currentWarning.value.risk_level)}，风险分：${currentWarning.value.risk_score}，状态：${formatWarningStatus(currentWarning.value.status)}`
 })
 
 const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
@@ -122,7 +123,7 @@ const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
       title: '预警触发',
       timestamp: row.created_at,
       type: 'primary',
-      note: `风险 ${row.risk_level} / 分数 ${row.risk_score}`,
+      note: `风险等级 ${formatRiskLevel(row.risk_level)} / 分数 ${row.risk_score}`,
     },
   ]
 
@@ -177,7 +178,7 @@ const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
     const actionType = item.action_type?.toUpperCase() ?? 'ACTION'
     nodes.push({
       key: `action-${item.id}`,
-      title: `动作：${actionType}`,
+      title: `动作：${formatWarningActionType(actionType)}`,
       timestamp: item.created_at,
       type: actionType === 'RESOLVE' ? 'success' : 'primary',
       note: item.action_note || item.template_code || undefined,
@@ -209,7 +210,7 @@ const formatDeadlineGap = (deadline?: string) => {
   const absMin = Math.round(Math.abs(diff) / 60000)
   const h = Math.floor(absMin / 60)
   const m = absMin % 60
-  return diff >= 0 ? `T-${h}h ${m}m` : `T+${h}h ${m}m`
+  return diff >= 0 ? `剩余 ${h} 小时 ${m} 分钟` : `超时 ${h} 小时 ${m} 分钟`
 }
 
 const loadWarnings = async () => {
@@ -320,7 +321,7 @@ const runAction = async (
 
 const markAcked = async (row: WarningEventItem) => {
   if (!canAck(row)) {
-    ElMessage.warning('仅 NEW 状态可执行确认')
+    ElMessage.warning('仅新建状态可执行确认')
     return
   }
   await runAction([row], {
@@ -360,7 +361,7 @@ const markResolved = async (row: WarningEventItem) => {
 const batchAck = async () => {
   const rowsValue = selectedAckable.value
   if (!rowsValue.length) {
-    ElMessage.warning('所选项中无可确认事件（仅 NEW 状态可确认）')
+    ElMessage.warning('所选项中没有可确认事件（仅新建状态可确认）')
     return
   }
   await runAction(rowsValue, {
@@ -457,10 +458,10 @@ onMounted(async () => {
             <el-option v-for="item in riskOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="SLA状态">
+        <el-form-item :label="`${SLA_LABEL}状态`">
           <el-radio-group v-model="query.breached">
             <el-radio-button label="">全部</el-radio-button>
-            <el-radio-button label="N">SLA 内</el-radio-button>
+            <el-radio-button label="N">时限内</el-radio-button>
             <el-radio-button label="Y">已超时</el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -523,7 +524,7 @@ onMounted(async () => {
         >
           批量结案
         </el-button>
-        <span class="batch-note">选中ID：{{ selectionIds.join(', ') || '-' }}</span>
+        <span class="batch-note">选中 ID：{{ selectionIds.join(', ') || '-' }}</span>
       </div>
 
       <el-table :data="filteredRows" border row-key="id" @selection-change="handleSelectionChange">
@@ -535,15 +536,17 @@ onMounted(async () => {
         <el-table-column prop="top_emotion" label="主情绪" width="100" />
         <el-table-column label="风险" width="110">
           <template #default="scope">
-            <el-tag :type="riskType(scope.row.risk_level)">{{ scope.row.risk_level }}</el-tag>
+            <el-tag :type="riskType(scope.row.risk_level)">{{ formatRiskLevel(scope.row.risk_level) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="risk_score" label="风险分" width="90" />
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column label="SLA" min-width="170">
+        <el-table-column label="状态" width="100">
+          <template #default="scope">{{ formatWarningStatus(scope.row.status) }}</template>
+        </el-table-column>
+        <el-table-column :label="SLA_LABEL" min-width="170">
           <template #default="scope">
             <el-tag :type="breachedType(scope.row)">
-              {{ isBreached(scope.row) ? '已超时' : 'SLA 内' }}
+              {{ isBreached(scope.row) ? '已超时' : '时限内' }}
             </el-tag>
             <div class="sla-gap">{{ formatDeadlineGap(scope.row.sla_deadline_at) }}</div>
           </template>

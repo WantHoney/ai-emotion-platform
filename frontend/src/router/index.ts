@@ -194,7 +194,7 @@ const router = createRouter({
           meta: {
             requiresAdminAuth: true,
             title: '轮播图管理',
-            description: 'Banner 内容运营 CRUD',
+            description: '轮播图内容管理（新增、查询、编辑、删除）',
             breadcrumb: ['管理端', '内容运营', '轮播图管理'],
           },
         },
@@ -205,7 +205,7 @@ const router = createRouter({
           meta: {
             requiresAdminAuth: true,
             title: '语录管理',
-            description: '语录内容 CRUD',
+            description: '语录内容管理（新增、查询、编辑、删除）',
             breadcrumb: ['管理端', '内容运营', '语录管理'],
           },
         },
@@ -216,7 +216,7 @@ const router = createRouter({
           meta: {
             requiresAdminAuth: true,
             title: '文章管理',
-            description: '文章内容 CRUD',
+            description: '文章内容管理（新增、查询、编辑、删除）',
             breadcrumb: ['管理端', '内容运营', '文章管理'],
           },
         },
@@ -227,7 +227,7 @@ const router = createRouter({
           meta: {
             requiresAdminAuth: true,
             title: '心理中心管理',
-            description: '心理中心资源 CRUD（按 cityCode 管理）',
+            description: '心理中心资源管理（按城市编码维护）',
             breadcrumb: ['管理端', '资源管理', '心理中心管理'],
           },
         },

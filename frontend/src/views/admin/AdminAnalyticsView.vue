@@ -13,6 +13,7 @@ import {
   type GovernanceSummary,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { SLA_LABEL, formatEmotion } from '@/utils/uiText'
 
 const loading = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
@@ -77,6 +78,7 @@ onMounted(async () => {
       <div class="header-row">
         <span>管理端统计分析</span>
         <div class="header-actions">
+          <span class="days-label">统计天数</span>
           <el-input-number v-model="days" :min="1" :max="30" size="small" />
           <el-button @click="loadData">刷新</el-button>
         </div>
@@ -100,7 +102,7 @@ onMounted(async () => {
       </el-row>
 
       <el-row :gutter="16" class="mt-16">
-        <el-col :xs="24" :md="6"><el-statistic title="DAU 累计" :value="totals.dau" /></el-col>
+        <el-col :xs="24" :md="6"><el-statistic title="日活用户累计" :value="totals.dau" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="上传累计" :value="totals.uploadCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="报告累计" :value="totals.reportCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="预警累计" :value="totals.warningCount" /></el-col>
@@ -109,7 +111,7 @@ onMounted(async () => {
       <el-row v-if="quality" :gutter="16" class="mt-16">
         <el-col :xs="24" :md="8">
           <el-card shadow="never" class="metric-card">
-            <template #header>SLA 概览</template>
+            <template #header>{{ `${SLA_LABEL}概览` }}</template>
             <p>总数：{{ quality.slaOverview.total ?? 0 }}</p>
             <p>已解决：{{ quality.slaOverview.resolved ?? 0 }}</p>
             <p>已超时：{{ quality.slaOverview.breached ?? 0 }}</p>
@@ -121,9 +123,11 @@ onMounted(async () => {
 
         <el-col :xs="24" :md="16">
           <el-card shadow="never">
-            <template #header>情绪分布漂移（当前 vs 基线）</template>
+            <template #header>情绪分布变化（当前与基线）</template>
             <el-table :data="quality.emotionDrift.slice(0, 8)" size="small" border>
-              <el-table-column prop="emotion" label="情绪" width="120" />
+              <el-table-column label="情绪" width="120">
+                <template #default="scope">{{ formatEmotion(scope.row.emotion) }}</template>
+              </el-table-column>
               <el-table-column label="当前占比">
                 <template #default="scope">{{ (scope.row.currentRatio * 100).toFixed(1) }}%</template>
               </el-table-column>
@@ -177,7 +181,7 @@ onMounted(async () => {
       </el-row>
 
       <el-card v-if="quality" shadow="never" class="mt-16">
-        <template #header>SLA 趋势</template>
+        <template #header>{{ `${SLA_LABEL}趋势` }}</template>
         <el-table :data="quality.slaTrend" size="small" border>
           <el-table-column prop="stat_date" label="日期" min-width="140" />
           <el-table-column prop="total" label="总数" width="110" />
@@ -196,7 +200,7 @@ onMounted(async () => {
       />
       <el-table v-else :data="dailyRows" border class="mt-16">
         <el-table-column prop="stat_date" label="日期" min-width="160" />
-        <el-table-column prop="dau" label="DAU" width="120" />
+        <el-table-column prop="dau" label="日活用户数" width="120" />
         <el-table-column prop="upload_count" label="上传数" width="120" />
         <el-table-column prop="report_count" label="报告数" width="120" />
         <el-table-column prop="warning_count" label="预警数" width="120" />
@@ -216,6 +220,11 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.days-label {
+  color: #475569;
+  font-size: 13px;
 }
 
 .mt-16 {

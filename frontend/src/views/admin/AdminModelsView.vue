@@ -14,6 +14,7 @@ import {
   type ModelSwitchLogItem,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
+import { formatEnv, formatModelStatus, formatModelType } from '@/utils/uiText'
 
 const loading = ref(false)
 const logsLoading = ref(false)
@@ -40,6 +41,26 @@ const createForm = reactive({
   env: 'dev',
   status: 'OFFLINE',
 })
+
+const environmentOptions = [
+  { label: '开发环境', value: 'dev' },
+  { label: '预发环境', value: 'staging' },
+  { label: '生产环境', value: 'prod' },
+]
+
+const modelStatusOptions = [
+  { label: '在线', value: 'ONLINE' },
+  { label: '离线', value: 'OFFLINE' },
+  { label: '已归档', value: 'ARCHIVED' },
+]
+
+const modelTypeOptions = [
+  { label: formatModelType('ASR'), value: 'ASR' },
+  { label: formatModelType('AUDIO_EMOTION'), value: 'AUDIO_EMOTION' },
+  { label: formatModelType('TEXT_SENTIMENT'), value: 'TEXT_SENTIMENT' },
+  { label: formatModelType('FUSION'), value: 'FUSION' },
+  { label: formatModelType('SCORING'), value: 'SCORING' },
+]
 
 const loadModels = async () => {
   loading.value = true
@@ -79,7 +100,7 @@ const openCreateDialog = () => {
 
 const submitCreate = async () => {
   if (!createForm.modelCode || !createForm.modelName || !createForm.version) {
-    ElMessage.warning('modelCode / modelName / version 为必填项')
+    ElMessage.warning('模型编码、模型名称和版本不能为空')
     return
   }
   try {
@@ -106,7 +127,7 @@ const submitCreate = async () => {
 const switchModel = async (row: ModelRegistryItem) => {
   try {
     const result = await ElMessageBox.prompt(
-      `确认将模型 #${row.id}（${row.model_name} / ${row.version}）切换为 ONLINE 吗？`,
+      `确认将模型 #${row.id}（${row.model_name} / ${row.version}）切换为在线吗？`,
       '确认切换',
       {
         confirmButtonText: '确认切换',
@@ -155,20 +176,16 @@ onMounted(async () => {
 
     <el-form inline>
       <el-form-item label="模型类型">
-        <el-input v-model="filters.modelType" placeholder="ASR/FUSION/..." clearable />
+        <el-input v-model="filters.modelType" placeholder="输入模型类型代码" clearable />
       </el-form-item>
       <el-form-item label="环境">
         <el-select v-model="filters.env" clearable style="width: 120px">
-          <el-option label="dev" value="dev" />
-          <el-option label="staging" value="staging" />
-          <el-option label="prod" value="prod" />
+          <el-option v-for="item in environmentOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
       <el-form-item label="状态">
         <el-select v-model="filters.status" clearable style="width: 140px">
-          <el-option label="ONLINE" value="ONLINE" />
-          <el-option label="OFFLINE" value="OFFLINE" />
-          <el-option label="ARCHIVED" value="ARCHIVED" />
+          <el-option v-for="item in modelStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
       <el-button type="primary" @click="loadModels">查询</el-button>
@@ -193,12 +210,18 @@ onMounted(async () => {
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="model_name" label="模型名称" min-width="170" />
       <el-table-column prop="model_code" label="模型编码" min-width="130" />
-      <el-table-column prop="model_type" label="类型" width="140" />
+      <el-table-column label="类型" width="140">
+        <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
+      </el-table-column>
       <el-table-column prop="version" label="版本" width="130" />
-      <el-table-column prop="env" label="环境" width="100" />
+      <el-table-column label="环境" width="100">
+        <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="120">
         <template #default="scope">
-          <el-tag :type="scope.row.status === 'ONLINE' ? 'success' : 'info'">{{ scope.row.status }}</el-tag>
+          <el-tag :type="scope.row.status === 'ONLINE' ? 'success' : 'info'">
+            {{ formatModelStatus(scope.row.status) }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="published_at" label="发布时间" min-width="180" />
@@ -210,7 +233,7 @@ onMounted(async () => {
             :disabled="scope.row.status === 'ONLINE'"
             @click="switchModel(scope.row)"
           >
-            设为 ONLINE
+            设为在线
           </el-button>
         </template>
       </el-table-column>
@@ -222,26 +245,20 @@ onMounted(async () => {
         <el-form-item label="模型名称"><el-input v-model="createForm.modelName" /></el-form-item>
         <el-form-item label="模型类型">
           <el-select v-model="createForm.modelType" style="width: 200px">
-            <el-option label="ASR" value="ASR" />
-            <el-option label="AUDIO_EMOTION" value="AUDIO_EMOTION" />
-            <el-option label="TEXT_SENTIMENT" value="TEXT_SENTIMENT" />
-            <el-option label="FUSION" value="FUSION" />
-            <el-option label="SCORING" value="SCORING" />
+            <el-option v-for="item in modelTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="提供方"><el-input v-model="createForm.provider" /></el-form-item>
         <el-form-item label="版本"><el-input v-model="createForm.version" /></el-form-item>
         <el-form-item label="环境">
           <el-select v-model="createForm.env" style="width: 160px">
-            <el-option label="dev" value="dev" />
-            <el-option label="staging" value="staging" />
-            <el-option label="prod" value="prod" />
+            <el-option v-for="item in environmentOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="初始状态">
           <el-select v-model="createForm.status" style="width: 160px">
-            <el-option label="OFFLINE" value="OFFLINE" />
-            <el-option label="ONLINE" value="ONLINE" />
+            <el-option label="离线" value="OFFLINE" />
+            <el-option label="在线" value="ONLINE" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -270,8 +287,12 @@ onMounted(async () => {
       />
       <el-table v-else :data="switchLogs" border>
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="model_type" label="模型类型" width="140" />
-        <el-table-column prop="env" label="环境" width="90" />
+        <el-table-column label="模型类型" width="140">
+          <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
+        </el-table-column>
+        <el-table-column label="环境" width="90">
+          <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
+        </el-table-column>
         <el-table-column prop="from_model_id" label="来源模型" width="110" />
         <el-table-column prop="to_model_id" label="目标模型" width="110" />
         <el-table-column prop="switch_reason" label="切换原因" min-width="220" show-overflow-tooltip />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { TRACE_ID_LABEL } from '@/utils/uiText'
 
 defineProps<{
   title: string
@@ -16,7 +17,7 @@ const expanded = ref(false)
 
 const copyTraceId = async (traceId: string) => {
   await navigator.clipboard.writeText(traceId)
-  ElMessage.success('Trace ID 已复制')
+  ElMessage.success('链路 ID 已复制')
 }
 </script>
 
@@ -30,7 +31,7 @@ const copyTraceId = async (traceId: string) => {
     <el-alert v-if="expanded && detail" :title="detail" type="error" :closable="false" show-icon class="mt-8" />
 
     <div class="trace" v-if="traceId">
-      <span>Trace ID: {{ traceId }}</span>
+      <span>{{ TRACE_ID_LABEL }}: {{ traceId }}</span>
       <el-button text type="primary" @click="copyTraceId(traceId)">复制</el-button>
     </div>
 

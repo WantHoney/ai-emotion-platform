@@ -15,6 +15,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 import { pinia } from '@/stores'
 import { toErrorMessage } from '@/utils/errorMessage'
+import { TRACE_ID_LABEL } from '@/utils/uiText'
 
 export interface ApiError {
   status?: number
@@ -109,7 +110,7 @@ const showApiErrorToast = (apiError: ApiError) => {
     message: h('div', { class: 'api-error-toast' }, [
       h('div', apiError.message),
       h('div', { style: 'margin-top: 6px; display:flex; align-items:center; gap:8px;' }, [
-        h('span', { style: 'font-size:12px;' }, `traceId: ${apiError.traceId}`),
+        h('span', { style: 'font-size:12px;' }, `${TRACE_ID_LABEL}: ${apiError.traceId}`),
         h(
           ElButton,
           {
@@ -119,7 +120,7 @@ const showApiErrorToast = (apiError: ApiError) => {
               if (apiError.traceId && navigator?.clipboard) {
                 await navigator.clipboard.writeText(apiError.traceId)
               }
-              ElMessage.success('traceId 已复制')
+              ElMessage.success('链路 ID 已复制')
             },
           },
           () => '复制',

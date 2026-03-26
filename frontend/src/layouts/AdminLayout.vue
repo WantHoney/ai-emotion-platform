@@ -57,7 +57,7 @@ const handleAdminSelect = async (path: string) => {
   <div class="admin-layout">
     <el-container class="admin-shell">
       <el-aside :width="sidebarOpen ? '252px' : '74px'" class="admin-sider">
-        <div class="admin-brand">{{ sidebarOpen ? '情绪预警管理台' : 'EA' }}</div>
+        <div class="admin-brand">{{ sidebarOpen ? '情绪预警管理台' : '预警' }}</div>
         <el-menu :default-active="activeAdminPath" :collapse="!sidebarOpen" @select="handleAdminSelect">
           <el-menu-item-group title="管理中心">
             <el-menu-item v-for="item in adminNavItems" :key="item.path" :index="item.path">

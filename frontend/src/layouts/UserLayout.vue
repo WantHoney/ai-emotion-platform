@@ -45,10 +45,8 @@ const activeUserPath = computed(() => {
   return found?.path ?? '/app/home'
 })
 
-const pageTitle = computed(() => String(route.meta.title ?? 'AI 情绪分析用户端'))
-const pageDescription = computed(() =>
-  String(route.meta.description ?? '语音情绪分析与心理状态自助评估'),
-)
+const pageTitle = computed(() => String(route.meta.title ?? '情绪档案库'))
+const pageDescription = computed(() => String(route.meta.description ?? '语音情绪分析与心理状态自助评估'))
 const hidePageHeader = computed(() => Boolean(route.meta.hidePageHeader))
 
 const logout = async () => {

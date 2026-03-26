@@ -38,7 +38,7 @@ const props = withDefaults(
   }>(),
   {
     fixedTab: undefined,
-    title: '内容运营管理',
+    title: '内容管理',
   },
 )
 
@@ -140,7 +140,7 @@ const hydrateForm = (row: CmsRow) => {
 const validateForm = () => {
   if (activeTab.value === 'banner') {
     if (!form.title.trim() || !form.imageUrl.trim()) {
-      ElMessage.warning('Banner 标题和图片地址必填')
+      ElMessage.warning('轮播图标题和图片地址不能为空')
       return false
     }
   }

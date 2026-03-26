@@ -23,6 +23,7 @@ const STREAM_LABEL_MAP: Record<string, string> = {
   idle: '未连接',
   connecting: '连接中',
   open: '已连接',
+  terminal: '已完成',
   closed: '已关闭',
   error: '异常',
 }
@@ -63,6 +64,7 @@ const flowStep = computed(() => {
 const streamLabel = computed(() => STREAM_LABEL_MAP[streamState.value] ?? streamState.value)
 const streamTagType = computed(() => {
   if (streamState.value === 'open') return 'success'
+  if (streamState.value === 'terminal') return 'success'
   if (streamState.value === 'connecting') return 'warning'
   if (streamState.value === 'error') return 'danger'
   return 'info'
@@ -212,7 +214,7 @@ onMounted(() => {
       />
       <template v-else>
         <el-alert
-          v-if="streamState !== 'open'"
+          v-if="streamState !== 'open' && streamState !== 'terminal'"
           class="channel-alert"
           type="warning"
           show-icon

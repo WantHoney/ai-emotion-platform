@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import type { TaskRealtimeSnapshot } from '@/api/task'
 import { USER_TOKEN_KEY } from '@/stores/userAuth'
 
-type RealtimeState = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
+type RealtimeState = 'idle' | 'connecting' | 'open' | 'terminal' | 'closed' | 'error'
 
 const TERMINAL_CLOSE_CODES = new Set([4400, 4401, 4403, 1008, 1002])
 
@@ -110,10 +110,20 @@ export const useTaskRealtimeStream = (taskIdRef: Ref<number>) => {
 
     ws.onclose = (event) => {
       socket = null
-      state.value = 'closed'
 
       const terminalSnapshot = snapshot.value?.terminal === true
-      if (manualStop || terminalSnapshot) return
+      if (manualStop) {
+        state.value = 'closed'
+        return
+      }
+
+      if (terminalSnapshot) {
+        state.value = 'terminal'
+        errorMessage.value = ''
+        return
+      }
+
+      state.value = 'closed'
 
       if (TERMINAL_CLOSE_CODES.has(event.code)) {
         errorMessage.value = `实时连接关闭（${event.code}）`

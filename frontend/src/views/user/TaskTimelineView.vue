@@ -19,6 +19,13 @@ type TimelineNode = {
   detail?: string
 }
 
+type FlowStepVisualStatus = 'wait' | 'process' | 'finish' | 'success' | 'error'
+
+type FlowStepItem = {
+  title: string
+  status: FlowStepVisualStatus
+}
+
 const STREAM_LABEL_MAP: Record<string, string> = {
   idle: '未连接',
   connecting: '连接中',
@@ -51,14 +58,55 @@ const displayTaskNo = computed(
 const latestStatus = computed(() => streamSnapshot.value?.status ?? task.value?.status ?? 'PENDING')
 const latestStatusText = computed(() => formatTaskStatus(latestStatus.value))
 
-const flowStep = computed(() => {
+const latestAttemptCount = computed(() => Number(streamSnapshot.value?.attemptCount ?? task.value?.attemptCount ?? 0))
+
+const hasRetryHistory = computed(() => {
+  if (latestStatus.value === 'RETRY_WAIT') return true
+  if (latestAttemptCount.value > 0) return true
+  return Boolean(streamSnapshot.value?.nextRunAt ?? task.value?.nextRunAt)
+})
+
+const flowSteps = computed<FlowStepItem[]>(() => {
   const status = latestStatus.value
-  if (status === 'PENDING') return 0
-  if (status === 'RUNNING') return 1
-  if (status === 'RETRY_WAIT') return 2
-  if (status === 'SUCCESS') return 3
-  if (status === 'FAILED' || status === 'CANCELED') return 4
-  return 0
+  const isSuccess = status === 'SUCCESS'
+  const isFailed = status === 'FAILED'
+  const isCanceled = status === 'CANCELED'
+  const isTerminalError = isFailed || isCanceled
+
+  return [
+    {
+      title: '创建',
+      status: status === 'PENDING' ? 'process' : 'finish',
+    },
+    {
+      title: '执行',
+      status:
+        status === 'PENDING'
+          ? 'wait'
+          : status === 'RUNNING'
+            ? 'process'
+            : status === 'RETRY_WAIT' || isSuccess || isTerminalError
+              ? 'finish'
+              : 'wait',
+    },
+    {
+      title: '重试等待',
+      status:
+        status === 'RETRY_WAIT'
+          ? 'process'
+          : hasRetryHistory.value && (isSuccess || isTerminalError)
+            ? 'finish'
+            : 'wait',
+    },
+    {
+      title: '完成',
+      status: isSuccess ? 'success' : 'wait',
+    },
+    {
+      title: isCanceled ? '已取消' : '结束',
+      status: isFailed || isCanceled ? 'error' : 'wait',
+    },
+  ]
 })
 
 const streamLabel = computed(() => STREAM_LABEL_MAP[streamState.value] ?? streamState.value)
@@ -223,12 +271,13 @@ onMounted(() => {
           :description="streamError || '连接恢复后将自动切换到实时推送。'"
         />
 
-        <el-steps :active="flowStep" finish-status="success" simple class="step-row">
-          <el-step title="创建" />
-          <el-step title="执行" />
-          <el-step title="重试等待" />
-          <el-step title="完成" />
-          <el-step title="结束" />
+        <el-steps simple class="step-row">
+          <el-step
+            v-for="step in flowSteps"
+            :key="step.title"
+            :title="step.title"
+            :status="step.status"
+          />
         </el-steps>
 
         <el-row :gutter="12" class="metrics-row">

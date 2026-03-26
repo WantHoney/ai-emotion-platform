@@ -73,7 +73,7 @@ const flowSteps = computed<FlowStepItem[]>(() => {
   const isCanceled = status === 'CANCELED'
   const isTerminalError = isFailed || isCanceled
 
-  return [
+  const steps: FlowStepItem[] = [
     {
       title: '创建',
       status: status === 'PENDING' ? 'process' : 'finish',
@@ -86,15 +86,6 @@ const flowSteps = computed<FlowStepItem[]>(() => {
           : status === 'RUNNING'
             ? 'process'
             : status === 'RETRY_WAIT' || isSuccess || isTerminalError
-              ? 'finish'
-              : 'wait',
-    },
-    {
-      title: '重试等待',
-      status:
-        status === 'RETRY_WAIT'
-          ? 'process'
-          : hasRetryHistory.value && (isSuccess || isTerminalError)
             ? 'finish'
             : 'wait',
     },
@@ -102,11 +93,28 @@ const flowSteps = computed<FlowStepItem[]>(() => {
       title: '完成',
       status: isSuccess ? 'success' : 'wait',
     },
-    {
-      title: isCanceled ? '已取消' : '结束',
-      status: isFailed || isCanceled ? 'error' : 'wait',
-    },
   ]
+
+  if (hasRetryHistory.value || status === 'RETRY_WAIT') {
+    steps.splice(2, 0, {
+      title: '重试等待',
+      status:
+        status === 'RETRY_WAIT'
+          ? 'process'
+          : hasRetryHistory.value && (isSuccess || isTerminalError)
+            ? 'finish'
+            : 'wait',
+    })
+  }
+
+  if (isTerminalError) {
+    steps.push({
+      title: isCanceled ? '已取消' : '异常结束',
+      status: 'error',
+    })
+  }
+
+  return steps
 })
 
 const streamLabel = computed(() => STREAM_LABEL_MAP[streamState.value] ?? streamState.value)
@@ -158,6 +166,13 @@ const averageCurveRisk = computed(() => {
   if (!curveRows.value.length) return null
   const total = curveRows.value.reduce((sum, point) => sum + point.riskIndex, 0)
   return total / curveRows.value.length
+})
+
+const riskScoreDisplay = computed(() => {
+  const score = riskSummary.value?.riskScore
+  if (score == null || Number.isNaN(score)) return '-'
+  const normalized = score <= 1 ? score * 100 : score
+  return normalized.toFixed(2)
 })
 
 const timelineNodes = computed<TimelineNode[]>(() => {
@@ -284,7 +299,7 @@ onMounted(() => {
           <el-col :xs="24" :md="8">
             <el-card shadow="hover" class="metric-card">
               <p>{{ PSI_LABEL }}</p>
-              <h3>{{ riskSummary ? (riskSummary.riskScore * 100).toFixed(2) : '-' }}</h3>
+              <h3>{{ riskScoreDisplay }}</h3>
             </el-card>
           </el-col>
           <el-col :xs="24" :md="8">

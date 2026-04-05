@@ -10,7 +10,6 @@ import com.wuhao.aiemotion.integration.asr.AsrTranscribeResponse;
 import com.wuhao.aiemotion.integration.ser.SerAnalyzeResponse;
 import com.wuhao.aiemotion.integration.ser.SerClient;
 import com.wuhao.aiemotion.integration.ser.SerClientException;
-import com.wuhao.aiemotion.integration.text.TextSentimentClient;
 import com.wuhao.aiemotion.integration.text.TextSentimentResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
@@ -38,17 +37,21 @@ public class AnalysisTaskWorkerService {
     private static final int TIMEOUT_RETRY_BACKOFF_SECONDS = 180;
     private static final double TEXT_MODEL_WEIGHT = 0.75D;
     private static final double TEXT_LEXICON_WEIGHT = 0.25D;
+    private static final double TEXT_MODEL_WEIGHT_SEMANTIC_LLM = 0.90D;
+    private static final double TEXT_LEXICON_WEIGHT_SEMANTIC_LLM = 0.10D;
 
     private final AnalysisTaskRepository analysisTaskRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisSegmentRepository analysisSegmentRepository;
     private final SerClient serClient;
     private final AsrClient asrClient;
-    private final TextSentimentClient textSentimentClient;
+    private final TranscriptSemanticScoringService transcriptSemanticScoringService;
     private final PsychologicalRiskScoringService riskScoringService;
     private final TextNegScorer textNegScorer;
     private final TaskRealtimeProgressTracker taskRealtimeProgressTracker;
     private final AnalysisWorkerProperties workerProperties;
+    private final NarrativeGenerationService narrativeGenerationService;
+    private final ConsistencyGuardService consistencyGuardService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final ResourceManagementService resourceManagementService;
@@ -58,11 +61,13 @@ public class AnalysisTaskWorkerService {
                                      AnalysisSegmentRepository analysisSegmentRepository,
                                      SerClient serClient,
                                      AsrClient asrClient,
-                                     TextSentimentClient textSentimentClient,
+                                     TranscriptSemanticScoringService transcriptSemanticScoringService,
                                      PsychologicalRiskScoringService riskScoringService,
                                      TextNegScorer textNegScorer,
                                      TaskRealtimeProgressTracker taskRealtimeProgressTracker,
                                      AnalysisWorkerProperties workerProperties,
+                                     NarrativeGenerationService narrativeGenerationService,
+                                     ConsistencyGuardService consistencyGuardService,
                                      ObjectMapper objectMapper,
                                      TransactionTemplate transactionTemplate,
                                      ResourceManagementService resourceManagementService) {
@@ -71,11 +76,13 @@ public class AnalysisTaskWorkerService {
         this.analysisSegmentRepository = analysisSegmentRepository;
         this.serClient = serClient;
         this.asrClient = asrClient;
-        this.textSentimentClient = textSentimentClient;
+        this.transcriptSemanticScoringService = transcriptSemanticScoringService;
         this.riskScoringService = riskScoringService;
         this.textNegScorer = textNegScorer;
         this.taskRealtimeProgressTracker = taskRealtimeProgressTracker;
         this.workerProperties = workerProperties;
+        this.narrativeGenerationService = narrativeGenerationService;
+        this.consistencyGuardService = consistencyGuardService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
         this.resourceManagementService = resourceManagementService;
@@ -140,7 +147,7 @@ public class AnalysisTaskWorkerService {
             taskRealtimeProgressTracker.publish(task.id(), "TEXT_RUNNING", "正在执行文本情感分析");
             try {
                 if (transcript != null && !transcript.isBlank()) {
-                    textSentiment = textSentimentClient.score(
+                    textSentiment = transcriptSemanticScoringService.score(
                             transcript,
                             languageHint,
                             workerProperties.getTextSentimentTimeoutMs()
@@ -150,18 +157,25 @@ public class AnalysisTaskWorkerService {
                 log.warn("text sentiment failed, fallback to lexicon only: taskId={}, audioId={}, reason={}",
                         task.id(), audioId, truncateError(ex.getMessage()));
             }
+            TextNegFusionWeights textNegFusionWeights = resolveTextNegFusionWeights(textSentiment);
             double fusedTextNeg = fuseTextNeg(
                     lexiconTextScore.textNeg(),
-                    textSentiment == null ? null : textSentiment.negativeScore()
+                    textSentiment == null ? null : textSentiment.negativeScore(),
+                    textNegFusionWeights
             );
             taskRealtimeProgressTracker.publish(
                     task.id(),
                     textSentiment == null ? "TEXT_FALLBACK" : "TEXT_DONE",
                     textSentiment == null ? "文本模型不可用，已回退词典结果" : "文本情感分析完成",
                     progressDetails(
+                            "textEngine", textSentiment == null || textSentiment.meta() == null ? null : textSentiment.meta().engine(),
+                            "textModel", textSentiment == null || textSentiment.meta() == null ? null : textSentiment.meta().model(),
+                            "textRouting", textSentiment == null || textSentiment.meta() == null ? null : textSentiment.meta().routingStrategy(),
                             "lexiconNeg", round4(lexiconTextScore.textNeg()),
                             "modelNeg", textSentiment == null || textSentiment.negativeScore() == null ? null : round4(textSentiment.negativeScore()),
-                            "fusedNeg", round4(fusedTextNeg)
+                            "fusedNeg", round4(fusedTextNeg),
+                            "lexiconWeight", round4(textNegFusionWeights.lexiconWeight()),
+                            "modelWeight", round4(textNegFusionWeights.modelWeight())
                     )
             );
             SerClient.FusionTextFeatures fusionTextFeatures =
@@ -172,8 +186,30 @@ public class AnalysisTaskWorkerService {
             SerAnalyzeResponse response = serClient.analyze(Path.of(audioPath), languageHint, fusionTextFeatures);
             long serCostMs = Duration.between(started, Instant.now()).toMillis();
 
-            AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment =
+            AnalysisTaskResultResponse.RiskAssessmentPayload baseRiskAssessment =
                     riskScoringService.evaluate(toSegments(task.id(), response), fusedTextNeg);
+            ConsistencyDecision decision = consistencyGuardService.evaluate(
+                    task.id(),
+                    task.audioFileId(),
+                    traceId,
+                    transcript,
+                    response,
+                    textSentiment,
+                    fusedTextNeg
+            );
+            AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment =
+                    consistencyGuardService.applyDecisionNotice(baseRiskAssessment, decision);
+            taskRealtimeProgressTracker.publish(task.id(), "NARRATIVE_RUNNING", "Generating local narrative");
+            NarrativePayload narrative = narrativeGenerationService.generate(task.id(), response, transcript, riskAssessment, decision);
+            taskRealtimeProgressTracker.publish(
+                    task.id(),
+                    "NARRATIVE_DONE",
+                    "ready".equalsIgnoreCase(narrative.status()) ? "Local narrative ready" : "Using fallback narrative",
+                    progressDetails(
+                            "narrativeStatus", narrative.status(),
+                            "narrativeModel", narrative.model()
+                    )
+            );
             taskRealtimeProgressTracker.publish(
                     task.id(),
                     "PERSISTING",
@@ -188,11 +224,12 @@ public class AnalysisTaskWorkerService {
             AsrTranscribeResponse finalAsrResponse = asrResponse;
             final long finalSerCostMs = serCostMs;
             TextSentimentResponse finalTextSentiment = textSentiment;
+            TextNegFusionWeights finalTextNegFusionWeights = textNegFusionWeights;
             transactionTemplate.executeWithoutResult(s -> saveSuccessResult(
                     task, workerId, response, finalAsrResponse, transcript,
-                    lexiconTextScore, finalTextSentiment, fusedTextNeg, riskAssessment, finalSerCostMs
+                    lexiconTextScore, finalTextSentiment, fusedTextNeg, finalTextNegFusionWeights, riskAssessment, decision, narrative, finalSerCostMs
             ));
-            log.info("analysis task success: taskId={}, audioId={}, status=SUCCESS, attemptCount={}, serCostMs={}, asrCostMs={}, asrFailed={}, asrLanguageHint={}, textLength={}, textNegLexicon={}, textNegModel={}, textNegFused={}, finalRisk={}, fusionReady={}, fusionLabel={}",
+            log.info("analysis task success: taskId={}, audioId={}, status=SUCCESS, attemptCount={}, serCostMs={}, asrCostMs={}, asrFailed={}, asrLanguageHint={}, textLength={}, textNegLexicon={}, textNegModel={}, textNegFused={}, finalRisk={}, fusionReady={}, fusionLabel={}, decisionCode={}, decisionStatus={}",
                     task.id(), audioId, task.attemptCount(), serCostMs, asrCostMs, asrFailed,
                     languageHint,
                     transcript == null ? 0 : transcript.length(),
@@ -201,7 +238,9 @@ public class AnalysisTaskWorkerService {
                     fusedTextNeg,
                     riskAssessment.risk_score(),
                     response.fusion() == null ? null : response.fusion().ready(),
-                    response.fusion() == null ? null : response.fusion().label());
+                    response.fusion() == null ? null : response.fusion().label(),
+                    decision.code(),
+                    decision.status());
             taskRealtimeProgressTracker.publish(
                     task.id(),
                     "DONE",
@@ -210,7 +249,9 @@ public class AnalysisTaskWorkerService {
                             "serLatencyMs", serCostMs,
                             "riskScore", round4(riskAssessment.risk_score()),
                             "riskLevel", riskAssessment.risk_level(),
-                            "fusionReady", response.fusion() == null ? null : response.fusion().ready()
+                            "fusionReady", response.fusion() == null ? null : response.fusion().ready(),
+                            "decisionCode", decision.code(),
+                            "decisionStatus", decision.status()
                     )
             );
         } catch (Exception e) {
@@ -228,7 +269,10 @@ public class AnalysisTaskWorkerService {
                                      TextNegScorer.TextNegScoreResult lexiconTextScore,
                                      TextSentimentResponse textSentiment,
                                      double fusedTextNeg,
+                                     TextNegFusionWeights textNegFusionWeights,
                                      AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment,
+                                     ConsistencyDecision decision,
+                                     NarrativePayload narrative,
                                      long serLatencyMs) {
         String rawJson;
         try {
@@ -238,8 +282,14 @@ public class AnalysisTaskWorkerService {
                     transcript,
                     lexiconTextScore,
                     textSentiment,
-                    new TextNegFusionPayload(round4(fusedTextNeg), TEXT_LEXICON_WEIGHT, TEXT_MODEL_WEIGHT),
-                    riskAssessment
+                    new TextNegFusionPayload(
+                            round4(fusedTextNeg),
+                            round4(textNegFusionWeights.lexiconWeight()),
+                            round4(textNegFusionWeights.modelWeight())
+                    ),
+                    riskAssessment,
+                    decision,
+                    narrative
             ));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("failed to serialize SER response for taskId=" + task.id(), e);
@@ -461,13 +511,22 @@ public class AnalysisTaskWorkerService {
         return x * Math.log(x);
     }
 
-    private double fuseTextNeg(double lexiconScore, Double modelScore) {
+    private TextNegFusionWeights resolveTextNegFusionWeights(TextSentimentResponse textSentiment) {
+        if (textSentiment != null
+                && textSentiment.meta() != null
+                && "semantic_llm_v1".equalsIgnoreCase(textSentiment.meta().routingStrategy())) {
+            return new TextNegFusionWeights(TEXT_LEXICON_WEIGHT_SEMANTIC_LLM, TEXT_MODEL_WEIGHT_SEMANTIC_LLM);
+        }
+        return new TextNegFusionWeights(TEXT_LEXICON_WEIGHT, TEXT_MODEL_WEIGHT);
+    }
+
+    private double fuseTextNeg(double lexiconScore, Double modelScore, TextNegFusionWeights weights) {
         double lexical = clamp01(lexiconScore);
         if (modelScore == null) {
             return round4(lexical);
         }
         double model = clamp01(modelScore);
-        return round4(TEXT_LEXICON_WEIGHT * lexical + TEXT_MODEL_WEIGHT * model);
+        return round4(weights.lexiconWeight() * lexical + weights.modelWeight() * model);
     }
 
     private String normalizeLanguageHint(String language) {
@@ -520,12 +579,20 @@ public class AnalysisTaskWorkerService {
             TextNegScorer.TextNegScoreResult textNeg,
             TextSentimentResponse textSentiment,
             TextNegFusionPayload textNegFusion,
-            AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment
+            AnalysisTaskResultResponse.RiskAssessmentPayload riskAssessment,
+            ConsistencyDecision decision,
+            NarrativePayload narrative
     ) {
     }
 
     private record TextNegFusionPayload(
             double fusedTextNeg,
+            double lexiconWeight,
+            double modelWeight
+    ) {
+    }
+
+    private record TextNegFusionWeights(
             double lexiconWeight,
             double modelWeight
     ) {

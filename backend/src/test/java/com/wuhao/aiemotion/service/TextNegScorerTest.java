@@ -1,4 +1,4 @@
-﻿package com.wuhao.aiemotion.service;
+package com.wuhao.aiemotion.service;
 
 import org.junit.jupiter.api.Test;
 

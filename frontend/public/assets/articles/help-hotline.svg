@@ -1,0 +1,20 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#08131D"/>
+  <rect x="40" y="40" width="1120" height="720" rx="40" fill="url(#bg)"/>
+  <circle cx="912" cy="262" r="168" fill="#1D4A63"/>
+  <path d="M878 190C910 220 938 274 940 324" stroke="#E8FAFF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M860 250C882 276 904 296 928 312" stroke="#E8FAFF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M804 448C862 506 922 556 992 596" stroke="#97E2BF" stroke-width="18" stroke-linecap="round"/>
+  <rect x="132" y="500" width="262" height="122" rx="30" fill="#163049"/>
+  <text x="104" y="160" fill="#94C6DA" font-size="34" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">HELP</text>
+  <text x="104" y="302" fill="#F4FAFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">求助入口</text>
+  <text x="104" y="392" fill="#D7E8F8" font-size="36" font-family="'Microsoft YaHei', sans-serif">当情绪开始影响生活、学习或睡眠时，主动求助不是示弱。</text>
+  <text x="104" y="456" fill="#B6CAE3" font-size="28" font-family="'Microsoft YaHei', sans-serif">先记住 12356，再把附近可联系的机构保存下来。</text>
+  <text x="168" y="578" fill="#F3FAFF" font-size="72" font-family="'Microsoft YaHei', sans-serif" font-weight="700">12356</text>
+  <defs>
+    <linearGradient id="bg" x1="88" y1="56" x2="1082" y2="748" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#122236"/>
+      <stop offset="1" stop-color="#0D1727"/>
+    </linearGradient>
+  </defs>
+</svg>

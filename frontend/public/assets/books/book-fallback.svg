@@ -1,0 +1,15 @@
+<svg width="800" height="1200" viewBox="0 0 800 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1200" rx="36" fill="#0B1522"/>
+  <rect x="36" y="36" width="728" height="1128" rx="28" fill="url(#bg)" stroke="rgba(196,223,255,0.18)"/>
+  <path d="M174 924C290 792 396 726 502 742C592 756 650 814 712 900" stroke="#9EE1BD" stroke-width="18" stroke-linecap="round"/>
+  <rect x="132" y="196" width="120" height="18" rx="9" fill="#83B8C9"/>
+  <text x="132" y="344" fill="#F4FAFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">推荐书籍</text>
+  <text x="132" y="436" fill="#D8E7F8" font-size="34" font-family="'Microsoft YaHei', sans-serif">书封缺失时的统一占位图</text>
+  <text x="132" y="520" fill="#B2C6E2" font-size="28" font-family="'Microsoft YaHei', sans-serif">所有内容页、首页和后台预览共用同一套兜底。</text>
+  <defs>
+    <linearGradient id="bg" x1="72" y1="60" x2="708" y2="1110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#13243A"/>
+      <stop offset="1" stop-color="#0E1727"/>
+    </linearGradient>
+  </defs>
+</svg>

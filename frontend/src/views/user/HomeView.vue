@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 
-import { getHomeContent, type HomePayload, type RecommendedArticle, type RecommendedBook } from '@/api/home'
-import { postContentClick } from '@/api/admin'
+import { getHomeContent, type HomePayload } from '@/api/home'
 import { getNearbyPsyCenters, getPsyCentersByCity, type PsyCenter } from '@/api/psyCenter'
-import HeroSection from '@/components/ui/HeroSection.vue'
-import SectionBlock from '@/components/ui/SectionBlock.vue'
-import LoreCard from '@/components/ui/LoreCard.vue'
+import ArticleFeatureCard from '@/components/content/ArticleFeatureCard.vue'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import { parseError, type ErrorStatePayload } from '@/utils/error'
+import HeroSection from '@/components/ui/HeroSection.vue'
+import LoreCard from '@/components/ui/LoreCard.vue'
+import MediaFeatureCard from '@/components/ui/MediaFeatureCard.vue'
+import SectionBlock from '@/components/ui/SectionBlock.vue'
+import SmartImage from '@/components/ui/SmartImage.vue'
+import { ARTICLE_CATEGORY_LABELS, PSY_CENTER_CITY_OPTIONS, PSY_CENTER_CITY_REFERENCES, SOURCE_LEVEL_LABELS } from '@/constants/contentMeta'
 import { useUserAuthStore } from '@/stores/userAuth'
+import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useUserAuthStore()
@@ -26,27 +29,106 @@ const cityCode = ref('310100')
 const centers = ref<PsyCenter[]>([])
 const loadingCenters = ref(false)
 const centerError = ref<ErrorStatePayload | null>(null)
+const PSY_CENTER_PREVIEW_VERSION = '20260404-posters-v5-anime'
+const PSY_CENTER_RADIUS_KM = 15
+const centerQueryMode = ref<'city' | 'nearby'>('city')
+const nearbyOutOfCoverage = ref(false)
+const nearbyCityLabel = ref('')
+const nearbyCoords = ref<{ latitude: number; longitude: number } | null>(null)
+const SUPPORTED_CITY_OPTION_MAP = new Map<string, string>(PSY_CENTER_CITY_OPTIONS.map((item) => [item.value, item.label]))
+const SUPPORTED_CITY_LABEL_TEXT = PSY_CENTER_CITY_OPTIONS.map((item) => item.label).join('、')
 
-const cityOptions = [
-  { label: '上海', value: '310100' },
-  { label: '北京', value: '110100' },
-  { label: '广州', value: '440100' },
-  { label: '深圳', value: '440300' },
-  { label: '杭州', value: '330100' },
-]
+const featuredArticle = computed(() => home.value?.todayFeaturedArticle || home.value?.todayArticles[0] || null)
+const featuredBook = computed(() => home.value?.todayFeaturedBook || home.value?.todayBooks[0] || null)
+const previewCenters = computed(() => centers.value.slice(0, 4))
+const todayThemeLabel = computed(() => {
+  const key = home.value?.todayTheme?.themeKey
+  return key ? ARTICLE_CATEGORY_LABELS[key] || key : '今日主题'
+})
+const nearbyRecommendedCity = computed(() => {
+  if (!nearbyOutOfCoverage.value || !nearbyCoords.value) {
+    return null
+  }
 
-const trackContentClick = (contentType: 'BANNER' | 'ARTICLE' | 'BOOK' | 'PRACTICE', contentId: string | number) => {
-  if (!authStore.isAuthenticated) return
-  void postContentClick(contentType, contentId).catch(() => undefined)
-}
+  const toRadians = (value: number) => (value * Math.PI) / 180
+  const distanceBetween = (latitudeA: number, longitudeA: number, latitudeB: number, longitudeB: number) => {
+    const earthRadiusKm = 6371
+    const deltaLatitude = toRadians(latitudeB - latitudeA)
+    const deltaLongitude = toRadians(longitudeB - longitudeA)
+    const normalizedLatitudeA = toRadians(latitudeA)
+    const normalizedLatitudeB = toRadians(latitudeB)
+    const haversine =
+      Math.sin(deltaLatitude / 2) ** 2 +
+      Math.cos(normalizedLatitudeA) * Math.cos(normalizedLatitudeB) * Math.sin(deltaLongitude / 2) ** 2
+    return 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine))
+  }
 
-const goProtectedPath = async (path: string) => {
+  return PSY_CENTER_CITY_REFERENCES.reduce<(typeof PSY_CENTER_CITY_REFERENCES)[number] | null>((closest, candidate) => {
+    if (!nearbyCoords.value) {
+      return closest
+    }
+
+    const candidateDistance = distanceBetween(
+      nearbyCoords.value.latitude,
+      nearbyCoords.value.longitude,
+      candidate.latitude,
+      candidate.longitude,
+    )
+
+    if (!closest) {
+      return candidate
+    }
+
+    const closestDistance = distanceBetween(
+      nearbyCoords.value.latitude,
+      nearbyCoords.value.longitude,
+      closest.latitude,
+      closest.longitude,
+    )
+
+    return candidateDistance < closestDistance ? candidate : closest
+  }, null)
+})
+const centerToolbarHint = computed(() => {
+  if (centerQueryMode.value !== 'nearby') {
+    return ''
+  }
+  if (nearbyOutOfCoverage.value) {
+    return nearbyRecommendedCity.value
+      ? `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。推荐优先查看最近的已覆盖城市：${nearbyRecommendedCity.value.label}。`
+      : `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。你可以切换到以上城市继续查看。`
+  }
+  return `已根据定位结果同步到 ${nearbyCityLabel.value || '附近城市'}，下方优先展示定位命中的支持入口。`
+})
+const centerEmptyDescription = computed(() =>
+  nearbyOutOfCoverage.value
+    ? nearbyRecommendedCity.value
+      ? `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。推荐优先查看最近的已覆盖城市：${nearbyRecommendedCity.value.label}。`
+      : `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。请切换到已覆盖城市继续查看。`
+    : '当前资源列表不可用，请切换城市或稍后重试。',
+)
+const centerEmptyActionText = computed(() =>
+  nearbyOutOfCoverage.value
+    ? nearbyRecommendedCity.value
+      ? `查看推荐城市：${nearbyRecommendedCity.value.label}`
+      : '查看当前城市'
+    : '重试',
+)
+const centerSectionFooterText = computed(() => {
+  if (centerQueryMode.value === 'nearby') {
+    return `首页先展示定位命中的${nearbyCityLabel.value || '附近'}重点支持入口，完整机构列表可在资源页继续查看。`
+  }
+  return '首页先展示当前城市的重点支持入口，完整机构列表可在资源页继续查看。'
+})
+
+const goProtectedPath = async (path: RouteLocationRaw) => {
+  const resolvedPath = router.resolve(path).fullPath
   if (authStore.userRole === 'USER') {
     await router.push(path)
     return
   }
   ElMessage.info('请先登录用户账号再访问该功能')
-  await router.push({ path: '/app/login', query: { redirect: path } })
+  await router.push({ path: '/app/login', query: { redirect: resolvedPath } })
 }
 
 const handlePrimaryAction = async () => {
@@ -57,18 +139,75 @@ const handleSecondaryAction = async () => {
   await goProtectedPath('/app/reports')
 }
 
-const openArticle = (item: RecommendedArticle) => {
-  trackContentClick('ARTICLE', item.id)
-  if (item.contentUrl) {
-    window.open(item.contentUrl, '_blank', 'noopener,noreferrer')
-  }
+const openPsyCenters = async () => {
+  const query =
+    centerQueryMode.value === 'nearby' && nearbyCoords.value
+      ? {
+          mode: 'nearby',
+          latitude: String(nearbyCoords.value.latitude),
+          longitude: String(nearbyCoords.value.longitude),
+          cityCode: cityCode.value,
+        }
+      : {
+          cityCode: cityCode.value,
+        }
+
+  await goProtectedPath({ path: '/app/psy-centers', query })
 }
 
-const openBook = (item: RecommendedBook) => {
-  trackContentClick('BOOK', item.id)
-  if (item.purchaseUrl) {
-    window.open(item.purchaseUrl, '_blank', 'noopener,noreferrer')
+const openContentHub = async () => {
+  await router.push({
+    path: '/app/content',
+    query: home.value?.todayDate ? { date: home.value.todayDate } : undefined,
+  })
+}
+
+const openArticle = async (id: number) => {
+  await router.push(`/app/content/articles/${id}`)
+}
+
+const openBook = async (id: number) => {
+  await router.push(`/app/content/books/${id}`)
+}
+
+const resolveCenterPreviewImage = (center: PsyCenter) => {
+  const seedKey = center.seedKey?.trim()
+  return seedKey ? `/assets/psy-centers/${seedKey}.svg?v=${PSY_CENTER_PREVIEW_VERSION}` : ''
+}
+
+const openRecommendedCity = async () => {
+  if (!nearbyRecommendedCity.value) {
+    await loadCentersByCity()
+    return
   }
+
+  cityCode.value = nearbyRecommendedCity.value.value
+  await loadCentersByCity()
+}
+
+const resetNearbyCenterState = () => {
+  centerQueryMode.value = 'city'
+  nearbyOutOfCoverage.value = false
+  nearbyCityLabel.value = ''
+  nearbyCoords.value = null
+}
+
+const syncNearbyCitySelection = (rows: PsyCenter[]) => {
+  const firstCityCode = rows[0]?.cityCode?.trim()
+  const matchedCityLabel = firstCityCode ? SUPPORTED_CITY_OPTION_MAP.get(firstCityCode) : undefined
+
+  if (firstCityCode && matchedCityLabel) {
+    cityCode.value = firstCityCode
+  }
+
+  nearbyCityLabel.value = matchedCityLabel || rows[0]?.cityName?.trim() || ''
+}
+
+const applyNearbyCenters = (rows: PsyCenter[]) => {
+  centers.value = rows
+  centerQueryMode.value = 'nearby'
+  nearbyOutOfCoverage.value = rows.length === 0
+  syncNearbyCitySelection(rows)
 }
 
 const loadHome = async () => {
@@ -84,6 +223,7 @@ const loadHome = async () => {
 }
 
 const loadCentersByCity = async () => {
+  resetNearbyCenterState()
   loadingCenters.value = true
   centerError.value = null
   try {
@@ -105,8 +245,17 @@ const locateNearbyCenters = () => {
   loadingCenters.value = true
   navigator.geolocation.getCurrentPosition(
     async (position) => {
+      nearbyCoords.value = {
+        latitude: Number(position.coords.latitude.toFixed(6)),
+        longitude: Number(position.coords.longitude.toFixed(6)),
+      }
       try {
-        centers.value = await getNearbyPsyCenters(position.coords.latitude, position.coords.longitude, 20)
+        const rows = await getNearbyPsyCenters(nearbyCoords.value.latitude, nearbyCoords.value.longitude, PSY_CENTER_RADIUS_KM)
+        applyNearbyCenters(rows)
+        if (rows.length === 0) {
+          const recommendationText = nearbyRecommendedCity.value ? `，推荐查看 ${nearbyRecommendedCity.value.label}` : ''
+          ElMessage.info(`当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}${recommendationText}`)
+        }
       } catch (error) {
         centerError.value = parseError(error, '附近心理中心加载失败')
       } finally {
@@ -115,7 +264,7 @@ const locateNearbyCenters = () => {
     },
     () => {
       loadingCenters.value = false
-      ElMessage.warning('定位失败，请手动切换城市。')
+      ElMessage.warning('定位失败，请手动切换城市')
     },
     { enableHighAccuracy: true, timeout: 6000 },
   )
@@ -139,88 +288,127 @@ onMounted(async () => {
     <template v-else>
       <HeroSection
         eyebrow="情绪智能门户"
-        title="AI 语音情绪分析与心理状态预警系统"
-        subtitle="上传或录制语音，执行声学+文本多模态分析，生成可解释报告并提供建议与资源引导。"
-        primary-text="开始上传/录音"
+        title="AI 语音情绪分析与心理支持平台"
+        subtitle="上传或录制语音，获得多模态分析结果、结构化报告与支持资源推荐。"
+        primary-text="开始上传 / 录音"
         secondary-text="查看报告"
         @primary="handlePrimaryAction"
         @secondary="handleSecondaryAction"
       >
         <div class="hero-badge-row">
-          <span class="hero-chip">声学 + 文本多模态融合</span>
+          <span class="hero-chip">语音 + 文本多模态融合</span>
           <span class="hero-chip">任务进度实时可见</span>
-          <span class="hero-chip">可解释风险评分</span>
+          <span class="hero-chip">报告与支持资源联动</span>
         </div>
+
+        <template #bottom>
+          <div class="home-hero-flow">
+            <header class="home-hero-flow__header">
+              <p class="home-hero-flow__eyebrow">核心流程</p>
+              <h2>三步闭环</h2>
+              <p class="home-hero-flow__description">
+                从语音采集、分析识别到报告与支持资源，一条链路完整串起来。
+              </p>
+            </header>
+
+            <div class="step-grid">
+              <LoreCard title="01 上传 / 录音" subtitle="分片上传、进度追踪、账号绑定">
+                语音采集支持浏览器录音与本地文件上传，也支持中断续传。
+              </LoreCard>
+              <LoreCard title="02 分析识别" subtitle="ASR + 语音情绪 + 文本语义融合">
+                结合声音特征与文本转写信息，推断情绪倾向与风险信号。
+              </LoreCard>
+              <LoreCard title="03 报告 / 资源" subtitle="结果汇总、建议生成、支持资源衔接">
+                让一次分析结果最终落到可阅读、可追踪、可行动的页面里。
+              </LoreCard>
+            </div>
+          </div>
+        </template>
       </HeroSection>
 
       <SectionBlock
-        eyebrow="核心流程"
-        title="三步闭环"
-        description="从语音采集到预警建议的一体化链路。"
+        eyebrow="今日内容"
+        title="从今天的内容开始"
+        description="先看一句语录，再选一篇文章或一本书；如果今天正需要一点支撑，就从这里开始。"
       >
-        <div class="step-grid">
-          <LoreCard title="01 上传 / 录音" subtitle="分片上传、进度追踪、账号绑定。">
-            语音采集支持浏览器录音与本地文件上传，可中断续传。
-          </LoreCard>
-          <LoreCard title="02 分析识别" subtitle="ASR + 声学情绪 + 文本语义融合。">
-            系统联合语音信号与转写文本，推断情绪分布与风险倾向。
-          </LoreCard>
-          <LoreCard title="03 报告 / 预警" subtitle="风险评分、预警等级、建议与资源。">
-            结果结构化可追踪，便于长期随访与干预闭环。
-          </LoreCard>
-        </div>
-      </SectionBlock>
+        <div class="content-entry-layout content-fade-rise">
+          <section class="content-entry-hero">
+            <div class="content-entry-hero__main">
+              <div class="content-entry-hero__chips">
+                <span class="hero-chip hero-chip--accent">{{ todayThemeLabel }}</span>
+                <span class="hero-chip">{{ home?.todayDate || '今日内容' }}</span>
+              </div>
+              <p class="content-entry-hero__eyebrow">今日主轴</p>
+              <h3>{{ home?.todayTheme?.themeTitle || '先给情绪一个容器' }}</h3>
+              <p class="content-entry-hero__summary">
+                {{ home?.todayTheme?.themeSubtitle || '把难受从一团里拆出来，看见它、命名它，再决定往哪里走。' }}
+              </p>
+              <div class="content-entry-hero__actions">
+                <el-button type="primary" @click="openContentHub">进入内容专栏</el-button>
+                <p>先从今天这组内容里挑一个入口，再决定是否继续往下深读。</p>
+              </div>
+            </div>
 
-      <SectionBlock
-        eyebrow="创新能力"
-        title="系统亮点"
-        description="面向毕设展示：架构清晰、流程可落地、治理能力可扩展。"
-      >
-        <div class="innovation-grid">
-          <LoreCard title="多模态融合" subtitle="声学情绪 + 文本语义">采用 late fusion 融合两种信号，在噪声场景下更稳健。</LoreCard>
-          <LoreCard title="实时体验" subtitle="任务队列 + 进度 + 兜底状态">用户可持续看到处理进度，不再面对白屏等待。</LoreCard>
-          <LoreCard title="可解释评分" subtitle="评分贡献 + 趋势预警">报告展示置信度、风险等级与可执行建议。</LoreCard>
-        </div>
-      </SectionBlock>
+            <aside class="content-entry-hero__quote">
+              <p class="content-entry-hero__quote-label">今日语录</p>
+              <blockquote>
+                {{ home?.todayQuote?.content || '允许自己慢一点，不是退步，而是在给情绪留出被看见的时间。' }}
+              </blockquote>
+              <p class="content-entry-hero__quote-author">{{ home?.todayQuote?.author || 'AI Emotion 编辑部' }}</p>
+            </aside>
+          </section>
 
-      <SectionBlock
-        eyebrow="内容推荐"
-        title="语录、文章与书籍"
-        description="通过持续运营内容，让系统不仅“能分析”，也能“可陪伴”。"
-      >
-        <LoreCard v-if="home?.todayQuote" :title="`今日语录`" :subtitle="home.todayQuote.author || '佚名'">
-          {{ home.todayQuote.content }}
-        </LoreCard>
+          <div class="content-entry-stage">
+            <aside v-if="featuredBook" class="content-entry-book-spotlight">
+              <div class="content-entry-book-spotlight__head">
+                <p class="content-entry-stage__eyebrow">延展阅读</p>
+                <h3>今天配套的一本书</h3>
+                <p>如果今天这条线索对你有帮助，这本书适合继续往深处读。</p>
+              </div>
 
-        <div class="content-grid">
-          <div>
-            <h3 class="group-title">推荐文章</h3>
-            <div class="h-scroll">
-              <LoreCard
-                v-for="item in home?.recommendedArticles ?? []"
-                :key="`article-${item.id}`"
-                :title="item.title"
-                :subtitle="item.summary || '点击卡片查看文章'"
-                interactive
-                @click="openArticle(item)"
+              <div class="content-entry-book-spotlight__shelf">
+                <div class="content-entry-book-spotlight__cover-frame">
+                  <div class="content-entry-book-spotlight__cover">
+                    <SmartImage :src="featuredBook.coverImageUrl" :alt="featuredBook.title" kind="book" fit="cover" />
+                  </div>
+                </div>
+
+                <div class="content-entry-book-spotlight__meta">
+                  <span v-if="featuredBook.category" class="pill pill-muted">
+                    {{ ARTICLE_CATEGORY_LABELS[featuredBook.category] || featuredBook.category }}
+                  </span>
+                  <h4>{{ featuredBook.title }}</h4>
+                  <p class="content-entry-book-spotlight__author">{{ featuredBook.author || '推荐阅读' }}</p>
+                  <p class="content-entry-book-spotlight__summary">
+                    {{ featuredBook.recommendReason || featuredBook.description || '先在站内看推荐理由，再决定是否继续深读。' }}
+                  </p>
+                  <p v-if="featuredBook.highlights?.[0]" class="content-entry-book-spotlight__highlight">
+                    {{ featuredBook.highlights[0] }}
+                  </p>
+                </div>
+              </div>
+
+              <el-button type="primary" plain class="content-entry-book-spotlight__action" @click="openBook(featuredBook.id)">
+                查看书籍导读
+              </el-button>
+            </aside>
+
+            <section v-if="featuredArticle" class="content-entry-article-spotlight">
+              <div class="content-entry-article-spotlight__head">
+                <p class="content-entry-stage__eyebrow">主推文章</p>
+                <h3>今天先看这篇文章</h3>
+                <p>如果你今天想先读一篇更直接的内容，就从这里开始。</p>
+              </div>
+              <ArticleFeatureCard
+                :article="featuredArticle"
+                dense
+                :highlight-limit="1"
+                :show-action="false"
               />
-            </div>
-          </div>
-
-          <div>
-            <h3 class="group-title">推荐书籍</h3>
-            <div class="h-scroll">
-              <LoreCard
-                v-for="item in home?.recommendedBooks ?? []"
-                :key="`book-${item.id}`"
-                :title="item.title"
-                :subtitle="item.author || '推荐阅读'"
-                interactive
-                @click="openBook(item)"
-              >
-                {{ item.description || '点击卡片打开购买或详情页面。' }}
-              </LoreCard>
-            </div>
+              <el-button type="primary" plain class="content-entry-article-spotlight__action" @click="openArticle(featuredArticle.id)">
+                查看文章导读
+              </el-button>
+            </section>
           </div>
         </div>
       </SectionBlock>
@@ -228,15 +416,16 @@ onMounted(async () => {
       <SectionBlock
         eyebrow="支持资源"
         title="心理中心"
-        description="可按城市筛选或定位附近机构；接口异常仅影响本区块，不会导致页面崩溃。"
+        description="支持按城市切换或定位附近，机构卡会低调展示来源备注，方便复核。"
       >
         <div class="resource-toolbar">
           <el-select v-model="cityCode" style="width: 180px" @change="loadCentersByCity">
-            <el-option v-for="item in cityOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option v-for="item in PSY_CENTER_CITY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <el-button @click="locateNearbyCenters">定位附近</el-button>
           <el-button type="primary" plain @click="loadCentersByCity">刷新</el-button>
         </div>
+        <p v-if="centerToolbarHint" class="resource-toolbar__hint">{{ centerToolbarHint }}</p>
 
         <LoadingState v-if="loadingCenters" />
         <ErrorState
@@ -249,20 +438,34 @@ onMounted(async () => {
         <EmptyState
           v-else-if="centers.length === 0"
           title="暂无心理中心数据"
-          description="当前资源列表不可用，请切换城市或稍后重试。"
-          action-text="重试"
-          @action="loadCentersByCity"
+          :description="centerEmptyDescription"
+          :action-text="centerEmptyActionText"
+          @action="nearbyOutOfCoverage ? openRecommendedCity() : loadCentersByCity()"
         />
         <div v-else class="center-grid">
-          <LoreCard
-            v-for="center in centers"
+          <MediaFeatureCard
+            v-for="center in previewCenters"
             :key="String(center.id)"
+            image-kind="psy"
+            :image-url="resolveCenterPreviewImage(center)"
+            :image-alt="center.name"
             :title="center.name"
-            :subtitle="`${center.cityName || ''} ${center.district || ''}`.trim()"
+            :subtitle="`${center.cityName || ''} ${center.district || ''}`.trim() || '心理支持机构'"
+            :description="center.address || '暂无地址信息'"
           >
-            <p class="center-line">{{ center.address || '暂无地址信息' }}</p>
-            <p class="center-line">{{ center.phone || '暂无电话信息' }}</p>
-          </LoreCard>
+            <template #meta>
+              <span class="pill pill-muted">{{ center.cityName || '城市待补充' }}</span>
+              <span class="pill pill-accent">{{ SOURCE_LEVEL_LABELS[center.sourceLevel || ''] || '来源备注' }}</span>
+            </template>
+            <div class="center-detail">
+              <p>{{ center.phone || '暂无联系电话' }}</p>
+              <p>{{ center.sourceName || '待补充来源说明' }}</p>
+            </div>
+          </MediaFeatureCard>
+        </div>
+        <div v-if="previewCenters.length > 0" class="center-section-footer">
+          <p class="center-section-footer__text">{{ centerSectionFooterText }}</p>
+          <el-button type="primary" plain @click="openPsyCenters">查看更多心理中心</el-button>
         </div>
       </SectionBlock>
     </template>
@@ -273,7 +476,7 @@ onMounted(async () => {
 .home-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--content-gap-3);
 }
 
 .hero-badge-row {
@@ -285,41 +488,329 @@ onMounted(async () => {
 
 .hero-chip {
   display: inline-flex;
-  border-radius: 999px;
-  border: 1px solid rgba(174, 193, 225, 0.5);
-  background: rgba(11, 23, 42, 0.6);
+  border-radius: var(--content-radius-pill);
+  border: 1px solid var(--content-border-2);
+  background: var(--content-surface-2);
   color: #d7e7ff;
   font-size: 12px;
   padding: 6px 11px;
+  box-shadow: var(--content-shadow-1);
 }
 
-.step-grid,
-.innovation-grid,
-.center-grid {
+.home-hero-flow {
+  display: grid;
+  gap: var(--content-gap-3);
+}
+
+.home-hero-flow__header {
+  display: grid;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.home-hero-flow__eyebrow {
+  margin: 0;
+  color: #8dc5c8;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-hero-flow__header h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: clamp(28px, 4.4vw, 50px);
+  line-height: 1.06;
+  font-family: var(--font-display);
+}
+
+.home-hero-flow__description {
+  margin: 0;
+  max-width: 58ch;
+  color: #b8c7df;
+  line-height: 1.72;
+}
+
+.step-grid {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.content-grid {
-  display: grid;
-  gap: 16px;
+.home-hero-flow :deep(.lore-card) {
+  height: 100%;
+  padding: 18px;
 }
 
-.group-title {
-  margin: 0 0 10px;
-  color: #f5f9ff;
+.home-hero-flow :deep(.head h3) {
+  font-size: 16px;
+}
+
+.content-entry-layout {
+  display: grid;
+  gap: var(--content-gap-4);
+}
+
+.content-entry-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.28fr) minmax(280px, 0.84fr);
+  gap: var(--content-gap-4);
+  padding: 28px;
+  border-radius: var(--content-radius-3);
+  border: 1px solid var(--content-border-2);
+  background: var(--content-surface-3);
+  box-shadow: var(--content-shadow-3);
+}
+
+.content-entry-hero__main,
+.content-entry-hero__quote,
+.content-entry-stage,
+.content-entry-article-spotlight,
+.content-entry-book-spotlight,
+.content-entry-article-spotlight__head,
+.content-entry-book-spotlight__head,
+.content-entry-book-spotlight__meta {
+  display: grid;
+}
+
+.content-entry-hero__main,
+.content-entry-hero__quote {
+  gap: var(--content-gap-3);
+}
+
+.content-entry-hero__chips,
+.content-entry-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--content-gap-2);
+  flex-wrap: wrap;
+}
+
+.content-entry-hero__eyebrow,
+.content-entry-stage__eyebrow,
+.content-entry-hero__quote-label {
+  margin: 0;
+  color: #8dc5c8;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hero-chip--accent {
+  color: #f5fff8;
+  background: var(--content-chip-accent-surface);
+}
+
+.content-entry-hero__main h3,
+.content-entry-article-spotlight__head h3,
+.content-entry-book-spotlight__head h3 {
+  margin: 0;
+  color: #f6fbff;
   font-family: var(--font-display);
-  letter-spacing: 0.03em;
 }
 
-.h-scroll {
+.content-entry-hero__main h3 {
+  font-size: clamp(34px, 4.6vw, 56px);
+  line-height: 1.04;
+}
+
+.content-entry-hero__summary,
+.content-entry-article-spotlight__head p:last-child,
+.content-entry-book-spotlight__head p:last-child,
+.content-entry-hero__actions p,
+.content-entry-hero__quote-author {
+  margin: 0;
+  color: #a9c0e3;
+  line-height: 1.7;
+}
+
+.content-entry-hero__summary {
+  max-width: 58ch;
+  font-size: 15px;
+}
+
+.content-entry-hero__actions p {
+  color: #96afd0;
+}
+
+.content-entry-hero__quote {
+  align-content: start;
+  padding: 20px 22px;
+  border-radius: var(--content-radius-2);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-surface-inset);
+  box-shadow: var(--content-shadow-1);
+}
+
+.content-entry-hero__quote blockquote {
+  margin: 0;
+  color: #f6fbff;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.8vw, 32px);
+  line-height: 1.34;
+}
+
+.content-entry-stage {
+  gap: var(--content-gap-3);
+  grid-template-columns: minmax(360px, 1.08fr) minmax(320px, 0.92fr);
+  align-items: stretch;
+}
+
+.content-entry-stage__article {
+  min-width: 0;
+  height: 100%;
+}
+
+.content-entry-article-spotlight {
+  height: 100%;
+  gap: var(--content-gap-3);
+  grid-template-rows: auto 1fr auto;
+  padding: 20px;
+  border-radius: var(--content-radius-2);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-surface-1);
+  box-shadow: var(--content-shadow-1);
+}
+
+.content-entry-article-spotlight__head {
+  gap: 8px;
+}
+
+.content-entry-article-spotlight__head h3 {
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.content-entry-article-spotlight :deep(.article-card) {
+  grid-template-columns: 1fr;
+  padding: 16px;
+}
+
+.content-entry-article-spotlight :deep(.article-card__cover) {
+  min-height: 182px;
+}
+
+.content-entry-book-spotlight {
+  height: 100%;
+  gap: var(--content-gap-3);
+  grid-template-rows: auto 1fr auto;
+  padding: 20px;
+  border-radius: var(--content-radius-2);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-surface-1);
+  box-shadow: var(--content-shadow-1);
+}
+
+.content-entry-book-spotlight__head {
+  gap: 8px;
+}
+
+.content-entry-book-spotlight__head h3 {
+  margin: 0;
+  color: #f6fbff;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.content-entry-book-spotlight__head p:last-child {
+  margin: 0;
+  color: #a9c0e3;
+  line-height: 1.7;
+}
+
+.content-entry-book-spotlight__shelf {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 320px);
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  gap: var(--content-gap-3);
+  align-content: start;
+  justify-items: center;
+}
+
+.content-entry-book-spotlight__cover-frame {
+  width: min(188px, 100%);
+  padding: 12px;
+  border-radius: var(--content-radius-1);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-surface-inset);
+  display: grid;
+  gap: 10px;
+}
+
+.content-entry-book-spotlight__cover-frame::after {
+  content: '';
+  display: block;
+  height: 10px;
+  border-radius: var(--content-radius-pill);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-surface-1);
+}
+
+.content-entry-book-spotlight__cover {
+  overflow: hidden;
+  min-height: 272px;
+  border-radius: var(--content-radius-1);
+  box-shadow: var(--content-shadow-1);
+}
+
+.content-entry-book-spotlight__meta {
+  width: 100%;
+  gap: 10px;
+}
+
+.content-entry-book-spotlight__meta > .pill {
+  width: fit-content;
+  justify-self: start;
+}
+
+.content-entry-book-spotlight__meta h4,
+.content-entry-book-spotlight__author,
+.content-entry-book-spotlight__summary,
+.content-entry-book-spotlight__highlight {
+  margin: 0;
+}
+
+.content-entry-book-spotlight__meta h4 {
+  color: #f4fbff;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.content-entry-book-spotlight__author {
+  color: #c1d2eb;
+}
+
+.content-entry-book-spotlight__summary,
+.content-entry-book-spotlight__highlight {
+  color: #aac0e2;
+  line-height: 1.7;
+}
+
+.content-entry-book-spotlight__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.content-entry-book-spotlight__highlight {
+  padding-left: 14px;
+  position: relative;
+}
+
+.content-entry-book-spotlight__highlight::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #8fc3c8;
+}
+
+.content-entry-article-spotlight__action,
+.content-entry-book-spotlight__action {
+  align-self: stretch;
 }
 
 .resource-toolbar {
@@ -329,15 +820,107 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.center-line {
-  margin: 6px 0 0;
-  color: #c4d5ef;
-  line-height: 1.6;
+.resource-toolbar__hint {
+  margin: 2px 0 0;
+  color: #9fc6cf;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.center-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.center-grid :deep(.media-card) {
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 20px;
+}
+
+.center-grid :deep(.cover-wrap) {
+  min-height: 132px;
+}
+
+.center-grid :deep(.head h3) {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.center-grid :deep(.head p) {
+  margin-top: 6px;
+}
+
+.center-grid :deep(.description) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.center-grid :deep(.meta) {
+  gap: 6px;
+}
+
+.center-section-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.center-section-footer__text {
+  margin: 0;
+  color: #9fb2cf;
+  line-height: 1.7;
+}
+
+.center-detail {
+  display: grid;
+  gap: 4px;
+}
+
+.center-detail p {
+  margin: 0;
+  color: #c6d8ef;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--content-radius-pill);
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.pill-muted {
+  color: #d8e8f7;
+  background: var(--content-chip-muted-surface);
+}
+
+.pill-accent {
+  color: #f5fff8;
+  background: var(--content-chip-accent-surface);
+}
+
+@media (max-width: 1100px) {
+  .content-entry-hero,
+  .content-entry-stage {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 980px) {
-  .step-grid,
-  .innovation-grid,
+  .step-grid {
+    grid-template-columns: 1fr;
+  }
+
   .center-grid {
     grid-template-columns: 1fr;
   }

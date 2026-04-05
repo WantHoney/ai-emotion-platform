@@ -238,6 +238,8 @@ export const getWarnings = async (params: {
   pageSize: number
   status?: string
   riskLevel?: string
+  breached?: string
+  keyword?: string
 }) => {
   const response = await http.get<PaginatedResponse<WarningEventItem>>('/api/admin/warnings', {
     params,

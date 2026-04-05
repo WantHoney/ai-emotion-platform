@@ -7,6 +7,7 @@ import com.wuhao.aiemotion.dto.response.ReportListResponse;
 import com.wuhao.aiemotion.dto.response.TaskListResponse;
 import com.wuhao.aiemotion.service.AuthService;
 import com.wuhao.aiemotion.service.ResourceManagementService;
+import com.wuhao.aiemotion.service.TrendInsightPayload;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -93,6 +94,15 @@ public class ResourceController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only user account can access personal trend");
         }
         return resourceManagementService.reportTrend(user.userId(), days);
+    }
+
+    @GetMapping("/reports/trend/insight")
+    public TrendInsightPayload reportTrendInsight(@RequestParam(defaultValue = "30") int days,
+                                                  @RequestAttribute(AuthInterceptor.AUTH_USER_ATTR) AuthService.UserProfile user) {
+        if (!AuthService.ROLE_USER.equals(user.role())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only user account can access personal trend");
+        }
+        return resourceManagementService.reportTrendInsight(user.userId(), days);
     }
 
     @GetMapping("/reports/{reportId}")

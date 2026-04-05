@@ -172,13 +172,18 @@ public class AdminGovernanceService {
         }
     }
 
-    public Map<String, Object> listWarnings(int page, int pageSize, String status, String riskLevel) {
+    public Map<String, Object> listWarnings(int page,
+                                            int pageSize,
+                                            String status,
+                                            String riskLevel,
+                                            String breached,
+                                            String keyword) {
         warningGovernanceRepository.markOverdueWarningsBreached();
         int safePage = Math.max(1, page);
         int safePageSize = Math.min(100, Math.max(1, pageSize));
         int offset = (safePage - 1) * safePageSize;
-        long total = warningGovernanceRepository.countWarnings(status, riskLevel);
-        List<Map<String, Object>> items = warningGovernanceRepository.listWarnings(offset, safePageSize, status, riskLevel);
+        long total = warningGovernanceRepository.countWarnings(status, riskLevel, breached, keyword);
+        List<Map<String, Object>> items = warningGovernanceRepository.listWarnings(offset, safePageSize, status, riskLevel, breached, keyword);
         return Map.of(
                 "items", items,
                 "total", total,
@@ -315,7 +320,7 @@ public class AdminGovernanceService {
 
     public Map<String, Object> listAnalyticsDaily(Integer days) {
         int safeDays = Math.max(1, Math.min(days == null ? 14 : days, 30));
-        List<Map<String, Object>> items = warningGovernanceRepository.listDailySummary(safeDays);
+        List<Map<String, Object>> items = warningGovernanceRepository.listDailySummary(Math.max(0, safeDays - 1));
         if (items.isEmpty()) {
             items = warningGovernanceRepository.aggregateFallbackDaily(safeDays);
         }
@@ -356,7 +361,7 @@ public class AdminGovernanceService {
         List<Map<String, Object>> rules = warningGovernanceRepository.listRules();
         summary.put("ruleCount", rules.size());
         summary.put("enabledRuleCount", rules.stream().filter(it -> toInt(it.get("enabled"), 0) == 1).count());
-        summary.put("warningCount", warningGovernanceRepository.countWarnings(null, null));
+        summary.put("warningCount", warningGovernanceRepository.countWarnings(null, null, null, null));
         return summary;
     }
 
@@ -458,6 +463,10 @@ public class AdminGovernanceService {
 
         long currentTotal = currentMap.values().stream().mapToLong(Long::longValue).sum();
         long baselineTotal = baselineMap.values().stream().mapToLong(Long::longValue).sum();
+
+        if (currentTotal == 0 || baselineTotal == 0) {
+            return new DriftDistribution(List.of(), currentTotal, baselineTotal);
+        }
 
         Set<String> emotions = new HashSet<>();
         emotions.addAll(currentMap.keySet());

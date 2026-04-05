@@ -10,8 +10,14 @@ export interface PsyCenter {
   phone?: string
   latitude?: number
   longitude?: number
-  isRecommended?: boolean
+  sourceName?: string
+  sourceUrl?: string
+  sourceLevel?: string
+  recommended?: boolean
   enabled?: boolean
+  isActive?: boolean
+  seedKey?: string
+  dataSource?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -28,10 +34,21 @@ interface PsyCenterRaw {
   phone?: string
   latitude?: number | string
   longitude?: number | string
-  recommended?: boolean
-  isRecommended?: boolean
-  enabled?: boolean
-  is_enabled?: boolean
+  sourceName?: string
+  source_name?: string
+  sourceUrl?: string
+  source_url?: string
+  sourceLevel?: string
+  source_level?: string
+  recommended?: boolean | number
+  isRecommended?: boolean | number
+  enabled?: boolean | number
+  is_enabled?: boolean | number
+  isActive?: boolean | number
+  seedKey?: string
+  seed_key?: string
+  dataSource?: string
+  data_source?: string
   createdAt?: string
   created_at?: string
   updatedAt?: string
@@ -47,23 +64,29 @@ const toNumber = (value: unknown) => {
   return undefined
 }
 
-const normalizeCenter = (row: PsyCenterRaw): PsyCenter => {
-  return {
-    id: row.id ?? '',
-    name: row.name ?? '',
-    cityCode: row.cityCode ?? row.city_code,
-    cityName: row.cityName ?? row.city_name,
-    district: row.district,
-    address: row.address,
-    phone: row.phone,
-    latitude: toNumber(row.latitude),
-    longitude: toNumber(row.longitude),
-    isRecommended: row.isRecommended ?? row.recommended,
-    enabled: row.enabled ?? row.is_enabled,
-    createdAt: row.createdAt ?? row.created_at,
-    updatedAt: row.updatedAt ?? row.updated_at,
-  }
-}
+const toBool = (value: unknown) => value === true || value === 1 || value === '1'
+
+const normalizeCenter = (row: PsyCenterRaw): PsyCenter => ({
+  id: row.id ?? '',
+  name: row.name ?? '',
+  cityCode: row.cityCode ?? row.city_code,
+  cityName: row.cityName ?? row.city_name,
+  district: row.district,
+  address: row.address,
+  phone: row.phone,
+  latitude: toNumber(row.latitude),
+  longitude: toNumber(row.longitude),
+  sourceName: row.sourceName ?? row.source_name,
+  sourceUrl: row.sourceUrl ?? row.source_url,
+  sourceLevel: row.sourceLevel ?? row.source_level,
+  recommended: toBool(row.recommended ?? row.isRecommended),
+  enabled: toBool(row.enabled ?? row.is_enabled),
+  isActive: row.isActive == null ? undefined : toBool(row.isActive),
+  seedKey: row.seedKey ?? row.seed_key,
+  dataSource: row.dataSource ?? row.data_source,
+  createdAt: row.createdAt ?? row.created_at,
+  updatedAt: row.updatedAt ?? row.updated_at,
+})
 
 const normalizeList = (rows: PsyCenterRaw[]) => rows.map(normalizeCenter)
 

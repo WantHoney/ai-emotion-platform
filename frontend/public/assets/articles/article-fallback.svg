@@ -1,0 +1,17 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#0B1422"/>
+  <rect x="42" y="42" width="1116" height="716" rx="36" fill="url(#bg)" stroke="rgba(196,223,255,0.18)"/>
+  <circle cx="248" cy="214" r="154" fill="#173A5B" fill-opacity="0.72"/>
+  <circle cx="976" cy="612" r="182" fill="#264A35" fill-opacity="0.6"/>
+  <path d="M178 524C282 410 386 370 490 404C594 438 654 514 742 524C830 534 914 486 1034 354" stroke="#9EE0B7" stroke-width="22" stroke-linecap="round"/>
+  <text x="104" y="176" fill="#9BC8D6" font-size="36" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">AI EMOTION</text>
+  <text x="104" y="312" fill="#F5FBFF" font-size="80" font-family="'Microsoft YaHei', sans-serif" font-weight="700">推荐文章</text>
+  <text x="104" y="408" fill="#D6E7F9" font-size="38" font-family="'Microsoft YaHei', sans-serif">本地封面资源缺失时，会统一展示这个占位图。</text>
+  <text x="104" y="476" fill="#B4C8E8" font-size="30" font-family="'Microsoft YaHei', sans-serif">统一兜底，避免页面各自散落处理。</text>
+  <defs>
+    <linearGradient id="bg" x1="78" y1="58" x2="1064" y2="728" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#15233A"/>
+      <stop offset="1" stop-color="#0F1728"/>
+    </linearGradient>
+  </defs>
+</svg>

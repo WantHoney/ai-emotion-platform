@@ -181,18 +181,25 @@ public class WarningGovernanceRepository {
         return jdbcTemplate.update("UPDATE warning_rule SET enabled=?, updated_at=NOW() WHERE id=?", enabled, id);
     }
 
-    public long countWarnings(String status, String riskLevel) {
+    public long countWarnings(String status, String riskLevel, String breached, String keyword) {
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM warning_event WHERE 1=1");
         List<Object> args = new ArrayList<>();
-        appendWarningFilters(status, riskLevel, sql, args);
+        appendOperationalWarningScope(sql);
+        appendWarningFilters(status, riskLevel, breached, keyword, sql, args);
         Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
         return total == null ? 0 : total;
     }
 
-    public List<Map<String, Object>> listWarnings(int offset, int pageSize, String status, String riskLevel) {
+    public List<Map<String, Object>> listWarnings(int offset,
+                                                  int pageSize,
+                                                  String status,
+                                                  String riskLevel,
+                                                  String breached,
+                                                  String keyword) {
         StringBuilder sql = new StringBuilder("SELECT * FROM warning_event WHERE 1=1");
         List<Object> args = new ArrayList<>();
-        appendWarningFilters(status, riskLevel, sql, args);
+        appendOperationalWarningScope(sql);
+        appendWarningFilters(status, riskLevel, breached, keyword, sql, args);
         sql.append(" ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?");
         args.add(pageSize);
         args.add(offset);
@@ -529,12 +536,13 @@ public class WarningGovernanceRepository {
                   GROUP BY DATE(created_at)
                 ) r ON r.stat_date=d.stat_date
                 LEFT JOIN (
-                  SELECT DATE(created_at) AS stat_date, COUNT(*) AS warning_count
-                  FROM warning_event
-                  GROUP BY DATE(created_at)
+                  SELECT DATE(we.created_at) AS stat_date, COUNT(*) AS warning_count
+                  FROM warning_event we
+                  WHERE %s
+                  GROUP BY DATE(we.created_at)
                 ) w ON w.stat_date=d.stat_date
                 ORDER BY d.stat_date DESC
-                """,
+                """.formatted(operationalWarningScope("we")),
                 days
         );
     }
@@ -616,28 +624,30 @@ public class WarningGovernanceRepository {
             return jdbcTemplate.queryForMap(
                     """
                     SELECT COUNT(*) AS total,
-                           SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+                           COALESCE(SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END), 0) AS resolved,
                            0 AS breached,
                            0 AS acked,
                            NULL AS avg_ack_minutes,
                            AVG(CASE WHEN resolved_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, resolved_at) END) AS avg_resolve_minutes
                     FROM warning_event
                     WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-                    """,
+                      AND %s
+                    """.formatted(operationalWarningScope("warning_event")),
                     days
             );
         }
         Map<String, Object> row = jdbcTemplate.queryForMap(
                 """
                 SELECT COUNT(*) AS total,
-                       SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
-                       SUM(CASE WHEN breached=1 THEN 1 ELSE 0 END) AS breached,
-                       SUM(CASE WHEN first_acked_at IS NOT NULL THEN 1 ELSE 0 END) AS acked,
+                       COALESCE(SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END), 0) AS resolved,
+                       COALESCE(SUM(CASE WHEN breached=1 THEN 1 ELSE 0 END), 0) AS breached,
+                       COALESCE(SUM(CASE WHEN first_acked_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS acked,
                        AVG(CASE WHEN first_acked_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, first_acked_at) END) AS avg_ack_minutes,
                        AVG(CASE WHEN resolved_at IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, created_at, resolved_at) END) AS avg_resolve_minutes
                 FROM warning_event
                 WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-                """,
+                  AND %s
+                """.formatted(operationalWarningScope("warning_event")),
                 days
         );
         return row;
@@ -653,9 +663,10 @@ public class WarningGovernanceRepository {
                            0 AS breached
                     FROM warning_event
                     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                      AND %s
                     GROUP BY DATE(created_at)
                     ORDER BY stat_date DESC
-                    """,
+                    """.formatted(operationalWarningScope("warning_event")),
                     days
             );
         }
@@ -667,14 +678,20 @@ public class WarningGovernanceRepository {
                        SUM(CASE WHEN breached=1 THEN 1 ELSE 0 END) AS breached
                 FROM warning_event
                 WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                  AND %s
                 GROUP BY DATE(created_at)
                 ORDER BY stat_date DESC
-                """,
+                """.formatted(operationalWarningScope("warning_event")),
                 days
         );
     }
 
-    private void appendWarningFilters(String status, String riskLevel, StringBuilder sql, List<Object> args) {
+    private void appendWarningFilters(String status,
+                                      String riskLevel,
+                                      String breached,
+                                      String keyword,
+                                      StringBuilder sql,
+                                      List<Object> args) {
         if (status != null && !status.isBlank()) {
             sql.append(" AND status=?");
             args.add(status.trim().toUpperCase());
@@ -683,6 +700,51 @@ public class WarningGovernanceRepository {
             sql.append(" AND risk_level=?");
             args.add(riskLevel.trim().toUpperCase());
         }
+        if (breached != null && !breached.isBlank()) {
+            if (hasColumn("warning_event", "breached")) {
+                sql.append(" AND breached=?");
+                args.add("Y".equalsIgnoreCase(breached.trim()) ? 1 : 0);
+            } else if ("Y".equalsIgnoreCase(breached.trim())) {
+                sql.append(" AND 1=0");
+            }
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim() + "%";
+            sql.append("""
+                     AND (
+                       CAST(id AS CHAR) LIKE ?
+                       OR COALESCE(user_mask, '') LIKE ?
+                       OR CAST(task_id AS CHAR) LIKE ?
+                       OR CAST(report_id AS CHAR) LIKE ?
+                       OR COALESCE(top_emotion, '') LIKE ?
+                       OR COALESCE(status, '') LIKE ?
+                       OR COALESCE(risk_level, '') LIKE ?
+                     )
+                    """);
+            args.add(like);
+            args.add(like);
+            args.add(like);
+            args.add(like);
+            args.add(like);
+            args.add(like);
+            args.add(like);
+        }
+    }
+
+    private void appendOperationalWarningScope(StringBuilder sql) {
+        sql.append(" AND ").append(operationalWarningScope(""));
+    }
+
+    private String operationalWarningScope(String alias) {
+        String prefix = alias == null || alias.isBlank() ? "" : alias.trim() + ".";
+        return """
+                NOT (
+                  %sreport_id IS NULL
+                  AND %stask_id IS NULL
+                  AND %suser_id IS NULL
+                  AND COALESCE(%suser_mask, '') = 'system_drift'
+                )
+                """.formatted(prefix, prefix, prefix, prefix);
     }
 
     private String riskScoreExpr(String alias) {

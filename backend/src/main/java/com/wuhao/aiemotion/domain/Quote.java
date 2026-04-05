@@ -9,6 +9,9 @@ public record Quote(
         Integer sortOrder,
         Boolean recommended,
         Boolean enabled,
+        String seedKey,
+        String dataSource,
+        Boolean isActive,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

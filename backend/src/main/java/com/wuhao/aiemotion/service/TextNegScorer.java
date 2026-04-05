@@ -1,4 +1,4 @@
-﻿package com.wuhao.aiemotion.service;
+package com.wuhao.aiemotion.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

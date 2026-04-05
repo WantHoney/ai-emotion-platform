@@ -13,6 +13,8 @@ public class PsychologicalRiskScoringService {
     private static final double WEIGHT_SAD = 0.45;
     private static final double WEIGHT_ANGRY = 0.25;
     private static final double WEIGHT_VAR_CONF = 0.10;
+    public static final double ATTENTION_THRESHOLD_SCORE = 40.0D;
+    public static final double HIGH_RISK_THRESHOLD_SCORE = 70.0D;
 
     private final InterventionAdviceService interventionAdviceService;
 
@@ -102,10 +104,10 @@ public class PsychologicalRiskScoringService {
     }
 
     private String toRiskLevel(double riskScore) {
-        if (riskScore >= 70.0D) {
+        if (riskScore >= HIGH_RISK_THRESHOLD_SCORE) {
             return "HIGH";
         }
-        if (riskScore >= 40.0D) {
+        if (riskScore >= ATTENTION_THRESHOLD_SCORE) {
             return "ATTENTION";
         }
         return "NORMAL";

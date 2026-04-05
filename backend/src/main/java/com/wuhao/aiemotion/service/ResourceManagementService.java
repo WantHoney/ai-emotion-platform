@@ -47,6 +47,7 @@ public class ResourceManagementService {
     private final WarningEventTriggerService warningEventTriggerService;
     private final TaskNoFormatter taskNoFormatter;
     private final ReportNoFormatter reportNoFormatter;
+    private final TrendInsightGenerationService trendInsightGenerationService;
 
     public ResourceManagementService(AnalysisTaskRepository analysisTaskRepository,
                                      AnalysisResultRepository analysisResultRepository,
@@ -57,7 +58,8 @@ public class ResourceManagementService {
                                      ObjectMapper objectMapper,
                                      WarningEventTriggerService warningEventTriggerService,
                                      TaskNoFormatter taskNoFormatter,
-                                     ReportNoFormatter reportNoFormatter) {
+                                     ReportNoFormatter reportNoFormatter,
+                                     TrendInsightGenerationService trendInsightGenerationService) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
@@ -68,6 +70,7 @@ public class ResourceManagementService {
         this.warningEventTriggerService = warningEventTriggerService;
         this.taskNoFormatter = taskNoFormatter;
         this.reportNoFormatter = reportNoFormatter;
+        this.trendInsightGenerationService = trendInsightGenerationService;
     }
 
     public TaskListResponse tasks(int page,
@@ -153,7 +156,9 @@ public class ResourceManagementService {
 
     public Map<String, Object> reportTrend(long userId, int days) {
         int safeDays = Math.min(180, Math.max(1, days));
-        List<Map<String, Object>> trendRows = reportRepository.listUserDailyTrend(userId, safeDays);
+        double mediumRiskThreshold = PsychologicalRiskScoringService.ATTENTION_THRESHOLD_SCORE;
+        double highRiskThreshold = PsychologicalRiskScoringService.HIGH_RISK_THRESHOLD_SCORE;
+        List<Map<String, Object>> trendRows = reportRepository.listUserDailyTrend(userId, safeDays, mediumRiskThreshold, highRiskThreshold);
         List<Map<String, Object>> items = trendRows.stream()
                 .map(this::toTrendItem)
                 .toList();
@@ -164,7 +169,29 @@ public class ResourceManagementService {
         response.put("page", 1);
         response.put("pageSize", items.size());
         response.put("days", safeDays);
+        response.put("riskThresholds", Map.of(
+                "mediumMin", mediumRiskThreshold,
+                "highMin", highRiskThreshold
+        ));
         return response;
+    }
+
+    public TrendInsightPayload reportTrendInsight(long userId, int days) {
+        int safeDays = Math.min(180, Math.max(1, days));
+        double mediumRiskThreshold = PsychologicalRiskScoringService.ATTENTION_THRESHOLD_SCORE;
+        double highRiskThreshold = PsychologicalRiskScoringService.HIGH_RISK_THRESHOLD_SCORE;
+        List<Map<String, Object>> trendRows = reportRepository
+                .listUserDailyTrend(userId, safeDays, mediumRiskThreshold, highRiskThreshold)
+                .stream()
+                .map(this::toTrendItem)
+                .toList();
+        return trendInsightGenerationService.generate(
+                userId,
+                safeDays,
+                trendRows,
+                mediumRiskThreshold,
+                highRiskThreshold
+        );
     }
 
     public void deleteReport(long reportId) {

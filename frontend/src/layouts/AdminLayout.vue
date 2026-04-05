@@ -17,6 +17,8 @@ const adminNavItems = [
   { label: '轮播图管理', path: '/admin/content/banners' },
   { label: '语录管理', path: '/admin/content/quotes' },
   { label: '文章管理', path: '/admin/content/articles' },
+  { label: '书籍管理', path: '/admin/content/books' },
+  { label: '每日排期', path: '/admin/content/schedules' },
   { label: '心理中心管理', path: '/admin/psy-centers' },
   { label: '预警处置台', path: '/admin/warnings' },
   { label: '系统设置', path: '/admin/settings' },

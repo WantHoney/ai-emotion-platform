@@ -1,5 +1,5 @@
-﻿# Backend (Spring Boot)
-最后同步日期：`2026-03-03`
+# Backend (Spring Boot)
+最后同步日期：`2026-04-03`
 
 ## 1. 环境要求
 
@@ -13,7 +13,7 @@
 # 1) 导入基线结构
 mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 
-# 2) 按顺序执行迁移（V2 -> V8）
+# 2) 按顺序执行迁移（V2 -> V11）
 # backend/docs/db/migrations/V2__task_queue_schema.sql
 # backend/docs/db/migrations/V3__resource_observability_upgrade.sql
 # backend/docs/db/migrations/V4__home_cms_content.sql
@@ -21,6 +21,9 @@ mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 # backend/docs/db/migrations/V6__warning_sla_and_quality.sql
 # backend/docs/db/migrations/V7__task_report_user_sequence_indexes.sql
 # backend/docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql
+# backend/docs/db/migrations/V9__cms_seed_source_metadata.sql
+# backend/docs/db/migrations/V10__repair_psy_center_seed_data.sql
+# backend/docs/db/migrations/V11__content_hub_daily_schedule.sql
 
 # 3) 启动服务
 mvn spring-boot:run
@@ -52,7 +55,16 @@ mvn spring-boot:run
 
 - 基线：`docs/db/schema_v1.sql`
 - 迁移：`docs/db/migrations/`
-- 当前最新迁移：`V8__cleanup_legacy_sequence_indexes.sql`
+- 当前最新迁移：`V11__content_hub_daily_schedule.sql`
+- 当前本地运行库（`2026-03-23` 实库核对）共有 `28` 张活跃表。
+- `schema_v1.sql` 仍保留历史遗留表定义；当前运行库已在 `2026-02-16` 完成清理，表数由 `45` 降到 `28`。
+- 清理与审计记录见：
+  - `docs/db/audit/V6_table_usage_audit.md`
+  - `docs/db/audit/V6_cleanup_execution_20260216.md`
+- 当前实际表名和分域说明见：`../docs/db.md`
+- `V9` 为 CMS 内容与心理中心补充了 seed 元数据、显式活跃状态和来源字段。
+- `articles.source_url` 是新的正式外链字段，`content_url` 仅保留兼容期映射。
+- `V9` 的 `source_url` 回填语句已兼容 MySQL Workbench safe update mode。
 
 ## 5. 说明
 

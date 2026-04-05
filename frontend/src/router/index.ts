@@ -50,6 +50,30 @@ const router = createRouter({
           },
         },
         {
+          path: 'content/articles/:id',
+          name: 'userContentArticleDetail',
+          component: () => import('@/views/user/ContentArticleDetailView.vue'),
+          meta: {
+            publicUser: true,
+            title: '文章导读',
+            description: '站内导读与外部来源承接页',
+            breadcrumb: ['用户端', '内容专栏', '文章导读'],
+            hidePageHeader: true,
+          },
+        },
+        {
+          path: 'content/books/:id',
+          name: 'userContentBookDetail',
+          component: () => import('@/views/user/ContentBookDetailView.vue'),
+          meta: {
+            publicUser: true,
+            title: '书籍导读',
+            description: '站内导读与购书/了解更多入口',
+            breadcrumb: ['用户端', '内容专栏', '书籍导读'],
+            hidePageHeader: true,
+          },
+        },
+        {
           path: 'about',
           name: 'userAbout',
           component: () => import('@/views/user/AboutView.vue'),
@@ -218,6 +242,28 @@ const router = createRouter({
             title: '文章管理',
             description: '文章内容管理（新增、查询、编辑、删除）',
             breadcrumb: ['管理端', '内容运营', '文章管理'],
+          },
+        },
+        {
+          path: 'content/books',
+          name: 'adminBooks',
+          component: () => import('@/views/admin/AdminBooksView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '书籍管理',
+            description: '书籍内容管理（新增、查询、编辑、删除）',
+            breadcrumb: ['管理端', '内容运营', '书籍管理'],
+          },
+        },
+        {
+          path: 'content/schedules',
+          name: 'adminContentSchedules',
+          component: () => import('@/views/admin/AdminContentSchedulesView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '每日排期',
+            description: '按日期配置主题、语录、文章与书籍组合',
+            breadcrumb: ['管理端', '内容运营', '每日排期'],
           },
         },
         {

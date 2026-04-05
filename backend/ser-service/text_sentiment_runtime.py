@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,6 +10,16 @@ NEGATIVE_HINTS = ("neg", "negative", "sad", "ang", "anger", "fear", "disgust")
 NEUTRAL_HINTS = ("neu", "neutral")
 POSITIVE_HINTS = ("pos", "positive", "happy", "joy", "love")
 EMOTION4_LABELS = ("ANG", "HAP", "NEU", "SAD")
+DEFAULT_EMOTION4_MAPPED_MASS_MIN = 0.95
+
+
+def _read_mapped_mass_min() -> float:
+    raw = os.getenv("TEXT_SENTIMENT_EMOTION4_MAPPED_MASS_MIN", str(DEFAULT_EMOTION4_MAPPED_MASS_MIN))
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = DEFAULT_EMOTION4_MAPPED_MASS_MIN
+    return max(0.0, min(1.0, value))
 
 
 def _categorize_label(label: str) -> str | None:
@@ -44,10 +55,12 @@ class TextSentimentRuntime:
     model_ref: str
     device_name: str = "auto"
     max_length: int = 256
+    emotion4_mapped_mass_min: float = DEFAULT_EMOTION4_MAPPED_MASS_MIN
 
     def __post_init__(self) -> None:
         resolved = Path(self.model_ref)
         self.model_ref = str(resolved.resolve()) if resolved.exists() else self.model_ref
+        self.emotion4_mapped_mass_min = _read_mapped_mass_min()
 
         if self.device_name == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -94,6 +107,7 @@ class TextSentimentRuntime:
                 "scores": {"negative": 0.0, "neutral": 1.0, "positive": 0.0},
                 "emotion4Ready": False,
                 "emotion4Scores": {label: 0.0 for label in EMOTION4_LABELS},
+                "mappedMass": 0.0,
                 "emotion4Label": "NEU",
                 "emotion4Confidence": 1.0,
                 "topLabelRaw": "EMPTY",
@@ -114,7 +128,7 @@ class TextSentimentRuntime:
 
         raw_scores: dict[str, float] = {}
         category_scores = {"negative": 0.0, "neutral": 0.0, "positive": 0.0}
-        emotion4_scores = {label: 0.0 for label in EMOTION4_LABELS}
+        mapped_emotion4_scores = {label: 0.0 for label in EMOTION4_LABELS}
 
         for idx in range(int(probs.shape[0])):
             label = self.id2label.get(idx, f"LABEL_{idx}")
@@ -125,7 +139,7 @@ class TextSentimentRuntime:
                 category_scores[category] += score
             emotion4 = _normalize_emotion4_label(label)
             if emotion4 is not None:
-                emotion4_scores[emotion4] += score
+                mapped_emotion4_scores[emotion4] += score
 
         if sum(category_scores.values()) <= 0.0:
             category_scores = self._fallback_category_scores(probs)
@@ -134,10 +148,14 @@ class TextSentimentRuntime:
             if unknown_mass > 0:
                 category_scores["neutral"] += unknown_mass
 
-        emotion4_ready = sum(emotion4_scores.values()) > 0.0
-        if not emotion4_ready:
+        mapped_mass = float(sum(mapped_emotion4_scores.values()))
+        emotion4_ready = mapped_mass >= self.emotion4_mapped_mass_min
+        if emotion4_ready:
+            emotion4_scores = dict(mapped_emotion4_scores)
+        else:
             # Fall back to sentiment->emotion projection to keep API stable for fusion features.
             negative = float(category_scores["negative"])
+            emotion4_scores = {label: 0.0 for label in EMOTION4_LABELS}
             emotion4_scores["ANG"] = negative * 0.5
             emotion4_scores["SAD"] = negative * 0.5
             emotion4_scores["NEU"] = float(category_scores["neutral"])
@@ -166,6 +184,7 @@ class TextSentimentRuntime:
             },
             "emotion4Ready": bool(emotion4_ready),
             "emotion4Scores": emotion4_scores,
+            "mappedMass": mapped_mass,
             "emotion4Label": emotion4_label,
             "emotion4Confidence": emotion4_conf,
             "topLabelRaw": best_raw_label,

@@ -43,13 +43,10 @@ public class PsyCenterService {
         }
         try {
             List<PsyCenter> rows = psyCenterRepository.findNearby(latitude, longitude, radiusKm, Math.max(limit, 1));
-            if (rows == null || rows.isEmpty()) {
-                return placeholderNearby(latitude, longitude);
-            }
-            return rows;
+            return rows == null ? List.of() : rows;
         } catch (Exception e) {
-            log.warn("psy center nearby query failed, fallback to placeholder list", e);
-            return placeholderNearby(latitude, longitude);
+            log.warn("psy center nearby query failed", e);
+            throw new IllegalStateException("psy center nearby query failed", e);
         }
     }
 
@@ -58,15 +55,55 @@ public class PsyCenterService {
     }
 
     public void adminCreate(String name, String cityCode, String cityName, String district, String address, String phone,
-                            BigDecimal latitude, BigDecimal longitude, boolean recommended, boolean enabled) {
-        psyCenterRepository.create(new PsyCenter(null, name, cityCode, cityName, district, address, phone,
-                latitude, longitude, recommended, enabled, null, null));
+                            BigDecimal latitude, BigDecimal longitude, String sourceName, String sourceUrl,
+                            String sourceLevel, boolean recommended, boolean enabled, boolean isActive) {
+        psyCenterRepository.create(new PsyCenter(
+                null,
+                name,
+                cityCode,
+                cityName,
+                district,
+                address,
+                phone,
+                latitude,
+                longitude,
+                sourceName,
+                sourceUrl,
+                sourceLevel,
+                recommended,
+                enabled,
+                null,
+                "manual",
+                isActive,
+                null,
+                null
+        ));
     }
 
     public void adminUpdate(long id, String name, String cityCode, String cityName, String district, String address, String phone,
-                            BigDecimal latitude, BigDecimal longitude, boolean recommended, boolean enabled) {
-        int updated = psyCenterRepository.update(id, new PsyCenter(id, name, cityCode, cityName, district, address,
-                phone, latitude, longitude, recommended, enabled, null, null));
+                            BigDecimal latitude, BigDecimal longitude, String sourceName, String sourceUrl,
+                            String sourceLevel, boolean recommended, boolean enabled, boolean isActive) {
+        int updated = psyCenterRepository.update(id, new PsyCenter(
+                id,
+                name,
+                cityCode,
+                cityName,
+                district,
+                address,
+                phone,
+                latitude,
+                longitude,
+                sourceName,
+                sourceUrl,
+                sourceLevel,
+                recommended,
+                enabled,
+                null,
+                null,
+                isActive,
+                null,
+                null
+        ));
         if (updated == 0) {
             throw new IllegalArgumentException("psy center not found: " + id);
         }
@@ -90,28 +127,17 @@ public class PsyCenterService {
                 "400-000-0000",
                 new BigDecimal("31.2304"),
                 new BigDecimal("121.4737"),
+                "示例来源",
+                null,
+                "trusted_reference",
                 true,
+                true,
+                null,
+                "manual",
                 true,
                 LocalDateTime.now(),
                 LocalDateTime.now()
         ));
     }
 
-    private List<PsyCenter> placeholderNearby(double latitude, double longitude) {
-        return List.of(new PsyCenter(
-                0L,
-                "附近心理支持中心（示例）",
-                "000000",
-                "示例城市",
-                "示例区域",
-                "示例地址 1 号",
-                "400-000-0000",
-                BigDecimal.valueOf(latitude),
-                BigDecimal.valueOf(longitude),
-                true,
-                true,
-                LocalDateTime.now(),
-                LocalDateTime.now()
-        ));
-    }
 }

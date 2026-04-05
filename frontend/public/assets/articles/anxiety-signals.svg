@@ -1,0 +1,19 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#081420"/>
+  <rect x="40" y="40" width="1120" height="720" rx="40" fill="url(#bg)"/>
+  <circle cx="866" cy="254" r="154" fill="#204B63"/>
+  <path d="M814 216L940 342" stroke="#E0FAFF" stroke-width="22" stroke-linecap="round"/>
+  <path d="M940 216L814 342" stroke="#E0FAFF" stroke-width="22" stroke-linecap="round"/>
+  <path d="M248 560C312 472 384 428 464 428H742C806 428 872 458 930 514" stroke="#95E1C0" stroke-width="18" stroke-linecap="round"/>
+  <path d="M268 640H924" stroke="#1B364F" stroke-width="14" stroke-linecap="round"/>
+  <text x="104" y="164" fill="#8DC7DA" font-size="34" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">ANXIETY</text>
+  <text x="104" y="306" fill="#F4FAFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">焦虑信号</text>
+  <text x="104" y="394" fill="#D8E8F7" font-size="36" font-family="'Microsoft YaHei', sans-serif">身体绷紧、担心反复和注意力被牵走，都是常见提醒。</text>
+  <text x="104" y="458" fill="#B5CAE2" font-size="28" font-family="'Microsoft YaHei', sans-serif">先识别，再命名，最后再决定是否需要外部支持。</text>
+  <defs>
+    <linearGradient id="bg" x1="88" y1="60" x2="1078" y2="744" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F2237"/>
+      <stop offset="1" stop-color="#0D1727"/>
+    </linearGradient>
+  </defs>
+</svg>

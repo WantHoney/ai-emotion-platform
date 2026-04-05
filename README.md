@@ -316,8 +316,11 @@ Frontend upload page (`/app/upload`) already uses chunk mode with realtime progr
   - `backend/docs/db/migrations/V6__warning_sla_and_quality.sql`
   - `backend/docs/db/migrations/V7__task_report_user_sequence_indexes.sql`
   - `backend/docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql`
+  - `backend/docs/db/migrations/V9__cms_seed_source_metadata.sql`
+  - `backend/docs/db/migrations/V10__repair_psy_center_seed_data.sql`
+  - `backend/docs/db/migrations/V11__content_hub_daily_schedule.sql`
 
-Current latest migration is `V8`.
+Current latest migration is `V11`.
 
 ## 10. Troubleshooting
 

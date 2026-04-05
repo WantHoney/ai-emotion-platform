@@ -9,6 +9,7 @@ import com.wuhao.aiemotion.dto.response.AnalysisSegmentsResponse;
 import com.wuhao.aiemotion.dto.response.AnalysisTaskResultResponse;
 import com.wuhao.aiemotion.dto.response.AnalysisTaskStartResponse;
 import com.wuhao.aiemotion.dto.response.AnalysisTaskStatusResponse;
+import com.wuhao.aiemotion.dto.response.DecisionResponse;
 import com.wuhao.aiemotion.repository.AnalysisResultRepository;
 import com.wuhao.aiemotion.repository.AnalysisSegmentRepository;
 import com.wuhao.aiemotion.repository.AnalysisTaskRepository;
@@ -39,6 +40,7 @@ public class AnalysisTaskService {
     private final AudioRepository audioRepository;
     private final AuthRepository authRepository;
     private final PsychologicalRiskScoringService riskScoringService;
+    private final ConsistencyGuardService consistencyGuardService;
     private final ObjectMapper objectMapper;
     private final AnalysisWorkerProperties workerProperties;
     private final TaskNoFormatter taskNoFormatter;
@@ -49,6 +51,7 @@ public class AnalysisTaskService {
                                AudioRepository audioRepository,
                                AuthRepository authRepository,
                                PsychologicalRiskScoringService riskScoringService,
+                               ConsistencyGuardService consistencyGuardService,
                                ObjectMapper objectMapper,
                                AnalysisWorkerProperties workerProperties,
                                TaskNoFormatter taskNoFormatter) {
@@ -58,6 +61,7 @@ public class AnalysisTaskService {
         this.audioRepository = audioRepository;
         this.authRepository = authRepository;
         this.riskScoringService = riskScoringService;
+        this.consistencyGuardService = consistencyGuardService;
         this.objectMapper = objectMapper;
         this.workerProperties = workerProperties;
         this.taskNoFormatter = taskNoFormatter;
@@ -89,8 +93,9 @@ public class AnalysisTaskService {
             overall = analysisResultRepository.findByTaskId(taskId)
                     .map(result -> {
                         List<AnalysisSegment> segments = analysisSegmentRepository.findByTaskIdOrderByStartMs(taskId);
-                        AnalysisTaskResultResponse.RiskAssessmentPayload risk = buildRiskAssessment(taskId, result, segments);
-                        return toOverallSummary(result, risk);
+                        ConsistencyDecision decision = consistencyGuardService.readPersistedDecision(result.rawJson());
+                        AnalysisTaskResultResponse.RiskAssessmentPayload risk = buildRiskAssessment(taskId, result, segments, decision);
+                        return toOverallSummary(result, risk, toDecisionResponse(decision));
                     })
                     .orElse(null);
         }
@@ -121,7 +126,8 @@ public class AnalysisTaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "analysis_result not found: " + taskId));
 
         List<AnalysisSegment> allSegments = analysisSegmentRepository.findByTaskIdOrderByStartMs(taskId);
-        AnalysisTaskResultResponse.RiskAssessmentPayload risk = buildRiskAssessment(taskId, result, allSegments);
+        ConsistencyDecision decision = consistencyGuardService.readPersistedDecision(result.rawJson());
+        AnalysisTaskResultResponse.RiskAssessmentPayload risk = buildRiskAssessment(taskId, result, allSegments, decision);
 
         long toMs = resolveDefaultToMs(result);
         long total = analysisSegmentRepository.countSegmentsInRange(taskId, 0, toMs);
@@ -132,7 +138,7 @@ public class AnalysisTaskService {
                 .toList();
 
         return new AnalysisTaskResultResponse(
-                toResultPayload(result, risk),
+                toResultPayload(result, risk, toDecisionResponse(decision)),
                 segments,
                 total,
                 total > segments.size()
@@ -211,9 +217,11 @@ public class AnalysisTaskService {
     }
 
     private AnalysisTaskStatusResponse.OverallSummary toOverallSummary(AnalysisResult r,
-                                                                       AnalysisTaskResultResponse.RiskAssessmentPayload risk) {
+                                                                       AnalysisTaskResultResponse.RiskAssessmentPayload risk,
+                                                                       DecisionResponse decision) {
         return new AnalysisTaskStatusResponse.OverallSummary(
                 r.overallEmotionCode(),
+                decision,
                 r.overallConfidence(),
                 r.durationMs(),
                 r.sampleRate(),
@@ -223,12 +231,14 @@ public class AnalysisTaskService {
     }
 
     private AnalysisTaskResultResponse.AnalysisResultPayload toResultPayload(AnalysisResult r,
-                                                                             AnalysisTaskResultResponse.RiskAssessmentPayload risk) {
+                                                                             AnalysisTaskResultResponse.RiskAssessmentPayload risk,
+                                                                             DecisionResponse decision) {
         return new AnalysisTaskResultResponse.AnalysisResultPayload(
                 r.id(),
                 r.taskId(),
                 r.modelName(),
                 r.overallEmotionCode(),
+                decision,
                 r.overallConfidence(),
                 r.durationMs(),
                 r.sampleRate(),
@@ -241,9 +251,13 @@ public class AnalysisTaskService {
 
     private AnalysisTaskResultResponse.RiskAssessmentPayload buildRiskAssessment(long taskId,
                                                                                  AnalysisResult result,
-                                                                                 List<AnalysisSegment> segments) {
+                                                                                 List<AnalysisSegment> segments,
+                                                                                 ConsistencyDecision decision) {
         double textNeg = resolveTextNeg(result);
-        AnalysisTaskResultResponse.RiskAssessmentPayload risk = riskScoringService.evaluate(segments, textNeg);
+        AnalysisTaskResultResponse.RiskAssessmentPayload risk = consistencyGuardService.applyDecisionNotice(
+                riskScoringService.evaluate(segments, textNeg),
+                decision
+        );
         log.info("risk scoring computed in API layer (not persisted): taskId={}, riskScore={}, riskLevel={}, pSad={}, pAngry={}, varConf={}, textNeg={}",
                 taskId,
                 risk.risk_score(),
@@ -253,6 +267,20 @@ public class AnalysisTaskService {
                 risk.var_conf(),
                 risk.text_neg());
         return risk;
+    }
+
+    private DecisionResponse toDecisionResponse(ConsistencyDecision decision) {
+        if (decision == null) {
+            return null;
+        }
+        return new DecisionResponse(
+                decision.code(),
+                decision.status(),
+                decision.reason(),
+                decision.source(),
+                decision.baseEmotionCode(),
+                decision.baseConfidence()
+        );
     }
 
     private double resolveTextNeg(AnalysisResult result) {

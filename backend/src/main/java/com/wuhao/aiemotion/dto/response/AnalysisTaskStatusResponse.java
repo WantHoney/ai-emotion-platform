@@ -17,6 +17,7 @@ public record AnalysisTaskStatusResponse(
 ) {
     public record OverallSummary(
             String overall_emotion_code,
+            DecisionResponse decision,
             Double overall_confidence,
             Integer duration_ms,
             Integer sample_rate,

@@ -16,6 +16,7 @@ public record TaskRealtimeSnapshotResponse(
         String errorMessage,
         boolean terminal,
         RiskSummary risk,
+        DecisionResponse decision,
         ProgressSummary progress,
         List<RiskCurvePoint> curve
 ) {

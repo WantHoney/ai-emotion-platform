@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import EmptyState from '@/components/states/EmptyState.vue'
@@ -39,6 +39,7 @@ const actionsError = ref<ErrorStatePayload | null>(null)
 const actionsDrawer = ref(false)
 const currentWarning = ref<WarningEventItem | null>(null)
 const actionRows = ref<WarningActionItem[]>([])
+let latestActionRequestId = 0
 
 const query = reactive({
   page: 1,
@@ -73,27 +74,6 @@ const isClosed = (row: WarningEventItem) => row.status === 'RESOLVED' || row.sta
 const canAck = (row: WarningEventItem) => row.status === 'NEW'
 const canFollow = (row: WarningEventItem) => !isClosed(row)
 const canResolve = (row: WarningEventItem) => !isClosed(row)
-
-const filteredRows = computed(() => {
-  const keyword = query.keyword.trim().toLowerCase()
-  return rows.value.filter((row) => {
-    if (query.breached === 'Y' && !isBreached(row)) return false
-    if (query.breached === 'N' && isBreached(row)) return false
-    if (!keyword) return true
-
-    const fields = [
-      String(row.id ?? ''),
-      String(row.user_mask ?? ''),
-      String(row.task_id ?? ''),
-      String(row.report_id ?? ''),
-      String(row.top_emotion ?? ''),
-      String(row.status ?? ''),
-      String(row.risk_level ?? ''),
-    ].map((v) => v.toLowerCase())
-
-    return fields.some((value) => value.includes(keyword))
-  })
-})
 
 const selectionIds = computed(() => selection.value.map((row) => row.id))
 const selectedCount = computed(() => selection.value.length)
@@ -222,6 +202,8 @@ const loadWarnings = async () => {
       pageSize: query.pageSize,
       status: query.status || undefined,
       riskLevel: query.riskLevel || undefined,
+      breached: query.breached || undefined,
+      keyword: query.keyword.trim() || undefined,
     })
     rows.value = response.items ?? []
     total.value = response.total ?? 0
@@ -234,14 +216,24 @@ const loadWarnings = async () => {
 }
 
 const loadActions = async (warningId: number) => {
+  const requestId = ++latestActionRequestId
   actionsLoading.value = true
   actionsError.value = null
+  actionRows.value = []
   try {
-    actionRows.value = await getWarningActions(warningId)
+    const rowsValue = await getWarningActions(warningId)
+    if (requestId !== latestActionRequestId || currentWarning.value?.id !== warningId) {
+      return
+    }
+    actionRows.value = rowsValue
   } catch (error) {
-    actionsError.value = parseError(error, '预警处置时间线加载失败')
+    if (requestId === latestActionRequestId) {
+      actionsError.value = parseError(error, '预警处置时间线加载失败')
+    }
   } finally {
-    actionsLoading.value = false
+    if (requestId === latestActionRequestId) {
+      actionsLoading.value = false
+    }
   }
 }
 
@@ -422,7 +414,7 @@ const handleSizeChange = async (size: number) => {
 
 let filterTimer: ReturnType<typeof setTimeout> | null = null
 watch(
-  () => [query.status, query.riskLevel],
+  () => [query.status, query.riskLevel, query.breached, query.keyword],
   () => {
     if (filterTimer) clearTimeout(filterTimer)
     filterTimer = setTimeout(() => {
@@ -434,6 +426,14 @@ watch(
 
 onMounted(async () => {
   await loadWarnings()
+})
+
+onBeforeUnmount(() => {
+  latestActionRequestId += 1
+  if (filterTimer) {
+    clearTimeout(filterTimer)
+    filterTimer = null
+  }
 })
 </script>
 
@@ -488,7 +488,7 @@ onMounted(async () => {
       @retry="loadWarnings"
     />
     <EmptyState
-      v-else-if="filteredRows.length === 0"
+      v-else-if="rows.length === 0"
       title="暂无预警事件"
       description="当前筛选条件下未匹配到预警事件。"
       action-text="重新加载"
@@ -527,7 +527,7 @@ onMounted(async () => {
         <span class="batch-note">选中 ID：{{ selectionIds.join(', ') || '-' }}</span>
       </div>
 
-      <el-table :data="filteredRows" border row-key="id" @selection-change="handleSelectionChange">
+      <el-table :data="rows" border row-key="id" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="50" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="user_mask" label="用户脱敏标识" width="120" />
@@ -634,13 +634,13 @@ onMounted(async () => {
 }
 
 .batch-note {
-  color: #64748b;
+  color: var(--admin-text-muted);
   font-size: 12px;
 }
 
 .sla-gap {
   margin-top: 4px;
-  color: #64748b;
+  color: var(--admin-text-muted);
   font-size: 12px;
 }
 
@@ -652,7 +652,7 @@ onMounted(async () => {
 
 .timeline-summary {
   margin: 0 0 10px;
-  color: #334155;
+  color: var(--admin-text-secondary);
 }
 
 .flow-steps {
@@ -666,7 +666,7 @@ onMounted(async () => {
 
 .timeline-note {
   margin: 8px 0 0;
-  color: #334155;
+  color: var(--admin-text-secondary);
   line-height: 1.5;
 }
 </style>

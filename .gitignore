@@ -28,3 +28,11 @@ backend/ser-service/pretrained_models/
 backend/ser-service/wav2vec2_checkpoints/
 backend/ser-service/tmp-*.wav
 backend/ser-service/__pycache__/
+
+# Local ML runtime artifacts
+.venv-sd/
+models/
+
+# Local scratch / non-product docs
+tmp/
+docs/midterm_ppt/

@@ -35,7 +35,7 @@ class HFWav2Vec2Runtime:
         else:
             raise RuntimeError("wav2vec2 model config has no label mapping")
 
-    def predict_file(self, wav_path: str | Path) -> tuple[str, float]:
+    def predict_file_verbose(self, wav_path: str | Path) -> dict[str, object]:
         audio = load_audio_mono_resample(wav_path, target_sr=self.sample_rate, max_duration_sec=None)
         encoded = self.feature_extractor(
             [audio],
@@ -52,8 +52,26 @@ class HFWav2Vec2Runtime:
             inputs["attention_mask"] = attention_mask.to(self.device)
         with torch.no_grad():
             outputs = self.model(**inputs)
+            logits = outputs.logits.detach().cpu().numpy()[0]
             probs = torch.softmax(outputs.logits, dim=-1).detach().cpu().numpy()[0]
         pred_id = int(np.argmax(probs))
         label = self.id2label.get(pred_id, str(pred_id))
         confidence = float(probs[pred_id])
-        return label, confidence
+        probability_map = {
+            self.id2label.get(index, str(index)): float(probs[index])
+            for index in range(len(probs))
+        }
+        logit_map = {
+            self.id2label.get(index, str(index)): float(logits[index])
+            for index in range(len(logits))
+        }
+        return {
+            "label": label,
+            "confidence": confidence,
+            "probabilities": probability_map,
+            "logits": logit_map,
+        }
+
+    def predict_file(self, wav_path: str | Path) -> tuple[str, float]:
+        result = self.predict_file_verbose(wav_path)
+        return str(result["label"]), float(result["confidence"])

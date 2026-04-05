@@ -214,7 +214,7 @@ Set environment variables before starting FastAPI service:
 ```bash
 SER_ENGINE=hf_wav2vec2
 SER_HF_MODEL_DIR_EN=./training/checkpoints/ser_multilingual_4class_exp02/best_model
-SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model
+SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model
 SER_HF_ROUTING=language
 SER_HF_DEFAULT_LANGUAGE=zh
 SER_HF_DEVICE=auto
@@ -234,9 +234,39 @@ uvicorn app:app --host 0.0.0.0 --port 8001
 Stable production defaults for the current repo state:
 
 - Chinese text model: `./training/text_models/zh_sentiment_exp03/best_model`
-- Chinese audio model: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+- Chinese audio model: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model`
 - Fusion model: `./training/fusion/models/fusion_exp04_gated`
-- Engineering default is now `exp04_gated`; the formal experiment caveat is still that this chain came from `stageB_exp04_fast`, not the empty same-name `stageB_exp04` directory.
+- Engineering default now uses the `hardfix_v1` audio checkpoint plus probability-distribution segment pooling.
+- For zh routing, the legacy gated fusion model is skipped when `text4_ready=0`, because the current Chinese text runtime is still a 3-class branch.
+- The formal experiment caveat is still that this chain started from `stageB_exp04_fast`, not the empty same-name `stageB_exp04` directory.
+
+### 5.1 Sadness-bias repair workflow
+
+When a confirmed zh natural-speech sample is pushed into `SAD` with very high confidence, use the lightweight repair path:
+
+```bash
+cd backend/ser-service
+python training/build_bias_repair_manifest.py \
+  --model-dir training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model \
+  --source-manifests training/manifests/casia_4class/test.csv,training/manifests/esd_4class/test.csv \
+  --extra-manifest training/manifests/zh_bias_repair_v1_local/extra_real_world_segments.csv \
+  --output-dir training/manifests/zh_bias_repair_v1_local/repair_manifest \
+  --device cpu
+
+python training/adapt_wav2vec2_head.py \
+  --train-manifest training/manifests/zh_bias_repair_v1_local/repair_manifest/train.csv \
+  --val-manifest training/manifests/zh_bias_repair_v1_local/repair_manifest/val.csv \
+  --base-model training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model \
+  --output-dir training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1 \
+  --device cpu \
+  --batch-size 2 \
+  --epochs 12 \
+  --patience 4 \
+  --learning-rate 3e-4 \
+  --train-projector
+```
+
+This workflow keeps the encoder backbone frozen and only adapts the projector/classifier head to reduce the zh `HAP/NEU -> SAD` bias quickly on a local machine.
 
 ## 6. Retrain Text Branch (Chinese-domain aligned)
 
@@ -321,7 +351,7 @@ Important current-state note:
 ### 6.3 Stable vs candidate branches
 
 - Stable production path:
-  - audio zh: `training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
+  - audio zh: `training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model`
   - text zh: `training/text_models/zh_sentiment_exp03/best_model`
   - fusion: `training/fusion/models/fusion_exp04_gated`
 - Archive-only caveat:

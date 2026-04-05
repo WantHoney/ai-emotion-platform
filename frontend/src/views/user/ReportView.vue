@@ -11,7 +11,15 @@ import LoadingState from '@/components/states/LoadingState.vue'
 import BadgeTag from '@/components/ui/BadgeTag.vue'
 import KpiGrid, { type KpiItem } from '@/components/ui/KpiGrid.vue'
 import LoreCard from '@/components/ui/LoreCard.vue'
+import MediaFeatureCard from '@/components/ui/MediaFeatureCard.vue'
 import SectionBlock from '@/components/ui/SectionBlock.vue'
+import { ARTICLE_CATEGORY_LABELS, ARTICLE_DIFFICULTY_LABELS } from '@/constants/contentMeta'
+import {
+  buildNarrativeSourceNote,
+  buildNarrativeTechNote,
+  parseNarrativeFromRawJson,
+  splitAdviceText,
+} from '@/utils/analysisNarrative'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 import { PSI_LABEL, SER_LABEL, TEXT_NEG_LABEL, formatEmotion, formatRiskLevel } from '@/utils/uiText'
 
@@ -59,6 +67,7 @@ const extractFusionConfidence = (rawJson?: string | null): number | undefined =>
 }
 
 const riskAssessment = computed<RiskAssessmentPayload | null>(() => taskResult.value?.riskAssessment ?? null)
+const narrative = computed(() => parseNarrativeFromRawJson(taskResult.value?.rawJson))
 
 const normalizedRiskScore = computed(() => {
   const score = riskAssessment.value?.risk_score ?? report.value?.riskScore
@@ -76,6 +85,8 @@ const confidencePercent = computed(() => {
 
 const rawRiskLevel = computed(() => riskAssessment.value?.risk_level ?? report.value?.riskLevel ?? '')
 const riskLevel = computed(() => formatRiskLevel(rawRiskLevel.value))
+const narrativeSourceNote = computed(() => buildNarrativeSourceNote(narrative.value))
+const narrativeTechNote = computed(() => buildNarrativeTechNote(narrative.value))
 
 const riskTone = computed<'low' | 'medium' | 'high' | 'neutral'>(() => {
   const level = rawRiskLevel.value.toLowerCase()
@@ -265,13 +276,25 @@ const adviceBuckets = computed(() => {
     resource: ['如果困扰持续存在，建议联系学校或本地心理支持资源。'],
   }
 
+  const narrativeBuckets = narrative.value?.adviceBuckets
+  if (narrativeBuckets) {
+    const hasNarrativeAdvice =
+      narrativeBuckets.instant.length > 0 ||
+      narrativeBuckets.longTerm.length > 0 ||
+      narrativeBuckets.resource.length > 0
+    if (hasNarrativeAdvice) {
+      return {
+        instant: narrativeBuckets.instant.length ? narrativeBuckets.instant : fallbackByRisk.instant,
+        longTerm: narrativeBuckets.longTerm.length ? narrativeBuckets.longTerm : fallbackByRisk.longTerm,
+        resource: narrativeBuckets.resource.length ? narrativeBuckets.resource : fallbackByRisk.resource,
+      }
+    }
+  }
+
   const source = riskAssessment.value?.advice_text?.trim() || report.value?.adviceText?.trim()
   if (!source) return fallbackByRisk
 
-  const items = source
-    .split(/[\n;；]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
+  const items = splitAdviceText(source)
 
   return {
     instant: items.slice(0, 2).length ? items.slice(0, 2) : fallbackByRisk.instant,
@@ -411,6 +434,27 @@ onMounted(() => {
         </SectionBlock>
 
         <SectionBlock title="建议方案" description="按干预阶段给出可直接执行的建议。">
+          <p class="narrative-source-note">{{ narrativeSourceNote }}</p>
+          <p v-if="narrativeTechNote" class="narrative-tech-note">{{ narrativeTechNote }}</p>
+          <div class="bucket-grid">
+            <LoreCard title="个性化摘要">
+              <p class="narrative-copy">
+                {{
+                  narrative?.summary ??
+                  '当前还没有生成额外摘要，系统会继续使用结构化判定结果和基础建议进行展示。'
+                }}
+              </p>
+            </LoreCard>
+            <LoreCard title="解释说明">
+              <p class="narrative-copy">
+                {{
+                  narrative?.explanation ??
+                  '当前为回退模式，建议区仍会优先展示安全边界内的基础建议。'
+                }}
+              </p>
+              <p v-if="narrative?.safetyNotice" class="narrative-note">{{ narrative.safetyNotice }}</p>
+            </LoreCard>
+          </div>
           <div class="bucket-grid">
             <LoreCard title="即时行动">
               <ul>
@@ -457,22 +501,44 @@ onMounted(() => {
 
         <SectionBlock eyebrow="相关内容" title="延伸阅读与练习" description="辅助提升情绪韧性的内容推荐。">
           <div class="recommend-grid">
-            <LoreCard
+            <MediaFeatureCard
               v-for="item in homeContent?.recommendedArticles ?? []"
               :key="`article-${item.id}`"
+              :image-url="item.coverImageUrl"
+              :image-alt="item.title"
+              image-kind="article"
               :title="item.title"
-              :subtitle="item.summary || '点击查看文章'"
+              :subtitle="item.sourceName || '推荐文章'"
+              :description="item.summary"
               interactive
-              @click="openArticle(item.contentUrl)"
-            />
-            <LoreCard
+              @click="openArticle(item.sourceUrl || item.contentUrl)"
+            >
+              <template #meta>
+                <span class="recommend-pill recommend-pill-muted">
+                  {{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '内容推荐' }}
+                </span>
+                <span class="recommend-pill recommend-pill-accent">
+                  {{ ARTICLE_DIFFICULTY_LABELS[item.difficultyTag || ''] || '精选' }}
+                </span>
+              </template>
+            </MediaFeatureCard>
+            <MediaFeatureCard
               v-for="item in homeContent?.recommendedBooks ?? []"
               :key="`book-${item.id}`"
+              :image-url="item.coverImageUrl"
+              :image-alt="item.title"
+              image-kind="book"
               :title="item.title"
-              :subtitle="item.author || '点击查看书籍详情'"
+              :subtitle="item.author || '推荐阅读'"
+              :description="item.description"
               interactive
               @click="openBook(item.purchaseUrl)"
-            />
+            >
+              <template #meta>
+                <span class="recommend-pill recommend-pill-muted">书单推荐</span>
+                <span class="recommend-pill recommend-pill-book">本地书封</span>
+              </template>
+            </MediaFeatureCard>
           </div>
         </SectionBlock>
       </div>
@@ -526,6 +592,20 @@ onMounted(() => {
 .bucket-grid {
   display: grid;
   gap: 10px;
+}
+
+.narrative-source-note {
+  margin: 0 0 12px;
+  color: #9eb7de;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.narrative-tech-note {
+  margin: -6px 0 12px;
+  color: #87a1ca;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .viz-ring-grid {
@@ -643,7 +723,42 @@ ul {
 .recommend-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.recommend-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.recommend-pill-muted {
+  color: #d8e8f7;
+  background: rgba(70, 100, 141, 0.3);
+}
+
+.recommend-pill-accent {
+  color: #f5fff7;
+  background: rgba(108, 182, 140, 0.26);
+}
+
+.recommend-pill-book {
+  color: #fff5df;
+  background: rgba(191, 154, 90, 0.24);
+}
+
+.narrative-copy {
+  margin: 0;
+  color: #d9e7fb;
+  line-height: 1.8;
+}
+
+.narrative-note {
+  margin: 10px 0 0;
+  color: #9eb7de;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .footer-actions {

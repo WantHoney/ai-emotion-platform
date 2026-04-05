@@ -8,6 +8,7 @@ public record TextSentimentResponse(
         Map<String, Double> scores,
         Boolean emotion4Ready,
         Map<String, Double> emotion4Scores,
+        Double mappedMass,
         String emotion4Label,
         Double emotion4Confidence,
         String topLabelRaw,

@@ -26,7 +26,7 @@ SER_ENGINE = os.getenv("SER_ENGINE", "hf_wav2vec2").strip().lower()
 SER_HF_MODEL_DIR = os.getenv("SER_HF_MODEL_DIR", "./wav2vec2_finetuned")
 SER_HF_ROUTING = os.getenv("SER_HF_ROUTING", "language").strip().lower()
 SER_HF_MODEL_DIR_EN = os.getenv("SER_HF_MODEL_DIR_EN", "./training/checkpoints/ser_multilingual_4class_exp02/best_model").strip()
-SER_HF_MODEL_DIR_ZH = os.getenv("SER_HF_MODEL_DIR_ZH", "./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model").strip()
+SER_HF_MODEL_DIR_ZH = os.getenv("SER_HF_MODEL_DIR_ZH", "./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model").strip()
 SER_HF_DEFAULT_LANGUAGE = os.getenv("SER_HF_DEFAULT_LANGUAGE", "zh").strip().lower()
 SER_HF_DEVICE = os.getenv("SER_HF_DEVICE", "auto")
 TEXT_ENGINE = os.getenv("TEXT_ENGINE", "hf").strip().lower()
@@ -37,6 +37,7 @@ TEXT_HF_MODEL_ZH = os.getenv("TEXT_HF_MODEL_ZH", "./training/text_models/zh_sent
 TEXT_HF_DEFAULT_LANGUAGE = os.getenv("TEXT_HF_DEFAULT_LANGUAGE", "zh").strip().lower()
 TEXT_HF_DEVICE = os.getenv("TEXT_HF_DEVICE", SER_HF_DEVICE).strip().lower()
 FUSION_ENABLED = os.getenv("FUSION_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"}
+FUSION_ZH_MODE = os.getenv("FUSION_ZH_MODE", "semantic_guarded").strip().lower()
 FUSION_MODEL_DIR = os.getenv("FUSION_MODEL_DIR", "./training/fusion/models/fusion_exp04_gated").strip()
 FUSION_DEVICE = os.getenv("FUSION_DEVICE", SER_HF_DEVICE).strip().lower()
 TEXT_LEXICON_NEGATIVE_TERMS_ZH = tuple(
@@ -62,6 +63,7 @@ SUPPORTED_SER_ENGINES = {"speechbrain", "hf_wav2vec2"}
 SUPPORTED_SER_HF_ROUTING = {"single", "language"}
 SUPPORTED_TEXT_ENGINES = {"hf", "lexicon"}
 SUPPORTED_TEXT_ROUTING = {"single", "language"}
+SUPPORTED_FUSION_ZH_MODES = {"legacy", "skip", "semantic_guarded"}
 if SER_ENGINE not in SUPPORTED_SER_ENGINES:
     logger = logging.getLogger("ser-service")
     logger.warning("unsupported SER_ENGINE=%s, fallback to speechbrain", SER_ENGINE)
@@ -78,6 +80,10 @@ if TEXT_HF_ROUTING not in SUPPORTED_TEXT_ROUTING:
     logger = logging.getLogger("ser-service")
     logger.warning("unsupported TEXT_HF_ROUTING=%s, fallback to single", TEXT_HF_ROUTING)
     TEXT_HF_ROUTING = "single"
+if FUSION_ZH_MODE not in SUPPORTED_FUSION_ZH_MODES:
+    logger = logging.getLogger("ser-service")
+    logger.warning("unsupported FUSION_ZH_MODE=%s, fallback to semantic_guarded", FUSION_ZH_MODE)
+    FUSION_ZH_MODE = "semantic_guarded"
 
 logger = logging.getLogger("ser-service")
 if not logger.handlers:
@@ -99,6 +105,7 @@ EMOTION_MAP = {
     "fear": "FEAR",
     "fea": "FEAR",
 }
+SER_PROJECT_LABELS = ("ANGRY", "HAPPY", "NEUTRAL", "SAD")
 
 _model = None
 _hf_model_cache: dict[str, object] = {}
@@ -358,6 +365,7 @@ def score_text_by_lexicon(text: str, language_hint: str | None) -> dict[str, Any
             "scores": {"negative": 0.0, "neutral": 1.0, "positive": 0.0},
             "emotion4Ready": False,
             "emotion4Scores": {"ANG": 0.0, "HAP": 0.0, "NEU": 1.0, "SAD": 0.0},
+            "mappedMass": 0.0,
             "emotion4Label": "NEU",
             "emotion4Confidence": 1.0,
             "hits": [],
@@ -401,6 +409,7 @@ def score_text_by_lexicon(text: str, language_hint: str | None) -> dict[str, Any
             "NEU": float(neutral_score),
             "SAD": float(negative_score * 0.5),
         },
+        "mappedMass": 0.0,
         "emotion4Label": "ANG" if negative_score >= max(neutral_score, positive_score) else ("NEU" if neutral_score >= positive_score else "HAP"),
         "emotion4Confidence": float(max(negative_score * 0.5, positive_score, neutral_score)),
         "hits": hits,
@@ -437,6 +446,25 @@ def clamp01(value: float) -> float:
 def shannon_entropy(values: list[float]) -> float:
     eps = 1e-12
     return float(-sum(v * math.log(max(v, eps)) for v in values))
+
+
+def project_emotion_scores(raw_scores: dict[str, Any] | None) -> dict[str, float]:
+    projected = {label: 0.0 for label in SER_PROJECT_LABELS}
+    if not raw_scores:
+        return projected
+
+    for raw_label, raw_value in raw_scores.items():
+        raw_key = str(raw_label).strip().upper()
+        projected_label = raw_key if raw_key in SER_PROJECT_LABELS else normalize_label(str(raw_label))
+        if projected_label not in projected:
+            continue
+        projected[projected_label] += max(0.0, float(raw_value))
+
+    total = sum(projected.values())
+    if total > 0.0:
+        for label in projected:
+            projected[label] = float(projected[label] / total)
+    return projected
 
 
 def get_fusion_runtime():
@@ -586,22 +614,34 @@ def build_audio_summary(segments: list[dict[str, Any]]) -> dict[str, float | str
     max_conf = 0.0
     total_weight = 0.0
 
-    for segment in segments:
-        emotion = str(segment.get("emotionCode") or "").upper()
-        confidence = clamp01(_to_optional_float(segment.get("confidence")) or 0.0)
-        max_conf = max(max_conf, confidence)
-        mapped_key = key_map.get(emotion)
-        if not mapped_key:
-            continue
-        weight = confidence if confidence > 0.0 else 1e-6
-        total_weight += weight
-        audio_probs[mapped_key] += weight
-
-    if total_weight <= 0.0:
-        audio_probs["audio_prob_neu"] = 1.0
+    probability_ready = bool(segments) and all(isinstance(seg.get("scores"), dict) for seg in segments)
+    if probability_ready:
+        for segment in segments:
+            segment_scores = project_emotion_scores(segment.get("scores"))
+            for emotion_label, mapped_key in key_map.items():
+                audio_probs[mapped_key] += float(segment_scores.get(emotion_label, 0.0) or 0.0)
+            max_conf = max(max_conf, clamp01(_to_optional_float(segment.get("confidence")) or 0.0))
+        segment_count = float(len(segments))
+        if segment_count > 0.0:
+            for key in list(audio_probs):
+                audio_probs[key] = float(audio_probs[key] / segment_count)
     else:
-        for key in list(audio_probs):
-            audio_probs[key] = float(audio_probs[key] / total_weight)
+        for segment in segments:
+            emotion = str(segment.get("emotionCode") or "").upper()
+            confidence = clamp01(_to_optional_float(segment.get("confidence")) or 0.0)
+            max_conf = max(max_conf, confidence)
+            mapped_key = key_map.get(emotion)
+            if not mapped_key:
+                continue
+            weight = confidence if confidence > 0.0 else 1e-6
+            total_weight += weight
+            audio_probs[mapped_key] += weight
+
+        if total_weight <= 0.0:
+            audio_probs["audio_prob_neu"] = 1.0
+        else:
+            for key in list(audio_probs):
+                audio_probs[key] = float(audio_probs[key] / total_weight)
 
     entropy = shannon_entropy(
         [
@@ -655,6 +695,109 @@ def build_fusion_features(
     }
 
 
+def normalize_distribution(scores: dict[str, float]) -> dict[str, float]:
+    normalized = {str(label): max(0.0, float(value or 0.0)) for label, value in scores.items()}
+    total = sum(normalized.values())
+    if total <= 0.0:
+        return {label: (1.0 if label == "NEUTRAL" else 0.0) for label in normalized}
+    return {label: float(value / total) for label, value in normalized.items()}
+
+
+def distribution_top_label(scores: dict[str, float]) -> tuple[str, float, float]:
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if not ordered:
+        return "NEUTRAL", 1.0, 1.0
+    top_label, top_score = ordered[0]
+    second_score = ordered[1][1] if len(ordered) > 1 else 0.0
+    return top_label, float(top_score), float(max(0.0, top_score - second_score))
+
+
+def predict_zh_semantic_guarded_fusion(
+    audio_summary: dict[str, Any],
+    text_features: dict[str, Any],
+    route_language: str | None,
+) -> dict[str, Any]:
+    text4_ready = float(text_features.get("text4_ready", 0.0) or 0.0)
+    if text4_ready < 0.5:
+        return {
+            "enabled": True,
+            "ready": False,
+            "skippedReason": "zh_text4_not_ready",
+            "strategy": "semantic_guarded_v1",
+        }
+
+    audio_scores = normalize_distribution({
+        "ANGRY": float(audio_summary.get("audio_prob_ang", 0.0) or 0.0),
+        "HAPPY": float(audio_summary.get("audio_prob_hap", 0.0) or 0.0),
+        "NEUTRAL": float(audio_summary.get("audio_prob_neu", 0.0) or 0.0),
+        "SAD": float(audio_summary.get("audio_prob_sad", 0.0) or 0.0),
+    })
+    text_scores = normalize_distribution({
+        "ANGRY": float(text_features.get("text4_prob_ang", 0.0) or 0.0),
+        "HAPPY": float(text_features.get("text4_prob_hap", 0.0) or 0.0),
+        "NEUTRAL": float(text_features.get("text4_prob_neu", 0.0) or 0.0),
+        "SAD": float(text_features.get("text4_prob_sad", 0.0) or 0.0),
+    })
+    audio_label, audio_conf, audio_gap = distribution_top_label(audio_scores)
+    text_label, text_conf, _ = distribution_top_label(text_scores)
+    text_negative = float(text_features.get("text_negative_score", text_features.get("text_negative", 0.0)) or 0.0)
+    text_positive = float(text_features.get("text_positive", 0.0) or 0.0)
+
+    audio_weight = 0.72
+    if audio_conf < 0.55:
+        audio_weight -= 0.12
+    if audio_gap < 0.08:
+        audio_weight -= 0.10
+
+    if text_label == "NEUTRAL" and text_conf >= 0.70 and audio_conf < 0.70:
+        audio_weight = 0.38
+    elif text_label == "HAPPY" and text_conf >= 0.60 and audio_scores["SAD"] >= audio_scores["HAPPY"] - 0.03 and audio_conf < 0.60:
+        audio_weight = 0.40
+    elif text_label in {"ANGRY", "SAD"} and text_negative >= 0.60 and audio_label == "HAPPY" and audio_conf < 0.60:
+        audio_weight = 0.40
+
+    audio_weight = max(0.30, min(0.82, audio_weight))
+    text_weight = 1.0 - audio_weight
+
+    fused_scores = {
+        label: audio_weight * audio_scores[label] + text_weight * text_scores[label]
+        for label in audio_scores
+    }
+    if text_label == "NEUTRAL" and text_conf >= 0.80:
+        fused_scores["NEUTRAL"] += 0.08
+    elif text_label == "HAPPY" and text_positive >= 0.60:
+        fused_scores["HAPPY"] += 0.06
+    elif text_label in {"ANGRY", "SAD"} and text_negative >= 0.60:
+        fused_scores[text_label] += 0.06
+
+    fused_scores = normalize_distribution(fused_scores)
+    fused_label, fused_confidence, _ = distribution_top_label(fused_scores)
+    features = build_fusion_features(audio_summary, text_features, route_language)
+    features.update({
+        "fusion_strategy": "semantic_guarded_v1",
+        "audio_weight": float(audio_weight),
+        "text_weight": float(text_weight),
+        "audio_label": audio_label,
+        "audio_gap": float(audio_gap),
+        "text_label": text_label,
+        "text_confidence": float(text_conf),
+        "text_negative_score": float(text_negative),
+        "route_language": route_language,
+    })
+    return {
+        "enabled": True,
+        "ready": True,
+        "strategy": "semantic_guarded_v1",
+        "labelRaw": fused_label,
+        "label": fused_label,
+        "confidence": float(fused_confidence),
+        "temperature": 1.0,
+        "scoresRaw": fused_scores,
+        "scores": fused_scores,
+        "features": features,
+    }
+
+
 def predict_fusion_result(
     audio_summary: dict[str, Any],
     text_features: dict[str, Any],
@@ -662,6 +805,16 @@ def predict_fusion_result(
 ) -> dict[str, Any]:
     if not FUSION_ENABLED:
         return {"enabled": False, "ready": False}
+    route_lang = normalize_language_hint(route_language)
+    if route_lang == "zh":
+        if FUSION_ZH_MODE == "skip":
+            return {
+                "enabled": True,
+                "ready": False,
+                "skippedReason": "zh_fusion_disabled",
+            }
+        if FUSION_ZH_MODE == "semantic_guarded":
+            return predict_zh_semantic_guarded_fusion(audio_summary, text_features, route_lang)
     try:
         runtime = get_fusion_runtime()
         if runtime is None:
@@ -742,18 +895,33 @@ def normalize_label(raw_label: str) -> str:
     return EMOTION_MAP.get(key, "NEUTRAL")
 
 
-def analyze_segment(model, segment_wav_path: Path) -> tuple[str, float]:
+def analyze_segment(model, segment_wav_path: Path) -> dict[str, Any]:
     if SER_ENGINE == "speechbrain":
         out_prob, score, index, text_lab = model.classify_file(str(segment_wav_path))
         label_text = text_lab[0] if isinstance(text_lab, list) else str(text_lab)
         mapped_label = normalize_label(label_text)
         confidence = float(score[0]) if hasattr(score, "__len__") else float(score)
         confidence = max(0.0, min(1.0, confidence))
-        return mapped_label, confidence
+        return {
+            "emotionCode": mapped_label,
+            "confidence": confidence,
+            "scores": {mapped_label: confidence},
+        }
 
-    label_text, confidence = model.predict_file(segment_wav_path)
-    mapped_label = normalize_label(label_text)
-    return mapped_label, max(0.0, min(1.0, float(confidence)))
+    details = model.predict_file_verbose(segment_wav_path)
+    mapped_label = normalize_label(str(details["label"]))
+    confidence = max(0.0, min(1.0, float(details["confidence"])))
+    projected_scores = project_emotion_scores(details.get("probabilities"))
+    return {
+        "emotionCode": mapped_label,
+        "confidence": confidence,
+        "scores": projected_scores,
+        "rawLabel": str(details["label"]),
+        "rawProbabilities": {
+            str(label): round(float(value), 6)
+            for label, value in (details.get("probabilities") or {}).items()
+        },
+    }
 
 
 def validate_audio_extension(filename: str | None):
@@ -770,6 +938,24 @@ def validate_audio_extension(filename: str | None):
 def aggregate_overall(segments: list[dict]) -> dict:
     if not segments:
         return {"emotionCode": "NEUTRAL", "confidence": 0.0}
+
+    probability_ready = bool(segments) and all(isinstance(seg.get("scores"), dict) for seg in segments)
+    if probability_ready:
+        pooled_scores = {label: 0.0 for label in SER_PROJECT_LABELS}
+        for segment in segments:
+            segment_scores = project_emotion_scores(segment.get("scores"))
+            for label in SER_PROJECT_LABELS:
+                pooled_scores[label] += float(segment_scores.get(label, 0.0) or 0.0)
+        segment_count = float(len(segments))
+        if segment_count > 0.0:
+            for label in pooled_scores:
+                pooled_scores[label] = float(pooled_scores[label] / segment_count)
+        best_label = max(pooled_scores, key=pooled_scores.get)
+        return {
+            "emotionCode": best_label,
+            "confidence": round(float(pooled_scores[best_label]), 6),
+            "scores": {label: round(score, 6) for label, score in pooled_scores.items()},
+        }
 
     votes = Counter(seg["emotionCode"] for seg in segments)
     best_count = max(votes.values())
@@ -832,6 +1018,7 @@ def health():
         "textModelCacheSize": len(_text_model_cache),
         "textModelWarmupError": _text_warmup_error,
         "fusionEnabled": FUSION_ENABLED,
+        "fusionZhMode": FUSION_ZH_MODE if FUSION_ENABLED else None,
         "fusionModelDir": str(Path(FUSION_MODEL_DIR).resolve()) if FUSION_ENABLED else None,
         "fusionDevice": FUSION_DEVICE if FUSION_ENABLED else None,
         "fusionReady": (_fusion_runtime is not None) if FUSION_ENABLED else False,
@@ -973,7 +1160,7 @@ async def analyze(
             chunk_path = tmp_dir / f"seg_{index}.wav"
             sf.write(str(chunk_path), chunk, sr, subtype="PCM_16")
 
-            emotion_code, confidence = analyze_segment(model, chunk_path)
+            segment_result = analyze_segment(model, chunk_path)
 
             start_ms = int(math.floor(start / sr * 1000))
             end_ms = int(math.floor(end / sr * 1000))
@@ -981,8 +1168,22 @@ async def analyze(
                 {
                     "startMs": start_ms,
                     "endMs": end_ms,
-                    "emotionCode": emotion_code,
-                    "confidence": round(confidence, 6),
+                    "emotionCode": segment_result["emotionCode"],
+                    "confidence": round(float(segment_result["confidence"]), 6),
+                    "scores": {
+                        label: round(float(score), 6)
+                        for label, score in (segment_result.get("scores") or {}).items()
+                    },
+                    **(
+                        {"rawLabel": segment_result["rawLabel"]}
+                        if segment_result.get("rawLabel") is not None
+                        else {}
+                    ),
+                    **(
+                        {"rawProbabilities": segment_result["rawProbabilities"]}
+                        if segment_result.get("rawProbabilities") is not None
+                        else {}
+                    ),
                 }
             )
 
@@ -1107,6 +1308,7 @@ async def text_sentiment(payload: TextSentimentRequest):
             "scores": {"negative": 0.0, "neutral": 1.0, "positive": 0.0},
             "emotion4Ready": False,
             "emotion4Scores": {"ANG": 0.0, "HAP": 0.0, "NEU": 1.0, "SAD": 0.0},
+            "mappedMass": 0.0,
             "emotion4Label": "NEU",
             "emotion4Confidence": 1.0,
             "meta": {

@@ -1,0 +1,20 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#0A1120"/>
+  <rect x="40" y="40" width="1120" height="720" rx="40" fill="url(#bg)"/>
+  <circle cx="926" cy="232" r="126" fill="#E3D294"/>
+  <circle cx="950" cy="220" r="126" fill="#122337"/>
+  <rect x="144" y="476" width="380" height="126" rx="30" fill="#182A40" fill-opacity="0.94"/>
+  <rect x="562" y="420" width="182" height="182" rx="34" fill="#163149"/>
+  <rect x="768" y="300" width="182" height="302" rx="34" fill="#204260"/>
+  <rect x="974" y="358" width="86" height="244" rx="30" fill="#89C9B2"/>
+  <text x="104" y="164" fill="#A6C1E9" font-size="34" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">SLEEP</text>
+  <text x="104" y="306" fill="#F5FBFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">睡眠节律</text>
+  <text x="104" y="394" fill="#D9E8FA" font-size="36" font-family="'Microsoft YaHei', sans-serif">睡前环境、咖啡因和午睡时长，会一起影响恢复感。</text>
+  <text x="104" y="458" fill="#B8CDE6" font-size="28" font-family="'Microsoft YaHei', sans-serif">先修复可控的习惯，再谈“为什么总是睡不好”。</text>
+  <defs>
+    <linearGradient id="bg" x1="72" y1="48" x2="1084" y2="748" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#15203B"/>
+      <stop offset="1" stop-color="#111A2A"/>
+    </linearGradient>
+  </defs>
+</svg>

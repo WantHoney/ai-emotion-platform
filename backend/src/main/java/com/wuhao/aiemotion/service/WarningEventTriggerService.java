@@ -230,9 +230,6 @@ public class WarningEventTriggerService {
     }
 
     private String resolveRiskLevel(double riskScore, String reportRiskLevel, double medium, double high) {
-        if (reportRiskLevel != null && !reportRiskLevel.isBlank()) {
-            return reportRiskLevel.trim().toUpperCase(Locale.ROOT);
-        }
         if (riskScore >= high) {
             return "HIGH";
         }

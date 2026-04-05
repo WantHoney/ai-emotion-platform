@@ -15,26 +15,20 @@ type NavItem = AppNavItem & {
   requiresAuth: boolean
 }
 
-const publicNavItems: NavItem[] = [
+const orderedNavItems: NavItem[] = [
   { label: '首页', path: '/app/home', requiresAuth: false },
-  { label: '内容专栏', path: '/app/content', requiresAuth: false },
-  { label: '关于', path: '/app/about', requiresAuth: false },
-]
-
-const userNavItems: NavItem[] = [
   { label: '语音上传', path: '/app/upload', requiresAuth: true },
   { label: '任务中心', path: '/app/tasks', requiresAuth: true },
   { label: '报告中心', path: '/app/reports', requiresAuth: true },
   { label: '趋势分析', path: '/app/trends', requiresAuth: true },
   { label: '心理中心', path: '/app/psy-centers', requiresAuth: true },
+  { label: '内容专栏', path: '/app/content', requiresAuth: false },
+  { label: '关于', path: '/app/about', requiresAuth: false },
   { label: '个人中心', path: '/app/profile', requiresAuth: true },
 ]
 
 const userTopNavItems = computed(() => {
-  const items = [...publicNavItems]
-  if (userAuthStore.isAuthenticated) {
-    items.push(...userNavItems)
-  }
+  const items = orderedNavItems.filter((item) => !item.requiresAuth || userAuthStore.isAuthenticated)
   return items.map((item) => ({ label: item.label, path: item.path }))
 })
 
@@ -68,7 +62,7 @@ const navigateByItem = async (path: string, options?: { requiresAuth?: boolean }
 }
 
 const handleUserNavigate = async (path: string) => {
-  const target = [...publicNavItems, ...userNavItems].find((item) => item.path === path)
+  const target = orderedNavItems.find((item) => item.path === path)
   await navigateByItem(path, { requiresAuth: target?.requiresAuth })
 }
 </script>

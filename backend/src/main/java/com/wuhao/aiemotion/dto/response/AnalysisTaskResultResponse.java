@@ -25,6 +25,7 @@ public record AnalysisTaskResultResponse(
             long task_id,
             String model_name,
             String overall_emotion_code,
+            DecisionResponse decision,
             Double overall_confidence,
             Integer duration_ms,
             Integer sample_rate,

@@ -208,13 +208,18 @@ public class ReportRepository {
         jdbcTemplate.update("UPDATE report_resource SET deleted_at = NOW() WHERE audio_id=? AND deleted_at IS NULL", audioId);
     }
 
-    public List<Map<String, Object>> listUserDailyTrend(long userId, int days) {
+    public List<Map<String, Object>> listUserDailyTrend(long userId, int days, double mediumRiskThreshold, double highRiskThreshold) {
         int safeDays = Math.min(180, Math.max(1, days));
         return jdbcTemplate.queryForList(
                 """
-                SELECT DATE(rr.created_at) AS stat_date,
+                SELECT trend.stat_date,
                        COUNT(*) AS report_count,
-                       AVG(
+                       AVG(trend.normalized_risk_score) AS avg_risk_score,
+                       SUM(CASE WHEN trend.normalized_risk_score < ? THEN 1 ELSE 0 END) AS low_count,
+                       SUM(CASE WHEN trend.normalized_risk_score >= ? AND trend.normalized_risk_score < ? THEN 1 ELSE 0 END) AS medium_count,
+                       SUM(CASE WHEN trend.normalized_risk_score >= ? THEN 1 ELSE 0 END) AS high_count
+                FROM (
+                  SELECT DATE(rr.created_at) AS stat_date,
                          CASE
                            WHEN (
                              CASE
@@ -237,19 +242,20 @@ public class ReportRepository {
                                ELSE CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(rr.report_json, '$.analysis_result.risk_assessment.risk_score')), '0') AS DECIMAL(10,4))
                              END
                            )
-                         END
-                       ) AS avg_risk_score,
-                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='LOW' THEN 1 ELSE 0 END) AS low_count,
-                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='MEDIUM' THEN 1 ELSE 0 END) AS medium_count,
-                       SUM(CASE WHEN UPPER(COALESCE(rr.risk_level, 'LOW'))='HIGH' THEN 1 ELSE 0 END) AS high_count
-                FROM report_resource rr
-                JOIN audio_file af ON af.id=rr.audio_id
-                WHERE rr.deleted_at IS NULL
-                  AND af.user_id=?
-                  AND rr.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                GROUP BY DATE(rr.created_at)
+                         END AS normalized_risk_score
+                  FROM report_resource rr
+                  JOIN audio_file af ON af.id=rr.audio_id
+                  WHERE rr.deleted_at IS NULL
+                    AND af.user_id=?
+                    AND rr.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                ) trend
+                GROUP BY trend.stat_date
                 ORDER BY stat_date ASC
                 """,
+                mediumRiskThreshold,
+                mediumRiskThreshold,
+                highRiskThreshold,
+                highRiskThreshold,
                 userId,
                 safeDays
         );

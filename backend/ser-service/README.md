@@ -14,7 +14,7 @@ Environment variables:
 - `SER_HF_MODEL_DIR` (used when `SER_ENGINE=hf_wav2vec2`)
 - `SER_HF_ROUTING` (default: `language`, optional: `single`)
 - `SER_HF_MODEL_DIR_EN` (default: `./training/checkpoints/ser_multilingual_4class_exp02/best_model`, used when `SER_HF_ROUTING=language`)
-- `SER_HF_MODEL_DIR_ZH` (default: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`, used when `SER_HF_ROUTING=language`)
+- `SER_HF_MODEL_DIR_ZH` (default: `./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model`, used when `SER_HF_ROUTING=language`)
 - `SER_HF_DEFAULT_LANGUAGE` (default: `zh`, optional: `en`)
 - `SER_HF_DEVICE` (default: `auto`, can be `cpu` or `cuda`)
 - `TEXT_ENGINE` (default: `hf`, optional: `lexicon`)
@@ -51,7 +51,7 @@ Example (HF bilingual routing):
 export SER_ENGINE=hf_wav2vec2
 export SER_HF_ROUTING=language
 export SER_HF_MODEL_DIR_EN=./training/checkpoints/ser_multilingual_4class_exp02/best_model
-export SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model
+export SER_HF_MODEL_DIR_ZH=./training/checkpoints/ser_multilingual_xlsr_stageB_exp04_hardfix_v1/best_model
 export SER_HF_DEFAULT_LANGUAGE=zh
 export SER_HF_DEVICE=cuda
 export TEXT_ENGINE=hf
@@ -65,9 +65,10 @@ export FUSION_DEVICE=cuda
 
 Current engineering default:
 
-- zh audio runtime uses `ser_multilingual_xlsr_stageB_exp04_fast`
+- zh audio runtime uses `ser_multilingual_xlsr_stageB_exp04_hardfix_v1`
 - zh text runtime uses `zh_sentiment_exp03`
 - fusion runtime uses `fusion_exp04_gated`
+- for zh requests, fusion is now skipped when `text4_ready=0` so the legacy gated fusion model does not consume unsupported 3-class text features
 
 Archive note:
 
@@ -85,4 +86,6 @@ Training pipeline (`wav2vec2 + classification head`):
 - `training/build_manifest.py`
 - `training/train_wav2vec2_cls.py`
 - `training/evaluate_wav2vec2_cls.py`
+- `training/build_bias_repair_manifest.py`
+- `training/adapt_wav2vec2_head.py`
 - `training/README.md`

@@ -1,0 +1,22 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#08131E"/>
+  <rect x="40" y="40" width="1120" height="720" rx="40" fill="url(#bg)"/>
+  <rect x="738" y="184" width="236" height="332" rx="42" fill="#193952"/>
+  <rect x="784" y="132" width="144" height="74" rx="24" fill="#98DCC0"/>
+  <circle cx="832" cy="340" r="28" fill="#D7EBF7"/>
+  <circle cx="884" cy="340" r="28" fill="#D7EBF7"/>
+  <circle cx="936" cy="340" r="28" fill="#D7EBF7"/>
+  <rect x="782" y="404" width="148" height="32" rx="16" fill="#7FC6E0"/>
+  <rect x="146" y="530" width="470" height="34" rx="17" fill="#233F5A"/>
+  <rect x="146" y="584" width="328" height="34" rx="17" fill="#29526E"/>
+  <text x="104" y="160" fill="#92C8DA" font-size="34" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">EMOTION</text>
+  <text x="104" y="302" fill="#F4FAFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">情绪工具箱</text>
+  <text x="104" y="390" fill="#D8E8F8" font-size="36" font-family="'Microsoft YaHei', sans-serif">不是把难受压下去，而是给情绪一个可以落地的处理方式。</text>
+  <text x="104" y="454" fill="#B3C8E2" font-size="28" font-family="'Microsoft YaHei', sans-serif">呼吸、记录、暂停和连接，都是能重复使用的小工具。</text>
+  <defs>
+    <linearGradient id="bg" x1="92" y1="56" x2="1080" y2="748" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#122338"/>
+      <stop offset="1" stop-color="#0C1627"/>
+    </linearGradient>
+  </defs>
+</svg>

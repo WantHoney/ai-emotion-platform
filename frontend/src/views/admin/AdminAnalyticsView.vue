@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import EmptyState from '@/components/states/EmptyState.vue'
@@ -39,10 +39,26 @@ const totals = computed(() => {
   )
 })
 
+const activeDayCount = computed(() =>
+  dailyRows.value.filter((row) => {
+    return (
+      Number(row.dau || 0) > 0 ||
+      Number(row.upload_count || 0) > 0 ||
+      Number(row.report_count || 0) > 0 ||
+      Number(row.warning_count || 0) > 0
+    )
+  }).length,
+)
+
 const maxErrorCategoryCount = computed(() => {
   if (!quality.value?.errorCategoryStats.length) return 1
   return Math.max(...quality.value.errorCategoryStats.map((item) => Number(item.count || 0)), 1)
 })
+
+const emotionDriftRows = computed(() => quality.value?.emotionDrift.slice(0, 8) ?? [])
+const errorCategoryRows = computed(() => quality.value?.errorCategoryStats ?? [])
+const errorSamples = computed(() => quality.value?.errorSamples ?? [])
+const slaTrendRows = computed(() => quality.value?.slaTrend ?? [])
 
 const loadData = async () => {
   loading.value = true
@@ -98,7 +114,7 @@ onMounted(async () => {
         <el-col :xs="24" :md="6"><el-statistic title="规则总数" :value="summary.ruleCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="启用规则数" :value="summary.enabledRuleCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="预警总量" :value="summary.warningCount" /></el-col>
-        <el-col :xs="24" :md="6"><el-statistic title="日统计条数" :value="dailyRows.length" /></el-col>
+        <el-col :xs="24" :md="6"><el-statistic title="有数据日期数" :value="activeDayCount" /></el-col>
       </el-row>
 
       <el-row :gutter="16" class="mt-16">
@@ -124,7 +140,7 @@ onMounted(async () => {
         <el-col :xs="24" :md="16">
           <el-card shadow="never">
             <template #header>情绪分布变化（当前与基线）</template>
-            <el-table :data="quality.emotionDrift.slice(0, 8)" size="small" border>
+            <el-table v-if="emotionDriftRows.length" :data="emotionDriftRows" size="small" border>
               <el-table-column label="情绪" width="120">
                 <template #default="scope">{{ formatEmotion(scope.row.emotion) }}</template>
               </el-table-column>
@@ -142,6 +158,7 @@ onMounted(async () => {
                 </template>
               </el-table-column>
             </el-table>
+            <p v-else class="section-empty">当前窗口或基线窗口样本不足，暂不展示情绪漂移。</p>
           </el-card>
         </el-col>
       </el-row>
@@ -150,44 +167,49 @@ onMounted(async () => {
         <el-col :xs="24" :md="10">
           <el-card shadow="never">
             <template #header>错误类别样本</template>
-            <div
-              v-for="item in quality.errorCategoryStats"
-              :key="item.category"
-              class="bar-row"
-            >
-              <span class="bar-label">{{ item.category }}</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  :style="{ width: `${(Number(item.count || 0) / maxErrorCategoryCount) * 100}%` }"
-                />
+            <template v-if="errorCategoryRows.length">
+              <div
+                v-for="item in errorCategoryRows"
+                :key="item.category"
+                class="bar-row"
+              >
+                <span class="bar-label">{{ item.category }}</span>
+                <div class="bar-track">
+                  <div
+                    class="bar-fill"
+                    :style="{ width: `${(Number(item.count || 0) / maxErrorCategoryCount) * 100}%` }"
+                  />
+                </div>
+                <span class="bar-value">{{ item.count }}</span>
               </div>
-              <span class="bar-value">{{ item.count }}</span>
-            </div>
+            </template>
+            <p v-else class="section-empty">当前时间范围内暂无错误类别样本。</p>
           </el-card>
         </el-col>
 
         <el-col :xs="24" :md="14">
           <el-card shadow="never">
             <template #header>近期错误样本</template>
-            <el-table :data="quality.errorSamples" size="small" border>
+            <el-table v-if="errorSamples.length" :data="errorSamples" size="small" border>
               <el-table-column prop="id" label="任务" width="90" />
               <el-table-column prop="audio_file_id" label="音频" width="90" />
               <el-table-column prop="error_message" label="错误信息" min-width="260" show-overflow-tooltip />
               <el-table-column prop="updated_at" label="更新时间" min-width="160" />
             </el-table>
+            <p v-else class="section-empty">当前时间范围内暂无错误样本。</p>
           </el-card>
         </el-col>
       </el-row>
 
       <el-card v-if="quality" shadow="never" class="mt-16">
         <template #header>{{ `${SLA_LABEL}趋势` }}</template>
-        <el-table :data="quality.slaTrend" size="small" border>
+        <el-table v-if="slaTrendRows.length" :data="slaTrendRows" size="small" border>
           <el-table-column prop="stat_date" label="日期" min-width="140" />
           <el-table-column prop="total" label="总数" width="110" />
           <el-table-column prop="resolved" label="已解决" width="110" />
           <el-table-column prop="breached" label="已超时" width="110" />
         </el-table>
+        <p v-else class="section-empty">当前时间范围内暂无 SLA 趋势数据。</p>
       </el-card>
 
       <EmptyState
@@ -223,7 +245,7 @@ onMounted(async () => {
 }
 
 .days-label {
-  color: #475569;
+  color: var(--admin-text-secondary);
   font-size: 13px;
 }
 
@@ -233,6 +255,7 @@ onMounted(async () => {
 
 .metric-card p {
   margin: 6px 0;
+  color: var(--admin-text-primary);
 }
 
 .bar-row {
@@ -244,13 +267,13 @@ onMounted(async () => {
 }
 
 .bar-label {
-  color: #334155;
+  color: var(--admin-text-secondary);
   font-size: 13px;
 }
 
 .bar-track {
   height: 10px;
-  background: #e2e8f0;
+  background: rgba(96, 119, 158, 0.18);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -262,7 +285,24 @@ onMounted(async () => {
 
 .bar-value {
   text-align: right;
-  color: #0f172a;
+  color: var(--admin-text-primary);
   font-size: 12px;
+}
+
+.section-empty {
+  margin: 0;
+  padding: 18px 0 6px;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+:deep(.el-statistic__head) {
+  color: var(--admin-text-secondary);
+}
+
+:deep(.el-statistic__content),
+:deep(.el-statistic__number) {
+  color: var(--admin-text-primary);
 }
 </style>

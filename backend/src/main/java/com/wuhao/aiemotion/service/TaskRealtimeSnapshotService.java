@@ -54,6 +54,7 @@ public class TaskRealtimeSnapshotService {
                 task.error_message(),
                 TERMINAL_STATUSES.contains(task.status()),
                 riskSummary,
+                task.overall() == null ? null : task.overall().decision(),
                 progressSummary,
                 curve
         );

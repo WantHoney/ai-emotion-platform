@@ -1,0 +1,19 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" rx="48" fill="#08131D"/>
+  <rect x="40" y="40" width="1120" height="720" rx="40" fill="url(#bg)"/>
+  <circle cx="262" cy="568" r="126" fill="#1E3B52"/>
+  <circle cx="956" cy="246" r="152" fill="#255B47"/>
+  <path d="M306 544C456 434 626 374 774 398C850 410 910 450 958 510" stroke="#B5F0C8" stroke-width="22" stroke-linecap="round"/>
+  <path d="M210 256C298 256 352 334 352 424" stroke="#D4EDFA" stroke-width="18" stroke-linecap="round"/>
+  <path d="M910 140C910 238 972 292 1040 292" stroke="#D4EDFA" stroke-width="18" stroke-linecap="round"/>
+  <text x="104" y="160" fill="#91C6D8" font-size="34" font-family="'Microsoft YaHei', sans-serif" letter-spacing="8">CONNECTION</text>
+  <text x="104" y="302" fill="#F4FAFF" font-size="78" font-family="'Microsoft YaHei', sans-serif" font-weight="700">连接支持</text>
+  <text x="104" y="392" fill="#D7E8F8" font-size="36" font-family="'Microsoft YaHei', sans-serif">稳定的人际连接，本身就是心理韧性的保护因素。</text>
+  <text x="104" y="456" fill="#B3C9E3" font-size="28" font-family="'Microsoft YaHei', sans-serif">当你开口表达感受时，支持系统也在慢慢形成。</text>
+  <defs>
+    <linearGradient id="bg" x1="86" y1="56" x2="1082" y2="748" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#122235"/>
+      <stop offset="1" stop-color="#0C1627"/>
+    </linearGradient>
+  </defs>
+</svg>

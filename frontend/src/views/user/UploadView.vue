@@ -36,6 +36,20 @@ let mediaStream: MediaStream | null = null
 let mediaRecorder: MediaRecorder | null = null
 let timerHandle: number | null = null
 let recorderChunks: Blob[] = []
+let activeUploadRunId = 0
+
+class UploadCanceledError extends Error {
+  constructor() {
+    super('upload canceled')
+    this.name = 'UploadCanceledError'
+  }
+}
+
+const ensureUploadActive = (runId: number, uploadId: string) => {
+  if (runId !== activeUploadRunId || currentUploadId.value !== uploadId) {
+    throw new UploadCanceledError()
+  }
+}
 
 const recorderSupported = computed(() => {
   return typeof window !== 'undefined' && 'MediaRecorder' in window && !!navigator.mediaDevices
@@ -85,7 +99,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   return true
 }
 
-const uploadInChunks = async (file: File) => {
+const uploadInChunks = async (file: File, runId: number) => {
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
 
   uploadHint.value = '正在初始化上传会话'
@@ -98,8 +112,10 @@ const uploadInChunks = async (file: File) => {
 
   currentUploadId.value = init.uploadId
   uploadPercent.value = 0
+  ensureUploadActive(runId, init.uploadId)
 
   for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    ensureUploadActive(runId, init.uploadId)
     const start = chunkIndex * CHUNK_SIZE
     const end = Math.min(file.size, start + CHUNK_SIZE)
     const chunk = file.slice(start, end)
@@ -116,8 +132,10 @@ const uploadInChunks = async (file: File) => {
         uploadPercent.value = Math.min(99, Math.round((doneRatio + currentChunkRatio) * 100))
       },
     })
+    ensureUploadActive(runId, init.uploadId)
   }
 
+  ensureUploadActive(runId, init.uploadId)
   uploadHint.value = '正在合并分片并创建任务'
   const complete = await completeUploadSession(init.uploadId, true)
   uploadPercent.value = 100
@@ -126,14 +144,49 @@ const uploadInChunks = async (file: File) => {
   return complete
 }
 
+const abortActiveUpload = async (options?: {
+  hint?: string
+  successMessage?: string
+  showErrorMessage?: boolean
+}) => {
+  const uploadId = currentUploadId.value
+  activeUploadRunId += 1
+  currentUploadId.value = null
+  uploading.value = false
+  uploadPercent.value = 0
+
+  if (options?.hint) {
+    uploadHint.value = options.hint
+  }
+
+  if (!uploadId) {
+    return
+  }
+
+  try {
+    await cancelUploadSession(uploadId)
+    if (options?.successMessage) {
+      ElMessage.warning(options.successMessage)
+    }
+  } catch (error) {
+    if (options?.showErrorMessage === false) {
+      return
+    }
+    const parsed = parseError(error, '取消上传失败')
+    ElMessage.error(parsed.detail)
+  }
+}
+
 const submitFile = async (file: File) => {
+  const runId = activeUploadRunId + 1
+  activeUploadRunId = runId
   uploading.value = true
   errorState.value = null
   hasUploaded.value = false
   uploadPercent.value = 0
 
   try {
-    const result = await uploadInChunks(file)
+    const result = await uploadInChunks(file, runId)
     hasUploaded.value = true
 
     if (result.taskId) {
@@ -144,9 +197,15 @@ const submitFile = async (file: File) => {
 
     ElMessage.success('上传完成')
   } catch (error) {
+    if (error instanceof UploadCanceledError) {
+      hasUploaded.value = false
+      return
+    }
     errorState.value = parseError(error, '分片上传失败')
   } finally {
-    uploading.value = false
+    if (runId === activeUploadRunId) {
+      uploading.value = false
+    }
   }
 }
 
@@ -220,21 +279,23 @@ const uploadRecorded = async () => {
 }
 
 const cancelCurrentUpload = async () => {
-  if (!currentUploadId.value) {
+  if (!uploading.value && !currentUploadId.value) {
     return
   }
-  try {
-    await cancelUploadSession(currentUploadId.value)
-    currentUploadId.value = null
-    uploadHint.value = '上传已取消'
-    ElMessage.warning('上传已取消')
-  } catch (error) {
-    const parsed = parseError(error, '取消上传失败')
-    ElMessage.error(parsed.detail)
-  }
+  await abortActiveUpload({
+    hint: '上传已取消',
+    successMessage: '上传已取消',
+    showErrorMessage: true,
+  })
 }
 
 onBeforeUnmount(() => {
+  if (uploading.value || currentUploadId.value) {
+    void abortActiveUpload({
+      hint: '上传已终止',
+      showErrorMessage: false,
+    })
+  }
   releaseRecorderResources()
 })
 </script>

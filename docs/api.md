@@ -1,5 +1,5 @@
 ﻿# API 文档（与代码同步）
-最后同步日期：`2026-03-10`
+最后同步日期：`2026-04-04`
 
 > HTTP 前缀：`/api`  
 > WebSocket 通道：`/ws/tasks/stream`
@@ -108,6 +108,10 @@
 ### 5.2 CMS 内容管理
 - `GET /api/home`
 - `GET /api/psy-centers`
+- `GET /api/content-hub`
+- `GET /api/content/articles/{id}`
+- `GET /api/content/books/{id}`
+- `POST /api/content/history`
 - `GET /api/admin/banners`
 - `POST /api/admin/banners`
 - `PUT /api/admin/banners/{id}`
@@ -124,6 +128,11 @@
 - `POST /api/admin/books`
 - `PUT /api/admin/books/{id}`
 - `DELETE /api/admin/books/{id}`
+- `GET /api/admin/content/schedules`
+- `POST /api/admin/content/schedules`
+- `PUT /api/admin/content/schedules/{id}`
+- `DELETE /api/admin/content/schedules/{id}`
+- `GET /api/admin/content/schedules/preview`
 - `GET /api/admin/psy-centers`
 - `POST /api/admin/psy-centers`
 - `PUT /api/admin/psy-centers/{id}`

@@ -16,19 +16,28 @@ const emit = defineEmits<{
 <template>
   <section class="hero" v-motion :initial="{ opacity: 0, y: 36 }" :visibleOnce="{ opacity: 1, y: 0 }">
     <div class="hero-layer"></div>
-    <div class="hero-content">
-      <p v-if="eyebrow" class="eyebrow">{{ eyebrow }}</p>
-      <h1 class="title">{{ title }}</h1>
-      <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
-      <div class="hero-actions">
-        <el-button v-if="primaryText" type="primary" size="large" @click="emit('primary')">
-          {{ primaryText }}
-        </el-button>
-        <el-button v-if="secondaryText" size="large" @click="emit('secondary')">
-          {{ secondaryText }}
-        </el-button>
+    <div class="hero-shell">
+      <div class="hero-content">
+        <p v-if="eyebrow" class="eyebrow">{{ eyebrow }}</p>
+        <h1 class="title">{{ title }}</h1>
+        <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
+        <div class="hero-actions">
+          <el-button v-if="primaryText" class="hero-cta hero-cta--primary" type="primary" size="large" @click="emit('primary')">
+            {{ primaryText }}
+          </el-button>
+          <el-button v-if="secondaryText" class="hero-cta hero-cta--secondary" size="large" @click="emit('secondary')">
+            {{ secondaryText }}
+          </el-button>
+        </div>
+        <slot />
       </div>
-      <slot />
+
+      <template v-if="$slots.bottom">
+        <div class="hero-divider" aria-hidden="true"></div>
+        <div class="hero-bottom">
+          <slot name="bottom" />
+        </div>
+      </template>
     </div>
   </section>
 </template>
@@ -38,7 +47,6 @@ const emit = defineEmits<{
   position: relative;
   overflow: hidden;
   border-radius: 24px;
-  min-height: min(76vh, 680px);
   border: 1px solid rgba(165, 179, 217, 0.18);
   background:
     linear-gradient(135deg, rgba(9, 14, 24, 0.88), rgba(11, 24, 42, 0.54)),
@@ -57,9 +65,16 @@ const emit = defineEmits<{
   opacity: 0.2;
 }
 
+.hero-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(28px, 7vw, 72px);
+}
+
 .hero-content {
   max-width: 680px;
-  padding: clamp(28px, 7vw, 72px);
 }
 
 .eyebrow {
@@ -94,6 +109,52 @@ const emit = defineEmits<{
   flex-wrap: wrap;
 }
 
+.hero-actions :deep(.hero-cta) {
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 16px 28px rgba(2, 8, 20, 0.26);
+  transition:
+    transform var(--content-motion-fast) var(--content-ease-standard),
+    box-shadow var(--content-motion-fast) var(--content-ease-standard),
+    border-color var(--content-motion-fast) var(--content-ease-standard);
+}
+
+.hero-actions :deep(.hero-cta:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 34px rgba(2, 8, 20, 0.34);
+}
+
+.hero-actions :deep(.hero-cta--secondary) {
+  --el-button-text-color: #0f172a;
+  --el-button-hover-text-color: #0f172a;
+  --el-button-active-text-color: #0f172a;
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.hero-actions :deep(.hero-cta--secondary:hover) {
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.86);
+  background: #ffffff;
+}
+
+.hero-divider {
+  width: 100%;
+  height: 1px;
+  margin-top: clamp(28px, 4vw, 40px);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.08);
+}
+
+.hero-bottom {
+  padding-top: clamp(24px, 4vw, 34px);
+}
+
 :deep(.el-button--primary) {
   --el-button-bg-color: #c3a26e;
   --el-button-border-color: #c3a26e;
@@ -103,11 +164,17 @@ const emit = defineEmits<{
   --el-button-active-border-color: #b8935d;
   --el-button-text-color: #0f172a;
   font-weight: 700;
+  box-shadow: 0 18px 34px rgba(195, 162, 110, 0.28);
 }
 
 @media (max-width: 768px) {
-  .hero {
-    min-height: 520px;
+  .hero-shell {
+    padding: 28px 22px 24px;
+  }
+
+  .hero-actions :deep(.hero-cta) {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

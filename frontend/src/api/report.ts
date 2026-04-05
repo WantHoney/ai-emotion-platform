@@ -43,12 +43,29 @@ export interface ReportTrendItem {
   highCount: number
 }
 
+export interface ReportTrendThresholds {
+  mediumMin: number
+  highMin: number
+}
+
 export interface ReportTrendResponse {
   items: ReportTrendItem[]
   total: number
   page: number
   pageSize: number
   days: number
+  riskThresholds?: ReportTrendThresholds
+}
+
+export interface ReportTrendInsight {
+  status?: string
+  provider?: string
+  model?: string
+  headline?: string
+  summary?: string
+  highlights?: string[]
+  note?: string
+  error?: string
 }
 
 interface ReportSummaryRaw {
@@ -189,6 +206,14 @@ export const getReportDetail = async (reportId: number) => {
 export const getReportTrend = async (days = 30) => {
   const response = await http.get<ReportTrendResponse>('/api/reports/trend', {
     params: { days },
+  })
+  return response.data
+}
+
+export const getReportTrendInsight = async (days = 30) => {
+  const response = await http.get<ReportTrendInsight>('/api/reports/trend/insight', {
+    params: { days },
+    timeout: 70000,
   })
   return response.data
 }

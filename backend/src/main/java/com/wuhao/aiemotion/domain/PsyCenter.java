@@ -13,8 +13,14 @@ public record PsyCenter(
         String phone,
         BigDecimal latitude,
         BigDecimal longitude,
+        String sourceName,
+        String sourceUrl,
+        String sourceLevel,
         Boolean recommended,
         Boolean enabled,
+        String seedKey,
+        String dataSource,
+        Boolean isActive,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

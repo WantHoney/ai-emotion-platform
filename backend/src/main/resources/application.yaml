@@ -72,8 +72,45 @@ analysis:
     text-sentiment-timeout-ms: ${ANALYSIS_WORKER_TEXT_SENTIMENT_TIMEOUT_MS:20000}
     backoff-base-seconds: ${ANALYSIS_WORKER_BACKOFF_BASE_SECONDS:30}
     backoff-max-seconds: ${ANALYSIS_WORKER_BACKOFF_MAX_SECONDS:600}
+  narrative:
+    enabled: ${ANALYSIS_NARRATIVE_ENABLED:true}
+    provider: ${ANALYSIS_NARRATIVE_PROVIDER:ollama}
+    language: ${ANALYSIS_NARRATIVE_LANGUAGE:zh-CN}
+    max-transcript-chars: ${ANALYSIS_NARRATIVE_MAX_TRANSCRIPT_CHARS:600}
+    max-segments: ${ANALYSIS_NARRATIVE_MAX_SEGMENTS:3}
+    trend:
+      enabled: ${ANALYSIS_NARRATIVE_TREND_ENABLED:true}
+      max-points: ${ANALYSIS_NARRATIVE_TREND_MAX_POINTS:12}
+    safety-notice: ${ANALYSIS_NARRATIVE_SAFETY_NOTICE:以上内容仅作辅助参考，不构成医疗诊断。若持续感到痛苦或风险升高，请尽快联系值得信任的人或专业支持资源。}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+      model: ${OLLAMA_MODEL:gemma4:e4b}
+      connect-timeout-ms: ${OLLAMA_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${OLLAMA_READ_TIMEOUT_MS:180000}
+      temperature: ${OLLAMA_TEMPERATURE:0.35}
+      preload: ${OLLAMA_PRELOAD:true}
+      keep-alive: ${OLLAMA_KEEP_ALIVE:30m}
+  text-scoring:
+    enabled: ${ANALYSIS_TEXT_SCORING_ENABLED:true}
+    provider: ${ANALYSIS_TEXT_SCORING_PROVIDER:ollama}
+    language: ${ANALYSIS_TEXT_SCORING_LANGUAGE:zh}
+    max-transcript-chars: ${ANALYSIS_TEXT_SCORING_MAX_TRANSCRIPT_CHARS:240}
+    fallback-to-ser: ${ANALYSIS_TEXT_SCORING_FALLBACK_TO_SER:true}
+    temperature: ${ANALYSIS_TEXT_SCORING_TEMPERATURE:0.10}
   realtime:
     push-interval-ms: ${ANALYSIS_REALTIME_PUSH_INTERVAL_MS:1000}
+  consistency:
+    enabled: ${ANALYSIS_CONSISTENCY_ENABLED:true}
+    audit-log-enabled: ${ANALYSIS_CONSISTENCY_AUDIT_LOG_ENABLED:true}
+    sad-positive-conflict:
+      enabled: ${ANALYSIS_CONSISTENCY_SAD_POSITIVE_CONFLICT_ENABLED:true}
+      voice-confidence-min: ${ANALYSIS_CONSISTENCY_VOICE_CONFIDENCE_MIN:0.98}
+      fused-text-neg-max: ${ANALYSIS_CONSISTENCY_FUSED_TEXT_NEG_MAX:0.45}
+      transcript-excerpt-max-chars: ${ANALYSIS_CONSISTENCY_TRANSCRIPT_EXCERPT_MAX_CHARS:120}
+      transcript-left-context-chars: ${ANALYSIS_CONSISTENCY_TRANSCRIPT_LEFT_CONTEXT_CHARS:24}
+      transcript-right-context-chars: ${ANALYSIS_CONSISTENCY_TRANSCRIPT_RIGHT_CONTEXT_CHARS:72}
+      positive-lexicon-resource: ${ANALYSIS_CONSISTENCY_POSITIVE_LEXICON_RESOURCE:lexicon/consistency_positive_zh.txt}
+      negative-lexicon-resource: ${ANALYSIS_CONSISTENCY_NEGATIVE_LEXICON_RESOURCE:lexicon/consistency_negative_zh.txt}
 
 governance:
   drift:

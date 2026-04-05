@@ -123,8 +123,10 @@ public class AdminGovernanceController {
     public Map<String, Object> warnings(@RequestParam(defaultValue = "1") int page,
                                         @RequestParam(defaultValue = "10") int pageSize,
                                         @RequestParam(required = false) String status,
-                                        @RequestParam(required = false) String riskLevel) {
-        return adminGovernanceService.listWarnings(page, pageSize, status, riskLevel);
+                                        @RequestParam(required = false) String riskLevel,
+                                        @RequestParam(required = false) String breached,
+                                        @RequestParam(required = false) String keyword) {
+        return adminGovernanceService.listWarnings(page, pageSize, status, riskLevel, breached, keyword);
     }
 
     @PostMapping("/warnings/{warningId}/actions")

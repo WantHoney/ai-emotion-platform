@@ -1,0 +1,29 @@
+[
+  {
+    "seedKey": "seed_quote_001",
+    "content": "允许自己慢一点，不是退步，而是在给情绪留出被看见的时间。",
+    "author": "AI Emotion 编辑部",
+    "sortOrder": 10,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_002",
+    "content": "真正的勇气，不是没有波动，而是在波动里仍愿意照顾自己。",
+    "author": "AI Emotion 编辑部",
+    "sortOrder": 20,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_003",
+    "content": "当你开始描述自己的感受，改变往往已经开始。",
+    "author": "AI Emotion 编辑部",
+    "sortOrder": 30,
+    "recommended": false,
+    "enabled": true,
+    "isActive": true
+  }
+]

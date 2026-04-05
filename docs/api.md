@@ -1,5 +1,5 @@
 ﻿# API 文档（与代码同步）
-最后同步日期：`2026-04-04`
+最后同步日期：`2026-04-05`
 
 > HTTP 前缀：`/api`  
 > WebSocket 通道：`/ws/tasks/stream`
@@ -68,6 +68,7 @@
 - `GET /api/tasks`
 - `GET /api/reports`
 - `GET /api/reports/trend`
+- `GET /api/reports/trend/insight`
 - `GET /api/reports/{reportId}`
 - `DELETE /api/reports/{reportId}`
 

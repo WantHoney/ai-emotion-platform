@@ -65,6 +65,7 @@ export interface WarningEventItem {
   breached?: number | boolean
   resolved_at?: string
   created_at?: string
+  trigger_snapshot?: unknown
 }
 
 export interface WarningActionItem {
@@ -279,5 +280,18 @@ export const getAnalyticsQuality = async (params?: { windowDays?: number; baseli
 
 export const getGovernanceSummary = async () => {
   const response = await http.get<GovernanceSummary>('/api/admin/governance/summary')
+  return response.data
+}
+
+export const triggerGovernanceDriftScan = async (params?: {
+  windowDays?: number
+  baselineDays?: number
+  mediumThreshold?: number
+  highThreshold?: number
+  minSamples?: number
+}) => {
+  const response = await http.post<{ created: number }>('/api/admin/governance/drift/scan', null, {
+    params,
+  })
   return response.data
 }

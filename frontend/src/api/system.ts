@@ -6,6 +6,16 @@ export interface ServiceHealth {
   message?: string
 }
 
+export interface RuntimeModelInfo {
+  modelType: string
+  label: string
+  source: string
+  status: 'UP' | 'DOWN' | 'DEGRADED' | 'UNKNOWN'
+  rawValue?: string
+  registryComparable?: string
+  detail?: string
+}
+
 export interface SystemStatus {
   backend: ServiceHealth
   db: ServiceHealth
@@ -19,6 +29,23 @@ export interface SystemStatus {
   config: {
     serBaseUrl?: string
     requestTimeoutMs?: number
+    runtimeRegistryEnvHint?: string
+  }
+  runtime: {
+    registryEnvHint?: string
+    activeProfiles?: string[]
+    aiMode?: string
+    modeDescription?: string
+    textScoringProvider?: string
+    textScoringFallbackToSer?: boolean
+    narrativeProvider?: string
+    models?: {
+      asr?: RuntimeModelInfo
+      audioEmotion?: RuntimeModelInfo
+      text?: RuntimeModelInfo
+      fusion?: RuntimeModelInfo
+      psi?: RuntimeModelInfo
+    }
   }
 }
 

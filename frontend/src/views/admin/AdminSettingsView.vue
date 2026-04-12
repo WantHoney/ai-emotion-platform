@@ -1,140 +1,61 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
 
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
-import {
-  getAdminModels,
-  getWarningRules,
-  updateWarningRule,
-  type ModelRegistryItem,
-  type WarningRuleItem,
-} from '@/api/governance'
+import { getAdminModels, getWarningRules, type ModelRegistryItem, type WarningRuleItem } from '@/api/governance'
+import { getSystemStatus, type SystemStatus } from '@/api/system'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
-import { JSON_LABEL, SLA_LABEL, formatEnv, formatModelStatus, formatModelType } from '@/utils/uiText'
+import { JSON_LABEL, SLA_LABEL, formatEnv, formatModelType } from '@/utils/uiText'
 
 const loading = ref(false)
-const saving = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
 
 const rules = ref<WarningRuleItem[]>([])
 const models = ref<ModelRegistryItem[]>([])
-const selectedRuleId = ref<number | null>(null)
+const systemStatus = ref<SystemStatus | null>(null)
 
-const ruleForm = reactive({
-  ruleName: '',
-  description: '',
-  enabled: true,
-  priority: 100,
-  lowThreshold: 40,
-  mediumThreshold: 60,
-  highThreshold: 80,
-  trendWindowDays: 7,
-  triggerCount: 1,
-  suggestTemplateCode: '',
-  slaLowMinutes: 1440,
-  slaMediumMinutes: 720,
-  slaHighMinutes: 240,
-  emotionComboJson: '{}',
+const activeRule = computed(
+  () => rules.value.find((item) => item.enabled === true || item.enabled === 1) ?? rules.value[0] ?? null,
+)
+const enabledRuleCount = computed(() =>
+  rules.value.filter((item) => item.enabled === true || item.enabled === 1).length,
+)
+const registryEnvHint = computed(
+  () => systemStatus.value?.runtime?.registryEnvHint || systemStatus.value?.config?.runtimeRegistryEnvHint || 'prod',
+)
+const onlineModels = computed(() =>
+  models.value.filter((item) => item.status === 'ONLINE' && item.env === registryEnvHint.value),
+)
+
+const emotionComboPreview = computed(() => {
+  const combo = activeRule.value?.emotion_combo_json
+  if (!combo) return `${JSON_LABEL}: {}`
+  return typeof combo === 'string' ? combo : JSON.stringify(combo, null, 2)
 })
-
-const selectedRule = computed(() => rules.value.find((item) => item.id === selectedRuleId.value) ?? null)
-
-const thresholdHint = '请保持低风险阈值不高于中风险阈值，中风险阈值不高于高风险阈值。'
-
-const syncFormFromRule = (rule: WarningRuleItem) => {
-  selectedRuleId.value = rule.id
-  ruleForm.ruleName = rule.rule_name
-  ruleForm.description = rule.description ?? ''
-  ruleForm.enabled = rule.enabled === true || rule.enabled === 1
-  ruleForm.priority = rule.priority
-  ruleForm.lowThreshold = rule.low_threshold
-  ruleForm.mediumThreshold = rule.medium_threshold
-  ruleForm.highThreshold = rule.high_threshold
-  ruleForm.trendWindowDays = rule.trend_window_days
-  ruleForm.triggerCount = rule.trigger_count
-  ruleForm.suggestTemplateCode = rule.suggest_template_code ?? ''
-  ruleForm.slaLowMinutes = rule.sla_low_minutes ?? 1440
-  ruleForm.slaMediumMinutes = rule.sla_medium_minutes ?? 720
-  ruleForm.slaHighMinutes = rule.sla_high_minutes ?? 240
-  ruleForm.emotionComboJson = JSON.stringify(rule.emotion_combo_json ?? {}, null, 2)
-}
-
-const handleRuleChange = (val: string | number) => {
-  const target = rules.value.find((item) => item.id === Number(val))
-  if (target) {
-    syncFormFromRule(target)
-  }
-}
 
 const loadData = async () => {
   loading.value = true
   errorState.value = null
   try {
-    const [ruleRows, modelRows] = await Promise.all([
+    const [ruleRows, modelRows, statusResponse] = await Promise.all([
       getWarningRules(),
-      getAdminModels({ env: 'prod' }),
+      getAdminModels(),
+      getSystemStatus(),
     ])
     rules.value = ruleRows
     models.value = modelRows
-    const firstRule = ruleRows[0]
-    if (firstRule) {
-      syncFormFromRule(firstRule)
-    }
+    systemStatus.value = statusResponse.data
   } catch (error) {
-    errorState.value = parseError(error, '系统设置数据加载失败')
+    errorState.value = parseError(error, '系统设置摘要加载失败')
   } finally {
     loading.value = false
   }
 }
 
-const saveRule = async () => {
-  if (!selectedRule.value) return
-  if (!(ruleForm.lowThreshold <= ruleForm.mediumThreshold && ruleForm.mediumThreshold <= ruleForm.highThreshold)) {
-    ElMessage.warning(thresholdHint)
-    return
-  }
-
-  let emotionCombo: Record<string, unknown> = {}
-  try {
-    emotionCombo = JSON.parse(ruleForm.emotionComboJson || '{}') as Record<string, unknown>
-  } catch {
-    ElMessage.warning(`情绪组合配置格式不正确，请检查 ${JSON_LABEL} 内容。`)
-    return
-  }
-
-  saving.value = true
-  try {
-    await updateWarningRule(selectedRule.value.id, {
-      ruleName: ruleForm.ruleName,
-      description: ruleForm.description || undefined,
-      enabled: ruleForm.enabled,
-      priority: ruleForm.priority,
-      lowThreshold: ruleForm.lowThreshold,
-      mediumThreshold: ruleForm.mediumThreshold,
-      highThreshold: ruleForm.highThreshold,
-      emotionCombo,
-      trendWindowDays: ruleForm.trendWindowDays,
-      triggerCount: ruleForm.triggerCount,
-      suggestTemplateCode: ruleForm.suggestTemplateCode || undefined,
-      slaLowMinutes: ruleForm.slaLowMinutes,
-      slaMediumMinutes: ruleForm.slaMediumMinutes,
-      slaHighMinutes: ruleForm.slaHighMinutes,
-    })
-    ElMessage.success('规则参数已保存')
-    await loadData()
-  } catch (error) {
-    const parsed = parseError(error, '保存规则参数失败')
-    ElMessage.error(parsed.detail)
-  } finally {
-    saving.value = false
-  }
-}
-
-onMounted(async () => {
-  await loadData()
+onMounted(() => {
+  void loadData()
 })
 </script>
 
@@ -149,91 +70,146 @@ onMounted(async () => {
       @retry="loadData"
     />
     <template v-else>
-      <el-card shadow="hover">
-        <template #header>
-          <div class="header-row">
-            <span>预警阈值与规则参数</span>
-            <el-button @click="loadData">刷新</el-button>
-          </div>
-        </template>
+      <el-alert
+        class="page-alert"
+        type="info"
+        :closable="false"
+        title="本页只展示当前生效规则、运行模式与在线模型摘要。如需修改规则，请前往“预警规则”页。"
+      />
 
-        <EmptyState
-          v-if="rules.length === 0"
-          title="暂无预警规则"
-          description="请先在预警规则页创建至少一条规则。"
-          action-text="重新加载"
-          @action="loadData"
-        />
-        <template v-else>
-          <el-form label-width="140px">
-            <el-form-item label="当前规则">
-              <el-select
-                :model-value="selectedRuleId"
-                style="width: 420px"
-                @change="handleRuleChange"
-              >
-                <el-option v-for="item in rules" :key="item.id" :label="`${item.rule_name} (${item.rule_code})`" :value="item.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="规则名称">
-              <el-input v-model="ruleForm.ruleName" />
-            </el-form-item>
-            <el-form-item label="规则描述">
-              <el-input v-model="ruleForm.description" type="textarea" :rows="2" />
-            </el-form-item>
-            <el-form-item label="启用">
-              <el-switch v-model="ruleForm.enabled" />
-            </el-form-item>
-            <el-form-item label="阈值（低/中/高）">
-              <el-input-number v-model="ruleForm.lowThreshold" :min="0" :max="100" />
-              <el-input-number v-model="ruleForm.mediumThreshold" :min="0" :max="100" />
-              <el-input-number v-model="ruleForm.highThreshold" :min="0" :max="100" />
-            </el-form-item>
-            <el-form-item label="趋势窗口/触发次数">
-              <el-input-number v-model="ruleForm.trendWindowDays" :min="1" :max="180" />
-              <el-input-number v-model="ruleForm.triggerCount" :min="1" :max="100" />
-            </el-form-item>
-            <el-form-item :label="`${SLA_LABEL}时限（低/中/高，分钟）`">
-              <el-input-number v-model="ruleForm.slaLowMinutes" :min="1" :max="20160" />
-              <el-input-number v-model="ruleForm.slaMediumMinutes" :min="1" :max="20160" />
-              <el-input-number v-model="ruleForm.slaHighMinutes" :min="1" :max="20160" />
-            </el-form-item>
-            <el-form-item label="建议模板编码">
-              <el-input v-model="ruleForm.suggestTemplateCode" />
-            </el-form-item>
-            <el-form-item :label="`情绪组合配置（${JSON_LABEL}）`">
-              <el-input v-model="ruleForm.emotionComboJson" type="textarea" :rows="5" />
-            </el-form-item>
-          </el-form>
-          <div class="actions">
-            <el-button type="primary" :loading="saving" @click="saveRule">保存参数</el-button>
-          </div>
-        </template>
-      </el-card>
+      <el-row :gutter="16">
+        <el-col :xs="24" :md="6">
+          <el-card shadow="hover">
+            <div class="summary-title">启用规则数</div>
+            <div class="summary-value">{{ enabledRuleCount }}</div>
+            <div class="summary-note">规则编辑入口统一收口在“预警规则”页。</div>
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :md="6">
+          <el-card shadow="hover">
+            <div class="summary-title">当前生效规则</div>
+            <div class="summary-value summary-value--compact">{{ activeRule?.rule_name || '-' }}</div>
+            <div class="summary-note">{{ activeRule?.rule_code || '当前还没有启用规则' }}</div>
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :md="6">
+          <el-card shadow="hover">
+            <div class="summary-title">风险阈值</div>
+            <div class="summary-value summary-value--compact">
+              {{ activeRule ? `${activeRule.low_threshold} / ${activeRule.medium_threshold} / ${activeRule.high_threshold}` : '-' }}
+            </div>
+            <div class="summary-note">低 / 中 / 高风险阈值</div>
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :md="6">
+          <el-card shadow="hover">
+            <div class="summary-title">{{ SLA_LABEL }}</div>
+            <div class="summary-value summary-value--compact">
+              {{
+                activeRule
+                  ? `${activeRule.sla_low_minutes ?? '-'} / ${activeRule.sla_medium_minutes ?? '-'} / ${activeRule.sla_high_minutes ?? '-'}`
+                  : '-'
+              }}
+            </div>
+            <div class="summary-note">低 / 中 / 高风险响应时限（分钟）</div>
+          </el-card>
+        </el-col>
+      </el-row>
 
-      <el-card shadow="hover">
-        <template #header>模型版本信息（只读）</template>
+      <el-row :gutter="16" class="mt-16">
+        <el-col :xs="24" :md="11">
+          <el-card shadow="hover">
+            <template #header>当前生效规则摘要</template>
+            <EmptyState
+              v-if="!activeRule"
+              title="暂无规则摘要"
+              description="请先在预警规则页创建并启用规则。"
+              action-text="刷新"
+              @action="loadData"
+            />
+            <template v-else>
+              <div class="detail-item">
+                <span>规则名称</span>
+                <strong>{{ activeRule.rule_name }}</strong>
+              </div>
+              <div class="detail-item">
+                <span>规则编码</span>
+                <strong>{{ activeRule.rule_code }}</strong>
+              </div>
+              <div class="detail-item">
+                <span>优先级</span>
+                <strong>{{ activeRule.priority }}</strong>
+              </div>
+              <div class="detail-item">
+                <span>趋势窗口 / 触发次数</span>
+                <strong>{{ activeRule.trend_window_days }} 天 / {{ activeRule.trigger_count }} 次</strong>
+              </div>
+              <div class="detail-item">
+                <span>建议模板</span>
+                <strong>{{ activeRule.suggest_template_code || '-' }}</strong>
+              </div>
+              <div class="detail-item detail-item--block">
+                <span>规则说明</span>
+                <p>{{ activeRule.description || '当前规则未填写额外说明。' }}</p>
+              </div>
+              <div class="detail-item detail-item--block">
+                <span>情绪组合配置（{{ JSON_LABEL }}）</span>
+                <pre class="json-preview">{{ emotionComboPreview }}</pre>
+              </div>
+            </template>
+          </el-card>
+        </el-col>
+
+        <el-col :xs="24" :md="13">
+          <el-card shadow="hover">
+            <template #header>运行模式与环境摘要</template>
+            <div class="detail-item">
+              <span>当前模式</span>
+              <strong>{{ systemStatus?.runtime?.aiMode || '-' }}</strong>
+            </div>
+            <div class="detail-item">
+              <span>模型登记环境</span>
+              <strong>{{ formatEnv(registryEnvHint) }}</strong>
+            </div>
+            <div class="detail-item">
+              <span>文本评分 Provider</span>
+              <strong>{{ systemStatus?.runtime?.textScoringProvider || '-' }}</strong>
+            </div>
+            <div class="detail-item">
+              <span>叙事生成 Provider</span>
+              <strong>{{ systemStatus?.runtime?.narrativeProvider || '-' }}</strong>
+            </div>
+            <div class="detail-item">
+              <span>文本回退到 SER</span>
+              <strong>{{ systemStatus?.runtime?.textScoringFallbackToSer ? '已开启' : '未开启' }}</strong>
+            </div>
+            <div class="detail-item detail-item--block">
+              <span>模式说明</span>
+              <p>{{ systemStatus?.runtime?.modeDescription || '暂无模式说明。' }}</p>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <el-card shadow="hover" class="mt-16">
+        <template #header>当前在线模型摘要（只读）</template>
         <EmptyState
-          v-if="models.length === 0"
-          title="暂无模型注册数据"
-          description="请在模型治理页创建或同步模型版本。"
+          v-if="onlineModels.length === 0"
+          title="暂无在线模型登记"
+          description="当前环境下还没有登记为在线的模型记录。"
           action-text="刷新"
           @action="loadData"
         />
-        <el-table v-else :data="models" border>
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="model_name" label="模型名称" min-width="160" />
-          <el-table-column label="模型类型" width="130">
+        <el-table v-else :data="onlineModels" border>
+          <el-table-column label="模型类型" width="150">
             <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
           </el-table-column>
-          <el-table-column prop="version" label="版本" width="130" />
-          <el-table-column label="环境" width="90">
+          <el-table-column prop="model_name" label="模型名称" min-width="180" />
+          <el-table-column prop="version" label="登记版本" min-width="160" />
+          <el-table-column label="环境" width="120">
             <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
           </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="scope">{{ formatModelStatus(scope.row.status) }}</template>
-          </el-table-column>
-          <el-table-column prop="published_at" label="发布时间" min-width="170" />
+          <el-table-column prop="provider" label="提供方" width="140" />
         </el-table>
       </el-card>
     </template>
@@ -247,18 +223,63 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.header-row {
+.page-alert {
+  margin-bottom: 4px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.summary-title,
+.detail-item span {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
+.summary-value {
+  margin-top: 10px;
+  color: var(--admin-text-primary);
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.summary-value--compact {
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.summary-note,
+.detail-item p {
+  margin: 10px 0 0;
+  color: var(--admin-text-secondary);
+  line-height: 1.6;
+}
+
+.detail-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(96, 119, 158, 0.16);
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
+.detail-item--block {
+  display: block;
 }
 
-:deep(.el-form-item .el-input-number + .el-input-number) {
-  margin-left: 10px;
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.json-preview {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(12, 21, 38, 0.76);
+  color: var(--admin-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

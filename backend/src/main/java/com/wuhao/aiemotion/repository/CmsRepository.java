@@ -270,6 +270,22 @@ public class CmsRepository {
                 quote.seedKey(), quote.dataSource(), quote.isActive());
     }
 
+    public int updateSeedQuote(Quote quote) {
+        return jdbcTemplate.update("""
+                UPDATE quotes
+                SET content=?,
+                    author=?,
+                    sort_order=?,
+                    is_recommended=?,
+                    is_enabled=?,
+                    is_active=?,
+                    updated_at=NOW()
+                WHERE seed_key=?
+                  AND data_source='seed'
+                """, quote.content(), quote.author(), quote.sortOrder(), quote.recommended(), quote.enabled(),
+                quote.isActive(), quote.seedKey());
+    }
+
     public void insertSeedArticle(Article article) {
         jdbcTemplate.update("""
                 INSERT INTO articles(title, cover_image_url, summary, recommend_reason, fit_for, highlights, reading_minutes,
@@ -282,6 +298,37 @@ public class CmsRepository {
                 article.enabled(), article.seedKey(), article.dataSource(), article.isActive(), article.publishedAt());
     }
 
+    public int updateSeedArticle(Article article) {
+        return jdbcTemplate.update("""
+                UPDATE articles
+                SET title=?,
+                    cover_image_url=?,
+                    summary=?,
+                    recommend_reason=?,
+                    fit_for=?,
+                    highlights=?,
+                    reading_minutes=?,
+                    category=?,
+                    source_name=?,
+                    source_url=?,
+                    content_url=?,
+                    is_external=?,
+                    difficulty_tag=?,
+                    sort_order=?,
+                    is_recommended=?,
+                    is_enabled=?,
+                    is_active=?,
+                    published_at=?,
+                    updated_at=NOW()
+                WHERE seed_key=?
+                  AND data_source='seed'
+                """, article.title(), article.coverImageUrl(), article.summary(), article.recommendReason(),
+                article.fitFor(), article.highlights(), article.readingMinutes(), article.category(),
+                article.sourceName(), article.sourceUrl(), article.sourceUrl(), article.isExternal(),
+                article.difficultyTag(), article.sortOrder(), article.recommended(), article.enabled(),
+                article.isActive(), article.publishedAt(), article.seedKey());
+    }
+
     public void insertSeedBook(Book book) {
         jdbcTemplate.update("""
                 INSERT INTO books(title, author, cover_image_url, description, category, recommend_reason, fit_for, highlights,
@@ -290,6 +337,30 @@ public class CmsRepository {
                 """, book.title(), book.author(), book.coverImageUrl(), book.description(), book.category(),
                 book.recommendReason(), book.fitFor(), book.highlights(), book.purchaseUrl(), book.sortOrder(),
                 book.recommended(), book.enabled(), book.seedKey(), book.dataSource(), book.isActive());
+    }
+
+    public int updateSeedBook(Book book) {
+        return jdbcTemplate.update("""
+                UPDATE books
+                SET title=?,
+                    author=?,
+                    cover_image_url=?,
+                    description=?,
+                    category=?,
+                    recommend_reason=?,
+                    fit_for=?,
+                    highlights=?,
+                    purchase_url=?,
+                    sort_order=?,
+                    is_recommended=?,
+                    is_enabled=?,
+                    is_active=?,
+                    updated_at=NOW()
+                WHERE seed_key=?
+                  AND data_source='seed'
+                """, book.title(), book.author(), book.coverImageUrl(), book.description(), book.category(),
+                book.recommendReason(), book.fitFor(), book.highlights(), book.purchaseUrl(), book.sortOrder(),
+                book.recommended(), book.enabled(), book.isActive(), book.seedKey());
     }
 
     private boolean seedKeyExists(String tableName, String seedKey) {

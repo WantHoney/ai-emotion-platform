@@ -54,13 +54,13 @@ void loadReports()
 <template>
   <div class="reports-page user-layout">
     <SectionBlock
-      eyebrow="历史归档"
+      eyebrow="历史报告"
       title="报告中心"
-      description="按条件筛选历史报告，避免信息拥挤。"
+      description="按编号、情绪或风险筛选你之前的报告。"
     >
       <div class="filters">
-        <el-input v-model="query.keyword" placeholder="按报告 ID / 任务 ID 搜索" clearable />
-        <el-input v-model="query.emotion" placeholder="按情绪筛选，例如悲伤" clearable />
+        <el-input v-model="query.keyword" placeholder="搜索报告编号或任务编号" clearable />
+        <el-input v-model="query.emotion" placeholder="筛选情绪，例如悲伤" clearable />
         <el-select v-model="query.riskLevel" clearable placeholder="风险等级" style="width: 140px">
           <el-option label="低风险" value="low" />
           <el-option label="中风险" value="medium" />
@@ -81,7 +81,7 @@ void loadReports()
       <EmptyState
         v-else-if="rows.length === 0"
         title="暂无报告"
-        description="请调整筛选条件，或先上传语音生成报告。"
+        description="先上传语音，生成第一份报告后就会显示在这里。"
         action-text="重新加载"
         @action="loadReports"
       />
@@ -91,7 +91,7 @@ void loadReports()
             v-for="item in rows"
             :key="item.id"
             :title="item.reportNo || `报告-${item.id}`"
-            :subtitle="item.taskNo || `任务-${item.taskId}`"
+            :subtitle="`关联任务：${item.taskNo || `任务-${item.taskId}`}`"
             interactive
             @click="router.push(`/app/reports/${item.id}`)"
           >

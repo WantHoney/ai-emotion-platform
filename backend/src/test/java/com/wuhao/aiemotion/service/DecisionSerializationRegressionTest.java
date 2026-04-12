@@ -67,9 +67,9 @@ class DecisionSerializationRegressionTest {
                         0.3529D,
                         0.3224D,
                         false,
-                        List.of("开心", "休息的很好"),
+                        List.of("开心", "休息得很好"),
                         List.of(),
-                        "今天真的很开心 晚上休息的很好",
+                        "今天真的很开心，晚上休息得很好。",
                         new ConsistencyDecision.Thresholds(0.98D, 0.45D)
                 )
         );
@@ -104,7 +104,7 @@ class DecisionSerializationRegressionTest {
                         16000,
                         "{\"decision\":{}}",
                         "今天真的很开心",
-                        new AnalysisTaskResultResponse.RiskAssessmentPayload(37.58D, "NORMAL", "复核提示", 1.0D, 0.0D, 0.0D, 0.2646D),
+                        new AnalysisTaskResultResponse.RiskAssessmentPayload(37.58D, "NORMAL", "复核提示", 1.0D, 0.0D, 0.0D, 0.0D, 0.2646D),
                         "2026-04-05 10:00:00"
                 ),
                 List.of(),
@@ -131,7 +131,7 @@ class DecisionSerializationRegressionTest {
                         12180,
                         16000,
                         "model-a",
-                        new AnalysisTaskResultResponse.RiskAssessmentPayload(37.58D, "NORMAL", "复核提示", 1.0D, 0.0D, 0.0D, 0.2646D)
+                        new AnalysisTaskResultResponse.RiskAssessmentPayload(37.58D, "NORMAL", "复核提示", 1.0D, 0.0D, 0.0D, 0.0D, 0.2646D)
                 )
         );
         TaskRealtimeSnapshotResponse snapshotResponse = new TaskRealtimeSnapshotResponse(

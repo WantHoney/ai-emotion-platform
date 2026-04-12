@@ -40,21 +40,23 @@ const activeTab = computed(
 <style scoped>
 .state-tabs {
   display: grid;
-  gap: var(--content-gap-2);
+  gap: 10px;
 }
 
 .state-tabs__rail {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--content-gap-2);
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .state-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0 18px;
+  min-height: 48px;
+  width: 100%;
+  padding: 0 16px;
   border-radius: var(--content-radius-pill);
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-1);
@@ -82,20 +84,31 @@ const activeTab = computed(
 
 .state-tab__label {
   color: #f4fbff;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .state-tabs__focus {
   margin: 0;
+  min-width: 0;
   color: #9fb4d6;
   line-height: 1.7;
-  font-size: 13px;
+  font-size: 14px;
+  text-align: left;
 }
 
 .state-tabs__focus span {
   margin-right: 8px;
   color: #f4fbff;
   font-weight: 700;
+}
+
+@media (max-width: 980px) {
+  .state-tabs__rail {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
 }
 </style>

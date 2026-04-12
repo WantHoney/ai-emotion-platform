@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import EmptyState from '@/components/states/EmptyState.vue'
@@ -13,13 +13,17 @@ import {
   type ModelRegistryItem,
   type ModelSwitchLogItem,
 } from '@/api/governance'
+import { getSystemStatus, type RuntimeModelInfo, type SystemStatus } from '@/api/system'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 import { formatEnv, formatModelStatus, formatModelType } from '@/utils/uiText'
+
+type RuntimeKey = 'asr' | 'audioEmotion' | 'text' | 'fusion' | 'psi'
 
 const loading = ref(false)
 const logsLoading = ref(false)
 const rows = ref<ModelRegistryItem[]>([])
 const switchLogs = ref<ModelSwitchLogItem[]>([])
+const systemStatus = ref<SystemStatus | null>(null)
 const errorState = ref<ErrorStatePayload | null>(null)
 const logsErrorState = ref<ErrorStatePayload | null>(null)
 
@@ -36,9 +40,9 @@ const createForm = reactive({
   modelCode: '',
   modelName: '',
   modelType: 'FUSION',
-  provider: 'openrouter',
+  provider: 'local',
   version: '',
-  env: 'dev',
+  env: 'prod',
   status: 'OFFLINE',
 })
 
@@ -62,17 +66,51 @@ const modelTypeOptions = [
   { label: formatModelType('SCORING'), value: 'SCORING' },
 ]
 
+const runtimeEnvHint = computed(
+  () => systemStatus.value?.runtime?.registryEnvHint || systemStatus.value?.config?.runtimeRegistryEnvHint || 'prod',
+)
+
+const runtimeModels = computed(() => {
+  const models = systemStatus.value?.runtime?.models
+  return {
+    asr: models?.asr,
+    audioEmotion: models?.audioEmotion,
+    text: models?.text,
+    fusion: models?.fusion,
+    psi: models?.psi,
+  }
+})
+
+const runtimeRows = computed(() =>
+  [runtimeModels.value.asr, runtimeModels.value.audioEmotion, runtimeModels.value.text, runtimeModels.value.fusion, runtimeModels.value.psi].filter(
+    (item): item is RuntimeModelInfo => Boolean(item),
+  ),
+)
+
+const runtimeMismatchRows = computed(() =>
+  rows.value.filter((row) => {
+    const runtime = runtimeForRow(row)
+    if (!runtime || !isCurrentEnv(row)) return false
+    return row.status === 'ONLINE' && !matchesRuntime(row, runtime)
+  }),
+)
+
 const loadModels = async () => {
   loading.value = true
   errorState.value = null
   try {
-    rows.value = await getAdminModels({
-      modelType: filters.modelType || undefined,
-      env: filters.env || undefined,
-      status: filters.status || undefined,
-    })
+    const [modelRows, statusResponse] = await Promise.all([
+      getAdminModels({
+        modelType: filters.modelType || undefined,
+        env: filters.env || undefined,
+        status: filters.status || undefined,
+      }),
+      getSystemStatus(),
+    ])
+    rows.value = modelRows
+    systemStatus.value = statusResponse.data
   } catch (error) {
-    errorState.value = parseError(error, '模型注册表加载失败')
+    errorState.value = parseError(error, '模型治理数据加载失败')
   } finally {
     loading.value = false
   }
@@ -92,6 +130,69 @@ const loadSwitchLogs = async () => {
   } finally {
     logsLoading.value = false
   }
+}
+
+const runtimeKeyByType = (modelType?: string): RuntimeKey | null => {
+  switch ((modelType || '').toUpperCase()) {
+    case 'ASR':
+      return 'asr'
+    case 'AUDIO_EMOTION':
+      return 'audioEmotion'
+    case 'TEXT_SENTIMENT':
+      return 'text'
+    case 'FUSION':
+      return 'fusion'
+    case 'SCORING':
+      return 'psi'
+    default:
+      return null
+  }
+}
+
+const runtimeForRow = (row: ModelRegistryItem) => {
+  const runtimeKey = runtimeKeyByType(row.model_type)
+  return runtimeKey ? runtimeModels.value[runtimeKey] : undefined
+}
+
+const isCurrentEnv = (row: ModelRegistryItem) => row.env === runtimeEnvHint.value
+
+const matchesRuntime = (row: ModelRegistryItem, runtime?: RuntimeModelInfo) => {
+  if (!runtime) return false
+  const haystack = [runtime.registryComparable, runtime.rawValue, runtime.label]
+    .filter(Boolean)
+    .join(' | ')
+    .toLowerCase()
+  const needles = [row.version, row.model_code, row.model_name]
+    .filter(Boolean)
+    .map((item) => String(item).toLowerCase())
+  return needles.some((needle) => needle.length > 2 && haystack.includes(needle))
+}
+
+const registryStateText = (row: ModelRegistryItem) => formatModelStatus(row.status)
+
+const runtimeStateText = (row: ModelRegistryItem) => {
+  if (!isCurrentEnv(row)) return '非当前环境'
+  const runtime = runtimeForRow(row)
+  if (!runtime) return '运行态未知'
+  const matched = matchesRuntime(row, runtime)
+  if (matched && row.status === 'ONLINE') return '登记在线 / 运行中'
+  if (matched) return '运行中但登记未在线'
+  if (row.status === 'ONLINE') return '登记在线 / 未生效'
+  return '未运行'
+}
+
+const runtimeStateTag = (row: ModelRegistryItem) => {
+  const text = runtimeStateText(row)
+  if (text === '登记在线 / 运行中') return 'success'
+  if (text === '运行中但登记未在线') return 'warning'
+  if (text === '登记在线 / 未生效') return 'danger'
+  return 'info'
+}
+
+const runtimeDetail = (row: ModelRegistryItem) => {
+  const runtime = runtimeForRow(row)
+  if (!runtime || !isCurrentEnv(row)) return '-'
+  return runtime.label
 }
 
 const openCreateDialog = () => {
@@ -136,16 +237,12 @@ const switchModel = async (row: ModelRegistryItem) => {
         inputType: 'text',
       },
     )
-    if (typeof result === 'string') {
-      return
-    }
+    if (typeof result === 'string') return
     await switchAdminModel(row.id, result.value || undefined)
-    ElMessage.success('模型切换成功')
+    ElMessage.success('模型切换已写入注册表，请继续核对“实际运行状态”是否同步生效。')
     await Promise.all([loadModels(), loadSwitchLogs()])
   } catch (error) {
-    if (error === 'cancel' || error === 'close') {
-      return
-    }
+    if (error === 'cancel' || error === 'close') return
     const parsed = parseError(error, '模型切换失败')
     ElMessage.error(parsed.detail)
   }
@@ -156,8 +253,8 @@ const openLogs = async () => {
   await loadSwitchLogs()
 }
 
-onMounted(async () => {
-  await loadModels()
+onMounted(() => {
+  void loadModels()
 })
 </script>
 
@@ -174,7 +271,47 @@ onMounted(async () => {
       </div>
     </template>
 
-    <el-form inline>
+    <el-alert
+      title="本页重点回答两个问题：模型在注册表里是什么状态、系统当前实际运行的又是哪一个版本。"
+      type="info"
+      :closable="false"
+      class="mb-16"
+    />
+
+    <el-alert
+      v-if="runtimeMismatchRows.length"
+      type="warning"
+      :closable="false"
+      class="mb-16"
+      title="检测到“登记在线”和“实际运行状态”不一致，请优先核对运行态后再对外说明当前模型版本。"
+    />
+
+    <el-card shadow="never" class="runtime-card">
+      <template #header>当前实际运行模型</template>
+      <EmptyState
+        v-if="runtimeRows.length === 0"
+        title="暂无运行态摘要"
+        description="系统状态接口还没有返回运行中的模型信息。"
+        action-text="刷新"
+        @action="loadModels"
+      />
+      <el-row v-else :gutter="12">
+        <el-col v-for="item in runtimeRows" :key="item.modelType" :xs="24" :md="12" :lg="8">
+          <div class="runtime-item">
+            <div class="runtime-item__meta">
+              <span>{{ formatModelType(item.modelType) }}</span>
+              <el-tag :type="item.status === 'UP' ? 'success' : item.status === 'UNKNOWN' ? 'info' : 'warning'">
+                {{ item.status }}
+              </el-tag>
+            </div>
+            <strong>{{ item.label }}</strong>
+            <p>{{ item.detail || item.source }}</p>
+          </div>
+        </el-col>
+      </el-row>
+    </el-card>
+
+    <el-form inline class="mt-16">
       <el-form-item label="模型类型">
         <el-input v-model="filters.modelType" placeholder="输入模型类型代码" clearable />
       </el-form-item>
@@ -213,19 +350,27 @@ onMounted(async () => {
       <el-table-column label="类型" width="140">
         <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
       </el-table-column>
-      <el-table-column prop="version" label="版本" width="130" />
+      <el-table-column prop="version" label="登记版本" min-width="150" />
       <el-table-column label="环境" width="100">
         <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="120">
+      <el-table-column label="注册状态" width="120">
         <template #default="scope">
           <el-tag :type="scope.row.status === 'ONLINE' ? 'success' : 'info'">
-            {{ formatModelStatus(scope.row.status) }}
+            {{ registryStateText(scope.row) }}
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="实际运行状态" min-width="170">
+        <template #default="scope">
+          <el-tag :type="runtimeStateTag(scope.row)">{{ runtimeStateText(scope.row) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="当前运行标识" min-width="220" show-overflow-tooltip>
+        <template #default="scope">{{ runtimeDetail(scope.row) }}</template>
+      </el-table-column>
       <el-table-column prop="published_at" label="发布时间" min-width="180" />
-      <el-table-column label="操作" width="130">
+      <el-table-column label="操作" width="130" fixed="right">
         <template #default="scope">
           <el-button
             type="primary"
@@ -240,6 +385,12 @@ onMounted(async () => {
     </el-table>
 
     <el-dialog v-model="createDialogVisible" title="新增模型" width="620">
+      <el-alert
+        class="mb-16"
+        type="info"
+        :closable="false"
+        title="本页更适合维护模型注册表与切换记录，指标和配置可在后续补充。"
+      />
       <el-form label-width="120px">
         <el-form-item label="模型编码"><el-input v-model="createForm.modelCode" /></el-form-item>
         <el-form-item label="模型名称"><el-input v-model="createForm.modelName" /></el-form-item>
@@ -269,7 +420,19 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="logsDialogVisible" title="模型切换日志" width="900">
+    <el-dialog v-model="logsDialogVisible" title="模型切换日志" width="980">
+      <el-card shadow="never" class="mb-16">
+        <template #header>切换后应核对的当前运行状态</template>
+        <el-row :gutter="12">
+          <el-col v-for="item in runtimeRows" :key="`logs-${item.modelType}`" :xs="24" :md="12">
+            <div class="runtime-check-row">
+              <span>{{ formatModelType(item.modelType) }}</span>
+              <strong>{{ item.label }}</strong>
+            </div>
+          </el-col>
+        </el-row>
+      </el-card>
+
       <LoadingState v-if="logsLoading" />
       <ErrorState
         v-else-if="logsErrorState"
@@ -281,7 +444,7 @@ onMounted(async () => {
       <EmptyState
         v-else-if="switchLogs.length === 0"
         title="暂无切换日志"
-        description="未查询到历史模型切换记录。"
+        description="还没有查询到历史模型切换记录。"
         action-text="重新加载"
         @action="loadSwitchLogs"
       />
@@ -315,5 +478,60 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.runtime-card {
+  margin-bottom: 16px;
+}
+
+.runtime-item {
+  height: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(96, 119, 158, 0.16);
+  background: rgba(12, 21, 38, 0.76);
+  display: grid;
+  gap: 10px;
+}
+
+.runtime-item__meta,
+.runtime-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runtime-item__meta span {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
+.runtime-item strong,
+.runtime-check-row strong {
+  color: var(--admin-text-primary);
+}
+
+.runtime-item p {
+  margin: 0;
+  color: var(--admin-text-secondary);
+  line-height: 1.6;
+}
+
+.runtime-check-row {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(96, 119, 158, 0.16);
+}
+
+.runtime-check-row:last-child {
+  border-bottom: none;
 }
 </style>

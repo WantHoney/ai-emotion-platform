@@ -75,21 +75,21 @@ const avgRisk = computed(() => {
 
 const highRiskDays = computed(() => rows.value.filter((item) => item.highCount > 0).length)
 
-const formulaText = computed(() => '风险分 = 0.6 × 语音风险 + 0.4 × 文本负向值')
+const formulaText = computed(() => '综合风险分会同时参考语音和文本结果')
 const explanationText = computed(
   () =>
-    '语音风险不是只看“悲伤/愤怒”标签，而是综合悲伤占比、愤怒占比和置信度波动一起计算，因此主情绪偏悲伤时，也可能仍然处于低风险区间。',
+    '所以主情绪偏悲伤时，也不一定代表已经进入高风险区间，建议结合整段趋势一起看。',
 )
 
 const trendInsightSourceNote = computed(() => {
   if (!trendInsight.value) return ''
   if (trendInsight.value.status === 'ready') {
-    return '以下趋势解读由本地部署的 Gemma 4 模型辅助生成，数据不会上传至外部服务。'
+    return '这段趋势解读由本地模型辅助整理，数据不会上传到外部服务。'
   }
   if (trendInsight.value.status === 'disabled') {
-    return '当前未启用本地模型趋势解读，以下内容以统计结果为主。'
+    return '当前没有启用本地趋势解读，先以图表和统计结果为主。'
   }
-  return '当前趋势解读以统计结果为主，本地模型结果暂未成功生成。'
+  return '这段趋势解读暂时没有生成成功，先参考上面的图表和统计结果。'
 })
 const trendInsightTechNote = computed(() =>
   trendInsight.value ? buildNarrativeTechNote(trendInsight.value) : null,
@@ -241,9 +241,9 @@ onMounted(() => {
 <template>
   <div class="trend-page user-layout">
     <SectionBlock
-      eyebrow="时间趋势"
+      eyebrow="最近变化"
       title="个人情绪趋势"
-      description="按时间查看报告数量和风险变化，图表口径也一起说明清楚。"
+      description="看看这段时间的报告数量和风险变化。"
     >
       <div class="toolbar">
         <el-select v-model="days" style="width: 146px">
@@ -265,60 +265,25 @@ onMounted(() => {
       <EmptyState
         v-else-if="rows.length === 0"
         title="暂无趋势数据"
-        description="请先上传并完成语音分析，随后即可查看趋势。"
+        description="先完成几次语音分析，再回来看看变化。"
         action-text="重新加载"
         @action="loadTrend"
       />
       <template v-else>
         <div class="summary-grid">
           <LoreCard title="报告总数" :subtitle="`统计周期：近 ${days} 天`">{{ totalReports }}</LoreCard>
-          <LoreCard title="平均风险分" subtitle="0-100 分，按报告数量加权">{{ avgRisk }}</LoreCard>
+          <LoreCard title="平均风险分" subtitle="按这段时间的报告综合计算">{{ avgRisk }}</LoreCard>
           <LoreCard
             title="高风险天数"
-            :subtitle="`当天至少出现 1 份 ${highRiskLabel} 的报告`"
+            :subtitle="`当天出现过 ${highRiskLabel} 的报告就会计入`"
           >
             {{ highRiskDays }}
           </LoreCard>
         </div>
 
-        <LoreCard
-          title="趋势解读"
-          subtitle="结合近期报告数量、风险均值和分布变化生成补充说明。"
-        >
-          <div v-if="trendInsightLoading && !trendInsight" class="trend-insight trend-insight-loading">
-            <div class="trend-insight-main">
-              <p class="trend-insight-kicker">本地趋势解读</p>
-              <h4 class="trend-insight-headline">正在生成趋势解读...</h4>
-              <p class="trend-insight-summary">
-                本地模型正在根据近期时间序列和风险分布生成更自然的趋势说明，图表和统计结果已可先行查看。
-              </p>
-            </div>
-          </div>
-          <div v-else-if="trendInsight" class="trend-insight">
-            <div class="trend-insight-layout">
-              <div class="trend-insight-main">
-                <p class="trend-insight-kicker">本地趋势解读</p>
-                <h4 class="trend-insight-headline">{{ trendInsight.headline ?? '近期趋势解读' }}</h4>
-                <p class="trend-insight-summary">{{ trendInsight.summary }}</p>
-                <p v-if="trendInsight.note" class="trend-insight-note">{{ trendInsight.note }}</p>
-              </div>
-              <div v-if="trendInsightHighlights.length" class="trend-insight-side">
-                <p class="trend-insight-side-title">观察点</p>
-                <ul class="trend-insight-list">
-                  <li v-for="item in trendInsightHighlights" :key="item">{{ item }}</li>
-                </ul>
-              </div>
-            </div>
-            <div class="trend-insight-meta">
-              <span class="trend-insight-source">{{ trendInsightSourceNote }}</span>
-              <span v-if="trendInsightTechNote" class="trend-insight-tech">{{ trendInsightTechNote }}</span>
-            </div>
-          </div>
-        </LoreCard>
-
-        <LoreCard title="风险趋势图" subtitle="柱状表示当天报告数，折线表示当天平均风险分">
+        <LoreCard title="风险趋势图" subtitle="柱状图看报告数，折线看平均风险分">
           <div class="chart-caption">
-            X 轴：日期，左轴：平均风险分，右轴：报告数。{{ lowRiskLabel }}，{{ mediumRiskLabel }}，{{ highRiskLabel }}。
+            横轴是日期，左边看平均风险分，右边看报告数。{{ lowRiskLabel }}，{{ mediumRiskLabel }}，{{ highRiskLabel }}。
           </div>
 
           <div class="chart-head">
@@ -500,6 +465,41 @@ onMounted(() => {
           </div>
 
           <div class="chart-note">{{ formulaText }}。{{ explanationText }}</div>
+        </LoreCard>
+
+        <LoreCard
+          title="趋势解读"
+          subtitle="把最近的变化整理成一段更容易读懂的话。"
+        >
+          <div v-if="trendInsightLoading && !trendInsight" class="trend-insight trend-insight-loading">
+            <div class="trend-insight-main">
+              <p class="trend-insight-kicker">本地趋势解读</p>
+              <h4 class="trend-insight-headline">正在生成趋势解读...</h4>
+              <p class="trend-insight-summary">
+                本地模型正在整理最近的变化，你可以先看上面的图表和统计结果。
+              </p>
+            </div>
+          </div>
+          <div v-else-if="trendInsight" class="trend-insight">
+            <div class="trend-insight-layout">
+              <div class="trend-insight-main">
+                <p class="trend-insight-kicker">本地趋势解读</p>
+                <h4 class="trend-insight-headline">{{ trendInsight.headline ?? '近期趋势解读' }}</h4>
+                <p class="trend-insight-summary">{{ trendInsight.summary }}</p>
+                <p v-if="trendInsight.note" class="trend-insight-note">{{ trendInsight.note }}</p>
+              </div>
+              <div v-if="trendInsightHighlights.length" class="trend-insight-side">
+                <p class="trend-insight-side-title">观察点</p>
+                <ul class="trend-insight-list">
+                  <li v-for="item in trendInsightHighlights" :key="item">{{ item }}</li>
+                </ul>
+              </div>
+            </div>
+            <div class="trend-insight-meta">
+              <span class="trend-insight-source">{{ trendInsightSourceNote }}</span>
+              <span v-if="trendInsightTechNote" class="trend-insight-tech">{{ trendInsightTechNote }}</span>
+            </div>
+          </div>
         </LoreCard>
 
         <el-table :data="rows" border size="small">

@@ -241,6 +241,33 @@ public class ContentHubRepository {
         });
     }
 
+    public boolean scheduleUsesOnlySeedContent(long scheduleId) {
+        Integer nonSeedQuoteCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM content_daily_schedule s
+                LEFT JOIN quotes q ON q.id = s.quote_id
+                WHERE s.id = ?
+                  AND (q.id IS NULL OR q.data_source <> 'seed')
+                """, Integer.class, scheduleId);
+        if (nonSeedQuoteCount != null && nonSeedQuoteCount > 0) {
+            return false;
+        }
+
+        Integer nonSeedItemCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM content_daily_item i
+                LEFT JOIN articles a ON i.content_type = 'ARTICLE' AND a.id = i.content_id
+                LEFT JOIN books b ON i.content_type = 'BOOK' AND b.id = i.content_id
+                WHERE i.schedule_id = ?
+                  AND (
+                    (i.content_type = 'ARTICLE' AND (a.id IS NULL OR a.data_source <> 'seed'))
+                    OR
+                    (i.content_type = 'BOOK' AND (b.id IS NULL OR b.data_source <> 'seed'))
+                  )
+                """, Integer.class, scheduleId);
+        return nonSeedItemCount == null || nonSeedItemCount == 0;
+    }
+
     public boolean existsActiveQuote(long quoteId) {
         return exists("""
                 SELECT COUNT(*)

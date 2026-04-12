@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextNegScorerTest {
@@ -41,6 +42,7 @@ class TextNegScorerTest {
 
         assertEquals(0.0D, result.textNeg());
         assertEquals(0, result.hitCount());
+        assertEquals(0.0D, result.diagnosticScore());
         assertFalse(result.highRiskHit());
     }
 
@@ -66,5 +68,26 @@ class TextNegScorerTest {
         TextNegScorer.TextNegScoreResult sameClauseStrong = scorer.score("我今天非常焦虑");
 
         assertTrue(crossClause.textNeg() < sameClauseStrong.textNeg());
+    }
+
+    @Test
+    void shouldExposePositiveDiagnosticHitsEvenWhenNegativeScoreIsZero() {
+        TextNegScorer.TextNegScoreResult result = scorer.score("我今天很开心，心情很好");
+
+        assertEquals(0.0D, result.textNeg());
+        assertEquals(0, result.hitCount());
+        assertTrue(result.diagnosticScore() > 0.0D);
+        assertEquals("HAP", result.dominantEmotion());
+        assertTrue(result.hits().stream().anyMatch(hit -> hit.startsWith("HAP:")));
+    }
+
+    @Test
+    void shouldExposeGroupedDiagnosticEmotionScores() {
+        TextNegScorer.TextNegScoreResult result = scorer.score("我现在真的很生气，而且特别难过");
+
+        assertTrue(result.textNeg() > 0.0D);
+        assertTrue(result.diagnosticHitCount() > 0);
+        assertNotEquals(0.0D, result.emotion4Scores().getOrDefault("ANG", 0.0D));
+        assertNotEquals(0.0D, result.emotion4Scores().getOrDefault("SAD", 0.0D));
     }
 }

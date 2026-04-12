@@ -187,7 +187,13 @@ public class AnalysisTaskWorkerService {
             long serCostMs = Duration.between(started, Instant.now()).toMillis();
 
             AnalysisTaskResultResponse.RiskAssessmentPayload baseRiskAssessment =
-                    riskScoringService.evaluate(toSegments(task.id(), response), fusedTextNeg);
+                    riskScoringService.evaluate(
+                            toSegments(task.id(), response),
+                            response.audioSummary() == null ? null : response.audioSummary().audio_prob_sad(),
+                            response.audioSummary() == null ? null : response.audioSummary().audio_prob_ang(),
+                            response.audioSummary() == null ? null : response.audioSummary().audio_prob_hap(),
+                            fusedTextNeg
+                    );
             ConsistencyDecision decision = consistencyGuardService.evaluate(
                     task.id(),
                     task.audioFileId(),

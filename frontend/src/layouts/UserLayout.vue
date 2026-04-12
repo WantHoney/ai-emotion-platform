@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell, { type AppNavItem } from '@/components/ui/AppShell.vue'
+import AmbientSideTicker from '@/components/ui/AmbientSideTicker.vue'
 import PageContainer from '@/components/layout/PageContainer.vue'
 import { useUserAuthStore } from '@/stores/userAuth'
 
@@ -23,7 +24,6 @@ const orderedNavItems: NavItem[] = [
   { label: '趋势分析', path: '/app/trends', requiresAuth: true },
   { label: '心理中心', path: '/app/psy-centers', requiresAuth: true },
   { label: '内容专栏', path: '/app/content', requiresAuth: false },
-  { label: '关于', path: '/app/about', requiresAuth: false },
   { label: '个人中心', path: '/app/profile', requiresAuth: true },
 ]
 
@@ -69,25 +69,39 @@ const handleUserNavigate = async (path: string) => {
 
 <template>
   <div class="user-layout">
-    <AppShell
-      :nav-items="userTopNavItems"
-      :active-path="activeUserPath"
-      :authenticated="userAuthStore.isAuthenticated"
-      :username="userAuthStore.currentUser?.username"
-      role="USER"
-      @navigate="handleUserNavigate"
-      @login="goLogin"
-      @logout="logout"
-    >
-      <PageContainer
-        variant="user"
-        :title="pageTitle"
-        :description="pageDescription"
-        :hide-header="hidePageHeader"
+    <div class="user-layout__shell">
+      <AmbientSideTicker />
+      <AppShell
+        :nav-items="userTopNavItems"
+        :active-path="activeUserPath"
+        :authenticated="userAuthStore.isAuthenticated"
+        :username="userAuthStore.currentUser?.username"
+        role="USER"
+        @navigate="handleUserNavigate"
+        @login="goLogin"
+        @logout="logout"
       >
-        <router-view />
-      </PageContainer>
-    </AppShell>
+        <PageContainer
+          variant="user"
+          :title="pageTitle"
+          :description="pageDescription"
+          :hide-header="hidePageHeader"
+        >
+          <router-view />
+        </PageContainer>
+      </AppShell>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.user-layout {
+  position: relative;
+}
+
+.user-layout__shell {
+  position: relative;
+  z-index: 1;
+}
+</style>
 

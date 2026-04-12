@@ -2,7 +2,6 @@
   {
     "seedKey": "seed_quote_001",
     "content": "允许自己慢一点，不是退步，而是在给情绪留出被看见的时间。",
-    "author": "AI Emotion 编辑部",
     "sortOrder": 10,
     "recommended": true,
     "enabled": true,
@@ -11,7 +10,6 @@
   {
     "seedKey": "seed_quote_002",
     "content": "真正的勇气，不是没有波动，而是在波动里仍愿意照顾自己。",
-    "author": "AI Emotion 编辑部",
     "sortOrder": 20,
     "recommended": true,
     "enabled": true,
@@ -20,9 +18,80 @@
   {
     "seedKey": "seed_quote_003",
     "content": "当你开始描述自己的感受，改变往往已经开始。",
-    "author": "AI Emotion 编辑部",
     "sortOrder": 30,
-    "recommended": false,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_004",
+    "content": "先把呼吸找回来，很多答案会在身体安静一点以后出现。",
+    "sortOrder": 40,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_005",
+    "content": "今晚不一定要把一切想明白，先把自己安顿好也算前进。",
+    "sortOrder": 50,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_006",
+    "content": "焦虑不是命令，它只是提醒你：这里有些事对你很重要。",
+    "sortOrder": 60,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_007",
+    "content": "能说出“我现在需要支持”，本身就是一种力量。",
+    "sortOrder": 70,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_008",
+    "content": "边界不是疏远，而是让关系有机会更稳地靠近。",
+    "sortOrder": 80,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_009",
+    "content": "休息不是偷懒，是让已经超载的部分重新获得空间。",
+    "sortOrder": 90,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_010",
+    "content": "情绪不会因为被催促就消失，但会因为被理解而慢慢松动。",
+    "sortOrder": 100,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_011",
+    "content": "有些恢复看起来很安静，却已经在内部悄悄发生。",
+    "sortOrder": 110,
+    "recommended": true,
+    "enabled": true,
+    "isActive": true
+  },
+  {
+    "seedKey": "seed_quote_012",
+    "content": "今天先做一件能让自己轻一点的小事，也很好。",
+    "sortOrder": 120,
+    "recommended": true,
     "enabled": true,
     "isActive": true
   }

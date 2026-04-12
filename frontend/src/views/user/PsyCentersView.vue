@@ -11,6 +11,7 @@ import MediaFeatureCard from '@/components/ui/MediaFeatureCard.vue'
 import SmartImage from '@/components/ui/SmartImage.vue'
 import SectionBlock from '@/components/ui/SectionBlock.vue'
 import { PSY_CENTER_CITY_OPTIONS, PSY_CENTER_CITY_REFERENCES, SOURCE_LEVEL_LABELS } from '@/constants/contentMeta'
+import { resolvePsyCenterPosterUrl } from '@/utils/contentMedia'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const route = useRoute()
@@ -23,7 +24,6 @@ const lastCoords = ref<{ latitude: number; longitude: number } | null>(null)
 const nearbyOutOfCoverage = ref(false)
 const nearbyCityLabel = ref('')
 const radiusKm = 15
-const PSY_CENTER_ASSET_VERSION = '20260404-posters-v5-anime'
 const PSY_CENTER_HERO_VERSION = '20260404-sd35-v1'
 const SUPPORTED_CITY_OPTION_MAP = new Map<string, string>(PSY_CENTER_CITY_OPTIONS.map((item) => [item.value, item.label]))
 const SUPPORTED_CITY_LABEL_TEXT = PSY_CENTER_CITY_OPTIONS.map((item) => item.label).join('、')
@@ -97,7 +97,7 @@ const querySummary = computed(() => {
       ? `已为你定位到 ${nearbyCityLabel.value} 附近 ${radiusKm}km 范围内的支持入口，优先展示可直接联系、来源清晰的机构。`
       : `已为你定位 ${radiusKm}km 范围内的支持入口，优先展示可直接联系、来源清晰的机构。`
   }
-  return `${currentCityLabel.value} 当前已整理 ${centers.value.length} 个支持入口，支持继续扩充维护。`
+  return `${currentCityLabel.value} 当前已整理 ${centers.value.length} 个支持机构，你可以先从里面挑一个联系。`
 })
 
 const heroHeadline = computed(() =>
@@ -137,31 +137,34 @@ const heroFacts = computed(() => [
   {
     label: '当前机构',
     value: String(centers.value.length).padStart(2, '0'),
-    hint: queryMode.value === 'nearby' ? '定位结果' : '城市结果',
+    hint: queryMode.value === 'nearby' ? '附近结果' : '当前城市',
   },
   {
     label: '优先联系',
     value: String(recommendedCount.value).padStart(2, '0'),
-    hint: '推荐入口',
+    hint: '建议先看',
   },
   {
     label: '官方来源',
     value: String(officialCount.value).padStart(2, '0'),
-    hint: '官网核对',
+    hint: '已附官网',
   },
 ])
+
+const heroGuideTitle = computed(() =>
+  queryMode.value === 'nearby' ? '怎么使用这页' : `在${currentCityLabel.value}可以这样查看`,
+)
 
 const heroPrinciples = [
   '仅保留精神卫生中心、精神专科医院和明确心理支持机构',
   '支持按城市切换，也支持直接定位附近',
-  '地址、电话和来源备注同步展示，便于后续核对',
+  '地址、电话和来源都会一起展示，方便你自己判断',
 ]
 
 const cityCoverage = PSY_CENTER_CITY_OPTIONS.map((item) => item.label)
 
 const resolveCenterImage = (center: PsyCenter) => {
-  const seedKey = center.seedKey?.trim()
-  return seedKey ? `/assets/psy-centers/${seedKey}.svg?v=${PSY_CENTER_ASSET_VERSION}` : ''
+  return resolvePsyCenterPosterUrl(center.cityCode, center.seedKey)
 }
 
 const resetNearbyState = () => {
@@ -290,6 +293,7 @@ onMounted(() => {
 <template>
   <div class="centers-page user-layout">
     <SectionBlock
+      headerless
       eyebrow="支持资源"
       title="心理中心"
       description="按城市筛选或定位附近，优先给出来源清晰、可直接联系的支持入口。"
@@ -309,7 +313,7 @@ onMounted(() => {
             <div class="hero-badges">
               <span class="hero-badge hero-badge--city">{{ locationBadgeLabel }}</span>
               <span class="hero-badge">六城覆盖</span>
-              <span class="hero-badge">来源可回查 {{ sourceTrackedCount }}/{{ centers.length || 0 }}</span>
+              <span class="hero-badge">已附来源 {{ sourceTrackedCount }}/{{ centers.length || 0 }}</span>
             </div>
 
             <h3>{{ heroHeadline }}</h3>
@@ -330,8 +334,8 @@ onMounted(() => {
           </div>
 
           <aside class="hero-proof">
-            <p class="hero-proof__eyebrow">首屏信息设计</p>
-            <h4>先给信任，再给入口</h4>
+            <p class="hero-proof__eyebrow">使用说明</p>
+            <h4>{{ heroGuideTitle }}</h4>
             <ul class="hero-proof__list">
               <li v-for="item in heroPrinciples" :key="item">{{ item }}</li>
             </ul>
@@ -344,7 +348,7 @@ onMounted(() => {
         <div class="hero-toolbar">
           <div class="hero-toolbar__copy">
             <span class="hero-toolbar__title">开始查询</span>
-            <span class="hero-toolbar__subtitle">城市筛选、附近定位和刷新入口都放在首屏区域</span>
+            <span class="hero-toolbar__subtitle">切换城市、定位附近或刷新当前结果</span>
           </div>
           <div class="hero-toolbar__actions">
             <el-select v-model="cityCode" style="width: 180px" @change="loadByCity">
@@ -640,13 +644,13 @@ onMounted(() => {
 }
 
 .card-grid :deep(.media-card) {
-  grid-template-columns: minmax(208px, 248px) minmax(0, 1fr);
-  gap: 18px;
-  min-height: 220px;
+  grid-template-columns: minmax(228px, 276px) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 236px;
 }
 
 .card-grid :deep(.cover-wrap) {
-  min-height: 196px;
+  min-height: 224px;
   background:
     radial-gradient(circle at top left, rgba(129, 190, 247, 0.14), transparent 38%),
     linear-gradient(160deg, rgba(15, 25, 43, 0.96), rgba(9, 15, 26, 0.98));

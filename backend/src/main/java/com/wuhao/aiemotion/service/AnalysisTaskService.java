@@ -254,16 +254,20 @@ public class AnalysisTaskService {
                                                                                  List<AnalysisSegment> segments,
                                                                                  ConsistencyDecision decision) {
         double textNeg = resolveTextNeg(result);
+        Double pSad = readDouble(result.rawJson(), "/ser/audioSummary/audio_prob_sad").orElse(null);
+        Double pAngry = readDouble(result.rawJson(), "/ser/audioSummary/audio_prob_ang").orElse(null);
+        Double pHappy = readDouble(result.rawJson(), "/ser/audioSummary/audio_prob_hap").orElse(null);
         AnalysisTaskResultResponse.RiskAssessmentPayload risk = consistencyGuardService.applyDecisionNotice(
-                riskScoringService.evaluate(segments, textNeg),
+                riskScoringService.evaluate(segments, pSad, pAngry, pHappy, textNeg),
                 decision
         );
-        log.info("risk scoring computed in API layer (not persisted): taskId={}, riskScore={}, riskLevel={}, pSad={}, pAngry={}, varConf={}, textNeg={}",
+        log.info("risk scoring computed in API layer (not persisted): taskId={}, riskScore={}, riskLevel={}, pSad={}, pAngry={}, pHappy={}, varConf={}, textNeg={}",
                 taskId,
                 risk.risk_score(),
                 risk.risk_level(),
                 risk.p_sad(),
                 risk.p_angry(),
+                risk.p_happy(),
                 risk.var_conf(),
                 risk.text_neg());
         return risk;

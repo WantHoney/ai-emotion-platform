@@ -188,6 +188,7 @@ public class ConsistencyGuardService {
                 adviceText,
                 riskAssessment.p_sad(),
                 riskAssessment.p_angry(),
+                riskAssessment.p_happy(),
                 riskAssessment.var_conf(),
                 riskAssessment.text_neg()
         );

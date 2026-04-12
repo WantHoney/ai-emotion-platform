@@ -116,7 +116,7 @@ onUnmounted(() => {
 <template>
   <el-card>
     <template #header>任务中心</template>
-    <p class="auto-refresh-tip">列表每 5 秒自动刷新一次，处理中任务会自动追踪状态变化。</p>
+    <p class="auto-refresh-tip">这里会自动刷新，方便你查看任务进度。</p>
 
     <el-form inline>
       <el-form-item label="状态">
@@ -125,7 +125,7 @@ onUnmounted(() => {
         </el-select>
       </el-form-item>
       <el-form-item label="搜索">
-        <el-input v-model="query.keyword" placeholder="任务编号 / 任务 ID / 链路 ID" clearable />
+        <el-input v-model="query.keyword" placeholder="任务编号 / 任务 ID" clearable />
       </el-form-item>
       <el-form-item label="排序">
         <el-select v-model="query.sortBy" style="width: 140px">
@@ -152,7 +152,7 @@ onUnmounted(() => {
     <EmptyState
       v-else-if="rows.length === 0"
       title="暂无任务"
-      description="当前筛选条件下没有找到任务记录。"
+      description="当前筛选下还没有任务。"
       action-text="刷新列表"
       @action="loadTasks"
     />

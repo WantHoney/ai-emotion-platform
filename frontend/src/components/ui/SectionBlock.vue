@@ -3,12 +3,13 @@ defineProps<{
   title: string
   description?: string
   eyebrow?: string
+  headerless?: boolean
 }>()
 </script>
 
 <template>
   <section class="section" v-motion :initial="{ opacity: 0, y: 28 }" :visibleOnce="{ opacity: 1, y: 0 }">
-    <header class="section-header">
+    <header v-if="!headerless" class="section-header">
       <p v-if="eyebrow" class="eyebrow">{{ eyebrow }}</p>
       <h2 class="title">{{ title }}</h2>
       <p v-if="description" class="description">{{ description }}</p>

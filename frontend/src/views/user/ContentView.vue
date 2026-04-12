@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getContentHub, type ContentHubPayload } from '@/api/content'
+import { getContentHub, type ContentArticle, type ContentBook, type ContentHubPayload } from '@/api/content'
 import ArchiveCalendar from '@/components/content/ArchiveCalendar.vue'
 import ArticleFeatureCard from '@/components/content/ArticleFeatureCard.vue'
 import BookShelfCard from '@/components/content/BookShelfCard.vue'
@@ -30,28 +30,39 @@ const selectedDate = computed(() => String(route.query.date ?? ''))
 const dailyPackage = computed(() => payload.value?.dailyPackage ?? null)
 const selectedCategoryPayload = computed(() => payload.value?.categoryHighlights ?? null)
 const hasArchiveDates = computed(() => (payload.value?.archiveDates?.length ?? 0) > 0)
-const selectedCategoryKey = computed(
+const showBackToToday = computed(
+  () => Boolean(payload.value?.selectedDate && payload.value.selectedDate !== payload.value?.todayDate),
+)
+
+const currentCategoryKey = computed(
   () => selectedCategoryPayload.value?.selectedCategory || dailyPackage.value?.theme?.themeKey || 'stress',
 )
-const selectedCategoryLabel = computed(
-  () => ARTICLE_CATEGORY_LABELS[selectedCategoryKey.value] || selectedCategoryKey.value,
+const currentCategoryLabel = computed(
+  () => ARTICLE_CATEGORY_LABELS[currentCategoryKey.value] || currentCategoryKey.value,
 )
-const readingBooks = computed(() => (selectedCategoryPayload.value?.books ?? []).slice(0, 1))
-const readingArticles = computed(() => {
-  const items = selectedCategoryPayload.value?.articles ?? []
-  return items.slice(0, readingBooks.value.length ? 2 : 3)
+
+const categoryArticles = computed(() => selectedCategoryPayload.value?.articles ?? [])
+const categoryBooks = computed(() => selectedCategoryPayload.value?.books ?? [])
+
+const stageArticle = computed<ContentArticle | null>(() => categoryArticles.value[0] ?? dailyPackage.value?.featuredArticle ?? null)
+const stageBook = computed<ContentBook | null>(() => categoryBooks.value[0] ?? dailyPackage.value?.featuredBook ?? null)
+const hasStageContent = computed(() => Boolean(stageArticle.value || stageBook.value))
+
+const supportingArticles = computed(() => {
+  const activeId = stageArticle.value?.id
+  const base = categoryArticles.value.filter((item) => item.id !== activeId)
+  return base.slice(0, 3)
 })
-const secondaryArticles = computed(() => {
-  const featuredId = dailyPackage.value?.featuredArticle?.id
-  return (dailyPackage.value?.articles ?? []).filter((item) => item.id !== featuredId)
+
+const supportingBooks = computed(() => {
+  const activeId = stageBook.value?.id
+  const base = categoryBooks.value.filter((item) => item.id !== activeId)
+  return base.slice(0, 1)
 })
-const secondaryBooks = computed(() => {
-  const featuredId = dailyPackage.value?.featuredBook?.id
-  return (dailyPackage.value?.books ?? []).filter((item) => item.id !== featuredId)
-})
-const supportingBooks = computed(() => secondaryBooks.value.slice(0, 1))
-const supportingArticles = computed(() => secondaryArticles.value.slice(0, supportingBooks.value.length ? 2 : 3))
+
 const hasSupportingContent = computed(() => supportingArticles.value.length > 0 || supportingBooks.value.length > 0)
+const recentHistoryItems = computed(() => (payload.value?.recentHistory ?? []).slice(0, 4))
+const hasRecentHistory = computed(() => authStore.isAuthenticated && recentHistoryItems.value.length > 0)
 
 const formatDateLabel = (value?: string) => {
   if (!value) return ''
@@ -133,137 +144,118 @@ onMounted(() => {
         :theme="dailyPackage?.theme"
         :quote="dailyPackage?.quote"
         :date-label="formatDateLabel(payload?.selectedDate || payload?.todayDate)"
-      >
-        <template #actions>
-          <el-button @click="updateQuery({ date: payload?.todayDate })">回到今天</el-button>
-        </template>
-      </QuoteHero>
-
-      <section class="hub-switcher content-fade-rise">
-        <div class="hub-switcher__copy">
-          <p class="hub-switcher__eyebrow">先选一个更贴近你的方向</p>
-          <h2>现在更需要哪一种支持？</h2>
-          <p>先把今天的阅读入口定下来，再决定要不要继续往下看。</p>
-        </div>
-        <ContentStateTabs :model-value="selectedCategoryKey" @change="updateQuery({ category: $event })" />
-      </section>
+      />
 
       <EmptyState
         v-if="dailyPackage && !dailyPackage.hasSchedule"
-        title="该日期暂无每日内容"
-        description="可以先回到今天，或者通过页面底部的往期入口切换到其他日期。"
+        title="这一天暂时还没有内容排期"
+        description="先回到今天，或者换一天看看。"
         action-text="回到今天"
         @action="updateQuery({ date: payload?.todayDate })"
       />
 
       <template v-else-if="dailyPackage">
-        <section class="hub-section hub-section--featured content-fade-rise">
-          <div class="section-head section-head--featured">
-            <h2>今天先从这里看</h2>
-            <p>先读主推文章，把今天的主题落到更具体的一步；配套书适合往深里读。</p>
+        <section class="hub-section hub-section--stage content-fade-rise">
+          <div class="stage-entry">
+          <div class="stage-entry__copy">
+              <p class="stage-entry__eyebrow">先选方向</p>
+              <h2>先选一个更贴近你的方向</h2>
+              <p>不用一次看很多，先从现在最需要的支持开始，再决定要不要继续往下读。</p>
+            </div>
+            <el-button v-if="showBackToToday" text class="stage-entry__back" @click="updateQuery({ date: payload?.todayDate })">
+              回到今天
+            </el-button>
           </div>
 
-          <div class="feature-stage">
-            <div class="feature-stage__article">
-              <div class="feature-stage__intro">
-                <p class="feature-stage__eyebrow">主推文章</p>
-                <h3>先看这篇</h3>
-                <p>如果今天只读一个内容，先从这里开始。</p>
+          <ContentStateTabs :model-value="currentCategoryKey" @change="updateQuery({ category: $event })" />
+
+          <div v-if="hasStageContent" class="stage-block">
+            <div class="section-head section-head--split section-head--compact">
+              <div>
+                <p class="section-head__eyebrow">今日先看</p>
+                <h2>先从这一组内容开始</h2>
               </div>
+              <p>先看这篇文章理解当下的线索，如果想继续了解，再看旁边这本书。</p>
+            </div>
+
+            <div class="feature-stage" :class="{ 'feature-stage--single': !(stageArticle && stageBook) }">
               <ArticleFeatureCard
-                v-if="dailyPackage.featuredArticle"
-                :article="dailyPackage.featuredArticle"
+                v-if="stageArticle"
+                class="feature-stage__article"
+                :article="stageArticle"
+                variant="text"
                 action-text="查看文章导读"
-                @action="openArticle(dailyPackage.featuredArticle.id)"
+                @action="openArticle(stageArticle.id)"
               />
-            </div>
-            <div class="feature-stage__book">
-              <div class="feature-stage__book-copy">
-                <p class="feature-stage__eyebrow">配套书籍</p>
-                <h3>想往深一点，再看这本</h3>
-                <p>如果今天这条线索对你有帮助，它适合继续往里读。</p>
+
+              <div v-if="stageBook" class="feature-stage__book">
+                <div class="feature-stage__book-copy">
+                  <p class="section-head__eyebrow">配套书籍</p>
+                  <h3>想读得更深，再看这本</h3>
+                  <p>如果刚才那篇内容对你有帮助，这本书适合继续往下读。</p>
+                </div>
+                <BookShelfCard
+                  :book="stageBook"
+                  dense
+                  action-text="查看书籍导读"
+                  @action="openBook(stageBook.id)"
+                />
               </div>
-              <BookShelfCard
-                v-if="dailyPackage.featuredBook"
-                :book="dailyPackage.featuredBook"
+            </div>
+          </div>
+        </section>
+
+        <section v-if="hasSupportingContent" class="hub-section hub-section--supporting content-fade-rise">
+          <div class="section-head section-head--split section-head--compact section-head--quiet">
+            <div>
+              <p class="section-head__eyebrow">补充阅读</p>
+              <h2>如果还想继续看</h2>
+            </div>
+            <p>如果刚才那组内容还不够，这里还有几条可以继续往下看。</p>
+          </div>
+
+          <div class="supporting-stream">
+            <button
+              v-for="item in supportingArticles"
+              :key="`secondary-article-${item.id}`"
+              type="button"
+              class="content-card-shell"
+              @click="openArticle(item.id)"
+            >
+              <ArticleFeatureCard
+                :article="item"
                 dense
-                action-text="查看书籍导读"
-                @action="openBook(dailyPackage.featuredBook.id)"
+                quiet
+                variant="text"
+                :show-action="false"
+                :highlight-limit="0"
               />
-            </div>
+            </button>
+
+            <button
+              v-for="item in supportingBooks"
+              :key="`secondary-book-${item.id}`"
+              type="button"
+              class="content-card-shell"
+              @click="openBook(item.id)"
+            >
+              <BookShelfCard :book="item" dense quiet :show-action="false" :highlight-limit="0" />
+            </button>
           </div>
         </section>
 
-        <section class="hub-section hub-section--reading content-fade-rise">
-          <div class="section-head">
-            <h2>换一条更贴近你的线索</h2>
-            <p>当前选择：{{ selectedCategoryLabel }}</p>
-          </div>
-
-          <transition name="content-swap" mode="out-in">
-            <div :key="selectedCategoryKey" class="detail-grid detail-grid--stream">
-              <button
-                v-for="item in readingArticles"
-                :key="`category-article-${item.id}`"
-                type="button"
-                class="content-card-shell"
-                @click="openArticle(item.id)"
-              >
-                <ArticleFeatureCard :article="item" dense quiet :show-action="false" :highlight-limit="0" />
-              </button>
-              <button
-                v-for="item in readingBooks"
-                :key="`category-book-${item.id}`"
-                type="button"
-                class="content-card-shell"
-                @click="openBook(item.id)"
-              >
-                <BookShelfCard :book="item" dense quiet :show-action="false" :highlight-limit="0" />
-              </button>
+        <section v-if="hasRecentHistory" class="hub-section hub-section--utility content-fade-rise">
+          <div class="section-head section-head--split section-head--compact section-head--quiet">
+            <div>
+              <p class="section-head__eyebrow">最近看过</p>
+              <h2>接着上次看到的地方</h2>
             </div>
-          </transition>
-
-          <div v-if="hasSupportingContent" class="reading-subsection">
-            <div class="section-head section-head--quiet section-head--subtle">
-              <h3>如果还想再看一条</h3>
-              <p>剩下的内容收在这里，不让它们和主线抢焦点。</p>
-            </div>
-
-            <div class="detail-grid detail-grid--supporting">
-              <button
-                v-for="item in supportingArticles"
-                :key="`secondary-article-${item.id}`"
-                type="button"
-                class="content-card-shell"
-                @click="openArticle(item.id)"
-              >
-                <ArticleFeatureCard :article="item" dense quiet :show-action="false" :highlight-limit="0" />
-              </button>
-              <button
-                v-for="item in supportingBooks"
-                :key="`secondary-book-${item.id}`"
-                type="button"
-                class="content-card-shell"
-                @click="openBook(item.id)"
-              >
-                <BookShelfCard :book="item" dense quiet :show-action="false" :highlight-limit="0" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section
-          class="hub-section hub-section--utility content-fade-rise"
-          v-if="authStore.isAuthenticated && payload?.recentHistory.length"
-        >
-          <div class="section-head section-head--quiet">
-            <h2>继续上次看到的地方</h2>
-            <p>只对登录用户显示。</p>
+            <p>你最近看过的内容会放在这里，方便下次继续读。</p>
           </div>
 
           <div class="history-grid">
             <button
-              v-for="item in payload.recentHistory"
+              v-for="item in recentHistoryItems"
               :key="`${item.contentType}-${item.contentId}`"
               type="button"
               class="history-card"
@@ -280,9 +272,9 @@ onMounted(() => {
 
       <section v-if="hasArchiveDates" class="archive-entry content-fade-rise">
         <div class="archive-entry__copy">
-          <p class="archive-entry__eyebrow">往期入口</p>
-          <h2>还想回看前几天？</h2>
-          <p>需要时再展开看，不让历史内容打断今天的阅读节奏。</p>
+          <p class="archive-entry__eyebrow">往期内容</p>
+          <h2>想回看前几天的内容，再从这里展开</h2>
+          <p>想回看前几天的内容，可以从这里打开。</p>
         </div>
         <el-button type="primary" plain class="archive-entry__action" @click="openArchiveDrawer">查看往期内容</el-button>
       </section>
@@ -295,7 +287,7 @@ onMounted(() => {
         class="archive-drawer"
       >
         <div class="archive-drawer__body">
-          <p class="archive-drawer__lead">这里保留按日期回看的能力，但不再占用专栏主页面的大块空间。</p>
+          <p class="archive-drawer__lead">这里保留按日期回看的能力，但不再占用专栏首页的大块空间。</p>
           <ArchiveCalendar
             :dates="payload?.archiveDates ?? []"
             :selected-date="payload?.selectedDate"
@@ -315,20 +307,44 @@ onMounted(() => {
   gap: var(--content-gap-3);
 }
 
-.hub-switcher {
+.hub-section {
   display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   gap: var(--content-gap-3);
-  align-items: end;
-  padding: 0 4px;
+  padding: 24px;
+  border-radius: var(--content-radius-2);
+  border: 1px solid var(--content-border-1);
+  box-shadow: var(--content-shadow-1);
 }
 
-.hub-switcher__copy {
+.hub-section--stage {
+  background: var(--content-surface-2);
+}
+
+.hub-section--supporting {
+  background: var(--content-surface-1);
+}
+
+.hub-section--utility {
+  background: var(--content-surface-inset);
+  box-shadow: none;
+}
+
+.stage-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--content-gap-3);
+  align-items: start;
+}
+
+.stage-entry__copy {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  max-width: 620px;
 }
 
-.hub-switcher__eyebrow {
+.stage-entry__eyebrow,
+.section-head__eyebrow,
+.archive-entry__eyebrow {
   margin: 0;
   color: #8fc3c8;
   font-size: 12px;
@@ -336,119 +352,85 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.hub-switcher__copy h2,
-.hub-switcher__copy p {
+.stage-entry__copy h2,
+.section-head h2,
+.archive-entry__copy h2 {
   margin: 0;
-}
-
-.hub-switcher__copy h2 {
   color: #f4fbff;
-  font-size: 22px;
+  font-family: var(--font-display);
 }
 
-.hub-switcher__copy p {
-  color: #99b0d1;
+.stage-entry__copy h2 {
+  font-size: 28px;
+  line-height: 1.12;
+}
+
+.stage-entry__copy p:last-child,
+.section-head p,
+.feature-stage__book-copy p:last-child,
+.archive-entry__copy p,
+.archive-drawer__lead {
+  margin: 0;
+  color: #a9c0e3;
   line-height: 1.7;
 }
 
-.hub-section {
+.stage-entry__back {
+  padding-left: 0;
+}
+
+.stage-block {
   display: grid;
   gap: var(--content-gap-3);
-  padding: 24px;
-  border-radius: var(--content-radius-2);
-  border: 1px solid var(--content-border-1);
-  background: var(--content-surface-1);
-  box-shadow: var(--content-shadow-1);
 }
 
-.hub-section--featured {
-  gap: var(--content-gap-4);
-  box-shadow: var(--content-shadow-2);
+.section-head {
+  display: grid;
+  gap: 8px;
 }
 
-.hub-section--reading {
-  background: var(--content-surface-2);
+.section-head--split {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.82fr);
+  gap: var(--content-gap-3);
+  align-items: end;
 }
 
-.hub-section--utility {
-  gap: var(--content-gap-2);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.section-head h2,
-.section-head h3,
-.section-head p {
-  margin: 0;
+.section-head--compact {
+  grid-template-columns: minmax(0, 780px);
 }
 
 .section-head h2 {
-  color: #f4fbff;
-  font-size: 24px;
-}
-
-.section-head h3 {
-  color: #eef6ff;
-  font-size: 18px;
-}
-
-.section-head p {
-  margin-top: 8px;
-  color: #aac0e2;
-  line-height: 1.7;
-}
-
-.section-head--quiet h2 {
-  font-size: 22px;
+  font-size: 30px;
+  line-height: 1.12;
 }
 
 .section-head--quiet p {
   color: #96afd0;
 }
 
-.section-head--subtle h3 {
-  font-size: 17px;
-}
-
-.feature-stage,
-.detail-grid,
-.history-grid {
-  display: grid;
-  gap: var(--content-gap-3);
-}
-
-.detail-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
 .feature-stage {
-  grid-template-columns: minmax(0, 2.08fr) minmax(300px, 0.92fr);
-  align-items: start;
-}
-
-.detail-grid--stream {
+  display: grid;
+  grid-template-columns: minmax(0, 1.32fr) minmax(300px, 0.88fr);
+  gap: var(--content-gap-3);
   align-items: stretch;
 }
 
-.detail-grid--supporting {
-  gap: var(--content-gap-2);
+.feature-stage--single {
+  grid-template-columns: 1fr;
 }
 
-.feature-stage__article,
-.feature-stage__book,
-.feature-stage__intro,
-.feature-stage__book-copy {
+.feature-stage__article {
+  height: 100%;
+}
+
+.feature-stage__article :deep(.article-card--text .article-card__content) {
+  margin-left: 24px;
+  max-width: 54ch;
+}
+
+.feature-stage__book {
   display: grid;
-}
-
-.feature-stage__article,
-.feature-stage__book {
   gap: var(--content-gap-2);
-}
-
-.feature-stage__book {
   padding: 18px;
   border-radius: var(--content-radius-2);
   border: 1px solid var(--content-border-1);
@@ -456,46 +438,27 @@ onMounted(() => {
   box-shadow: var(--content-shadow-1);
 }
 
-.feature-stage__intro,
 .feature-stage__book-copy {
+  display: grid;
   gap: 8px;
 }
 
-.feature-stage__eyebrow {
-  margin: 0;
-  color: #8dc5c8;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.feature-stage__intro h3,
 .feature-stage__book-copy h3 {
   margin: 0;
   color: #f4fbff;
   font-family: var(--font-display);
-}
-
-.feature-stage__intro h3 {
-  font-size: 28px;
-}
-
-.feature-stage__book-copy h3 {
   font-size: 22px;
+  line-height: 1.18;
 }
 
-.feature-stage__intro p:last-child,
-.feature-stage__book-copy p:last-child {
-  margin: 0;
-  color: #aac0e2;
-  line-height: 1.7;
-}
-
-.reading-subsection {
+.supporting-stream,
+.history-grid {
   display: grid;
   gap: var(--content-gap-2);
-  padding-top: 20px;
-  border-top: 1px solid var(--content-border-1);
+}
+
+.supporting-stream {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .history-grid {
@@ -503,6 +466,9 @@ onMounted(() => {
 }
 
 .content-card-shell {
+  display: block;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -581,42 +547,13 @@ onMounted(() => {
   padding: 20px 24px;
   border-radius: var(--content-radius-2);
   border: 1px solid var(--content-border-1);
-  background: linear-gradient(180deg, rgba(12, 20, 35, 0.9), rgba(10, 18, 31, 0.78));
-  box-shadow: var(--content-shadow-1);
+  background: var(--content-surface-inset);
+  box-shadow: none;
 }
 
 .archive-entry__copy {
   display: grid;
   gap: 6px;
-}
-
-.archive-entry__eyebrow,
-.archive-drawer__lead {
-  margin: 0;
-  color: #9ab6db;
-  line-height: 1.7;
-}
-
-.archive-entry__eyebrow {
-  color: #8fc3c8;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.archive-entry__copy h2,
-.archive-entry__copy p {
-  margin: 0;
-}
-
-.archive-entry__copy h2 {
-  color: #f4fbff;
-  font-size: 22px;
-}
-
-.archive-entry__copy p {
-  color: #aac0e2;
-  line-height: 1.7;
 }
 
 .archive-entry__action {
@@ -629,30 +566,48 @@ onMounted(() => {
   gap: var(--content-gap-3);
 }
 
-.content-swap-enter-active,
-.content-swap-leave-active {
-  transition:
-    opacity var(--content-motion-base) var(--content-ease-standard),
-    transform var(--content-motion-base) var(--content-ease-standard);
+.content-fade-rise {
+  animation: contentFadeRise var(--content-motion-base) var(--content-ease-standard);
 }
 
-.content-swap-enter-from,
-.content-swap-leave-to {
-  opacity: 0;
-  transform: translateY(14px);
+@keyframes contentFadeRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@media (max-width: 980px) {
-  .hub-switcher,
-  .feature-stage,
-  .detail-grid,
-  .history-grid {
+@media (max-width: 1100px) {
+  .feature-stage {
     grid-template-columns: 1fr;
   }
 
+  .feature-stage__article :deep(.article-card--text .article-card__content) {
+    margin-left: 12px;
+  }
+}
+
+@media (max-width: 980px) {
+  .stage-entry,
+  .supporting-stream,
+  .history-grid,
   .archive-entry {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+
+  .stage-entry,
+  .archive-entry {
+    display: grid;
+  }
+
+  .feature-stage__article :deep(.article-card--text .article-card__content) {
+    margin-left: 0;
+    max-width: 58ch;
   }
 }
 </style>

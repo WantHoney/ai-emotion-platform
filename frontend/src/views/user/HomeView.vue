@@ -16,6 +16,7 @@ import SectionBlock from '@/components/ui/SectionBlock.vue'
 import SmartImage from '@/components/ui/SmartImage.vue'
 import { ARTICLE_CATEGORY_LABELS, PSY_CENTER_CITY_OPTIONS, PSY_CENTER_CITY_REFERENCES, SOURCE_LEVEL_LABELS } from '@/constants/contentMeta'
 import { useUserAuthStore } from '@/stores/userAuth'
+import { resolvePsyCenterPosterUrl } from '@/utils/contentMedia'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const router = useRouter()
@@ -29,7 +30,6 @@ const cityCode = ref('310100')
 const centers = ref<PsyCenter[]>([])
 const loadingCenters = ref(false)
 const centerError = ref<ErrorStatePayload | null>(null)
-const PSY_CENTER_PREVIEW_VERSION = '20260404-posters-v5-anime'
 const PSY_CENTER_RADIUS_KM = 15
 const centerQueryMode = ref<'city' | 'nearby'>('city')
 const nearbyOutOfCoverage = ref(false)
@@ -98,7 +98,7 @@ const centerToolbarHint = computed(() => {
       ? `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。推荐优先查看最近的已覆盖城市：${nearbyRecommendedCity.value.label}。`
       : `当前定位附近暂无已收录机构，现阶段仅覆盖 ${SUPPORTED_CITY_LABEL_TEXT}。你可以切换到以上城市继续查看。`
   }
-  return `已根据定位结果同步到 ${nearbyCityLabel.value || '附近城市'}，下方优先展示定位命中的支持入口。`
+  return `已根据定位切换到 ${nearbyCityLabel.value || '附近城市'}，下方先展示附近能联系到的机构。`
 })
 const centerEmptyDescription = computed(() =>
   nearbyOutOfCoverage.value
@@ -115,10 +115,7 @@ const centerEmptyActionText = computed(() =>
     : '重试',
 )
 const centerSectionFooterText = computed(() => {
-  if (centerQueryMode.value === 'nearby') {
-    return `首页先展示定位命中的${nearbyCityLabel.value || '附近'}重点支持入口，完整机构列表可在资源页继续查看。`
-  }
-  return '首页先展示当前城市的重点支持入口，完整机构列表可在资源页继续查看。'
+  return '更多资源可以前往心理中心继续查看。'
 })
 
 const goProtectedPath = async (path: RouteLocationRaw) => {
@@ -171,8 +168,7 @@ const openBook = async (id: number) => {
 }
 
 const resolveCenterPreviewImage = (center: PsyCenter) => {
-  const seedKey = center.seedKey?.trim()
-  return seedKey ? `/assets/psy-centers/${seedKey}.svg?v=${PSY_CENTER_PREVIEW_VERSION}` : ''
+  return resolvePsyCenterPosterUrl(center.cityCode, center.seedKey)
 }
 
 const openRecommendedCity = async () => {
@@ -287,39 +283,39 @@ onMounted(async () => {
     />
     <template v-else>
       <HeroSection
-        eyebrow="情绪智能门户"
+        eyebrow="从这里开始"
         title="AI 语音情绪分析与心理支持平台"
-        subtitle="上传或录制语音，获得多模态分析结果、结构化报告与支持资源推荐。"
+        subtitle="录音或上传音频后，你可以继续查看分析结果、报告和后续支持内容。"
         primary-text="开始上传 / 录音"
         secondary-text="查看报告"
         @primary="handlePrimaryAction"
         @secondary="handleSecondaryAction"
       >
         <div class="hero-badge-row">
-          <span class="hero-chip">语音 + 文本多模态融合</span>
-          <span class="hero-chip">任务进度实时可见</span>
-          <span class="hero-chip">报告与支持资源联动</span>
+          <span class="hero-chip">录音或上传都可以</span>
+          <span class="hero-chip">进度会自动更新</span>
+          <span class="hero-chip">结果会连到报告和支持内容</span>
         </div>
 
         <template #bottom>
           <div class="home-hero-flow">
             <header class="home-hero-flow__header">
-              <p class="home-hero-flow__eyebrow">核心流程</p>
-              <h2>三步闭环</h2>
+              <p class="home-hero-flow__eyebrow">怎么使用</p>
+              <h2>三步就够了</h2>
               <p class="home-hero-flow__description">
-                从语音采集、分析识别到报告与支持资源，一条链路完整串起来。
+                先上传，再看结果，最后按需要继续看报告、内容或支持资源。
               </p>
             </header>
 
             <div class="step-grid">
-              <LoreCard title="01 上传 / 录音" subtitle="分片上传、进度追踪、账号绑定">
-                语音采集支持浏览器录音与本地文件上传，也支持中断续传。
+              <LoreCard title="01 上传 / 录音" subtitle="录音或选择音频文件">
+                可以直接用浏览器录音，也可以上传本地音频文件。
               </LoreCard>
-              <LoreCard title="02 分析识别" subtitle="ASR + 语音情绪 + 文本语义融合">
-                结合声音特征与文本转写信息，推断情绪倾向与风险信号。
+              <LoreCard title="02 开始分析" subtitle="系统会整理这段语音的结果">
+                系统会结合声音和转写内容，整理出情绪倾向和风险线索。
               </LoreCard>
-              <LoreCard title="03 报告 / 资源" subtitle="结果汇总、建议生成、支持资源衔接">
-                让一次分析结果最终落到可阅读、可追踪、可行动的页面里。
+              <LoreCard title="03 查看结果" subtitle="报告、内容和支持资源都会接上">
+                你可以继续看报告、内容专栏，或去心理中心找进一步支持。
               </LoreCard>
             </div>
           </div>
@@ -354,7 +350,7 @@ onMounted(async () => {
               <blockquote>
                 {{ home?.todayQuote?.content || '允许自己慢一点，不是退步，而是在给情绪留出被看见的时间。' }}
               </blockquote>
-              <p class="content-entry-hero__quote-author">{{ home?.todayQuote?.author || 'AI Emotion 编辑部' }}</p>
+              <p v-if="home?.todayQuote?.author" class="content-entry-hero__quote-author">{{ home.todayQuote.author }}</p>
             </aside>
           </section>
 
@@ -416,7 +412,7 @@ onMounted(async () => {
       <SectionBlock
         eyebrow="支持资源"
         title="心理中心"
-        description="支持按城市切换或定位附近，机构卡会低调展示来源备注，方便复核。"
+        description="支持按城市切换或定位附近，也会附上来源信息，方便你自己核对。"
       >
         <div class="resource-toolbar">
           <el-select v-model="cityCode" style="width: 180px" @change="loadCentersByCity">
@@ -634,8 +630,12 @@ onMounted(async () => {
 }
 
 .content-entry-hero__quote {
-  align-content: start;
-  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 100%;
+  gap: 14px;
+  padding: 22px 24px;
   border-radius: var(--content-radius-2);
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-inset);
@@ -834,15 +834,22 @@ onMounted(async () => {
 }
 
 .center-grid :deep(.media-card) {
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 144px minmax(0, 1fr);
+  gap: 18px;
   min-height: 0;
   padding: 14px;
   border-radius: 20px;
 }
 
 .center-grid :deep(.cover-wrap) {
-  min-height: 132px;
+  min-height: 196px;
+  background:
+    radial-gradient(circle at top left, rgba(129, 190, 247, 0.14), transparent 38%),
+    linear-gradient(160deg, rgba(15, 25, 43, 0.96), rgba(9, 15, 26, 0.98));
+}
+
+.center-grid :deep(.smart-image) {
+  border-radius: 0;
 }
 
 .center-grid :deep(.head h3) {

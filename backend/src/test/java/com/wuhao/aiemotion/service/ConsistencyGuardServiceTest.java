@@ -25,7 +25,7 @@ class ConsistencyGuardServiceTest {
                 37L,
                 101L,
                 "trace-37",
-                "今天真的很开心 太阳非常好 晚上休息的很好",
+                "今天真的很开心，太阳非常好，晚上休息得很好。",
                 sadBaseResponse(),
                 textSentiment(false, 0.3224D),
                 0.2646D
@@ -38,7 +38,7 @@ class ConsistencyGuardServiceTest {
         assertTrue(decision.audit().triggered());
         assertTrue(decision.audit().positiveHits().contains("开心"));
         assertTrue(decision.audit().positiveHits().contains("太阳非常好"));
-        assertTrue(decision.audit().positiveHits().contains("休息的很好"));
+        assertTrue(decision.audit().positiveHits().contains("很好"));
         assertTrue(decision.audit().negativeHits().isEmpty());
         assertEquals(0.3224D, decision.audit().mappedMass(), 0.0001D);
         assertFalse(Boolean.TRUE.equals(decision.audit().emotion4Ready()));
@@ -51,7 +51,7 @@ class ConsistencyGuardServiceTest {
                 38L,
                 102L,
                 "trace-38",
-                "我今天不开心，整个人都很难过",
+                "我今天不开心，整个人都很难过。",
                 sadBaseResponse(),
                 textSentiment(false, 0.1200D),
                 0.1200D
@@ -71,7 +71,7 @@ class ConsistencyGuardServiceTest {
                 39L,
                 103L,
                 "trace-39",
-                "今天状态一般",
+                "今天状态一般。",
                 missingBaseResponse(),
                 textSentiment(false, 0.0D),
                 0.0D
@@ -92,6 +92,7 @@ class ConsistencyGuardServiceTest {
                 "NORMAL",
                 "保持当前节奏，继续进行日常放松与自我觉察。",
                 1.0D,
+                0.0D,
                 0.0D,
                 0.0D,
                 0.2646D

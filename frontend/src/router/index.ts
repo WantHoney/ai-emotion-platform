@@ -32,7 +32,7 @@ const router = createRouter({
           meta: {
             publicUser: true,
             title: '首页',
-            description: '沉浸式情绪分析与心理支持门户',
+            description: '从这里开始上传语音、查看报告和支持内容',
             breadcrumb: ['用户端', '首页'],
             hidePageHeader: true,
           },
@@ -44,7 +44,7 @@ const router = createRouter({
           meta: {
             publicUser: true,
             title: '内容专栏',
-            description: '精选文章、书籍与语录',
+            description: '看看今天适合读的语录、文章和书',
             breadcrumb: ['用户端', '内容专栏'],
             hidePageHeader: true,
           },
@@ -56,7 +56,7 @@ const router = createRouter({
           meta: {
             publicUser: true,
             title: '文章导读',
-            description: '站内导读与外部来源承接页',
+            description: '先看导读，再决定要不要继续阅读原文',
             breadcrumb: ['用户端', '内容专栏', '文章导读'],
             hidePageHeader: true,
           },
@@ -68,7 +68,7 @@ const router = createRouter({
           meta: {
             publicUser: true,
             title: '书籍导读',
-            description: '站内导读与购书/了解更多入口',
+            description: '先看推荐理由，再决定要不要继续了解这本书',
             breadcrumb: ['用户端', '内容专栏', '书籍导读'],
             hidePageHeader: true,
           },
@@ -76,12 +76,12 @@ const router = createRouter({
         {
           path: 'about',
           name: 'userAbout',
-          component: () => import('@/views/user/AboutView.vue'),
+          redirect: '/app/profile',
           meta: {
-            publicUser: true,
+            requiresUserAuth: true,
             title: '关于',
-            description: '项目背景与架构说明',
-            breadcrumb: ['用户端', '关于'],
+            description: '已整合进个人中心',
+            breadcrumb: ['用户端', '个人中心'],
           },
         },
         {
@@ -91,7 +91,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '语音上传',
-            description: '上传或录制语音并创建分析任务',
+            description: '上传或录制语音，开始这次分析',
             breadcrumb: ['用户端', '语音上传'],
             hidePageHeader: true,
           },
@@ -103,7 +103,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '任务中心',
-            description: '查看任务状态与处理流程',
+            description: '查看任务进度和当前状态',
             breadcrumb: ['用户端', '任务中心'],
           },
         },
@@ -114,7 +114,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '任务详情',
-            description: '任务结果、风险分与建议详情',
+            description: '查看这次分析的进度、结果和建议',
             breadcrumb: ['用户端', '任务中心', '任务详情'],
           },
         },
@@ -125,7 +125,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '任务时间线',
-            description: '查看任务从创建到完成的处理节点',
+            description: '按时间查看任务处理进度',
             breadcrumb: ['用户端', '任务中心', '任务时间线'],
           },
         },
@@ -136,7 +136,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '报告中心',
-            description: '浏览与筛选情绪分析报告',
+            description: '查看历史报告并按条件筛选',
             breadcrumb: ['用户端', '报告中心'],
             hidePageHeader: true,
           },
@@ -148,7 +148,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '报告详情',
-            description: '综合情绪、风险等级与建议',
+            description: '查看这次分析的结果和建议',
             breadcrumb: ['用户端', '报告中心', '报告详情'],
             hidePageHeader: true,
           },
@@ -160,7 +160,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '趋势分析',
-            description: '个人报告时间轴与评分趋势',
+            description: '看看这段时间的情绪变化',
             breadcrumb: ['用户端', '趋势分析'],
           },
         },
@@ -171,7 +171,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '心理中心',
-            description: '查找心理咨询与支持机构',
+            description: '查找可联系的心理咨询与支持机构',
             breadcrumb: ['用户端', '心理中心'],
           },
         },
@@ -182,7 +182,7 @@ const router = createRouter({
           meta: {
             requiresUserAuth: true,
             title: '个人中心',
-            description: '账号信息与活动概览',
+            description: '查看账号信息、报告概览和使用说明',
             breadcrumb: ['用户端', '个人中心'],
             hidePageHeader: true,
           },
@@ -256,6 +256,18 @@ const router = createRouter({
           },
         },
         {
+          path: 'content/books-overview',
+          name: 'adminBookLibraryOverview',
+          component: () => import('@/views/admin/AdminBookLibraryOverviewView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '书籍总览',
+            description: '书库巡检与封面链接核对',
+            breadcrumb: ['管理端', '内容运营', '书籍总览'],
+            hidePageHeader: true,
+          },
+        },
+        {
           path: 'content/schedules',
           name: 'adminContentSchedules',
           component: () => import('@/views/admin/AdminContentSchedulesView.vue'),
@@ -286,6 +298,29 @@ const router = createRouter({
             title: '预警处置台',
             description: '预警事件列表与处置流转',
             breadcrumb: ['管理端', '预警处置台'],
+          },
+        },
+        {
+          path: 'inspect/tasks/:id',
+          name: 'adminTaskInspect',
+          component: () => import('@/views/user/TaskView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '任务详情（管理查看）',
+            description: '以管理视角查看关联任务详情',
+            breadcrumb: ['管理端', '预警处置台', '关联任务'],
+          },
+        },
+        {
+          path: 'inspect/reports/:id',
+          name: 'adminReportInspect',
+          component: () => import('@/views/user/ReportView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '报告详情（管理查看）',
+            description: '以管理视角查看关联报告详情',
+            breadcrumb: ['管理端', '预警处置台', '关联报告'],
+            hidePageHeader: true,
           },
         },
         {

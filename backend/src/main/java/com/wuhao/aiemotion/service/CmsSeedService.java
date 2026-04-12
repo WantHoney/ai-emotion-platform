@@ -33,53 +33,48 @@ public class CmsSeedService {
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Shanghai");
     private static final LocalDate DAILY_SCHEDULE_ANCHOR = LocalDate.of(2026, 1, 1);
     private static final int DAILY_SCHEDULE_WINDOW_DAYS = 45;
-    private static final List<String> QUOTE_ROTATION = List.of(
-            "seed_quote_001",
-            "seed_quote_002",
-            "seed_quote_003"
-    );
     private static final List<DailyThemeSeed> DAILY_THEMES = List.of(
             new DailyThemeSeed(
                     "stress",
                     "先把自己稳住",
                     "当压力先压上来的时候，今天先做稳定和降噪，不急着立刻解决全部问题。",
-                    List.of("seed_article_stress_001"),
-                    List.of("seed_book_firstaid_001", "seed_book_talk_001")
+                    List.of("seed_article_stress_001", "seed_article_stress_002", "seed_article_stress_003"),
+                    List.of("seed_book_firstaid_001", "seed_book_body_001", "seed_book_road_001", "seed_book_flow_001")
             ),
             new DailyThemeSeed(
                     "sleep",
                     "把睡眠还给身体",
                     "今天先照顾节律、光线和休息环境，让身体有机会慢慢重新进入恢复状态。",
-                    List.of("seed_article_sleep_001"),
-                    List.of("seed_book_firstaid_001", "seed_book_toad_001")
+                    List.of("seed_article_sleep_001", "seed_article_sleep_002", "seed_article_sleep_003"),
+                    List.of("seed_book_sleep_why_001", "seed_book_sleep_stanford_001")
             ),
             new DailyThemeSeed(
                     "anxiety",
                     "先识别焦虑信号",
                     "不是急着否定自己，而是先看清焦虑怎么出现、怎么影响身体和注意力。",
-                    List.of("seed_article_anxiety_001"),
-                    List.of("seed_book_inferiority_001", "seed_book_firstaid_001")
+                    List.of("seed_article_anxiety_001", "seed_article_anxiety_002", "seed_article_anxiety_003"),
+                    List.of("seed_book_inferiority_001", "seed_book_burns_001", "seed_book_meaning_001", "seed_book_sensitive_001")
             ),
             new DailyThemeSeed(
                     "emotion",
                     "给情绪一个容器",
                     "把难受从一团雾里拆出来，看见它、命名它，处理就会更有抓手。",
-                    List.of("seed_article_emotion_001"),
-                    List.of("seed_book_toad_001", "seed_book_firstaid_001")
+                    List.of("seed_article_emotion_001", "seed_article_emotion_002", "seed_article_emotion_003"),
+                    List.of("seed_book_toad_001", "seed_book_family_001", "seed_book_not_forgive_001")
             ),
             new DailyThemeSeed(
                     "help-seeking",
                     "求助本身就是能力",
                     "当一个人扛着已经很吃力，今天给自己一个更明确的求助入口和解释空间。",
-                    List.of("seed_article_help_001"),
-                    List.of("seed_book_talk_001", "seed_book_toad_001")
+                    List.of("seed_article_help_001", "seed_article_help_002", "seed_article_help_003"),
+                    List.of("seed_book_talk_001")
             ),
             new DailyThemeSeed(
                     "communication",
                     "把支持重新连回来",
                     "关系里的连接、表达和边界，都可以被重新练习，今天从开口和理解开始。",
-                    List.of("seed_article_communication_001"),
-                    List.of("seed_book_nvc_001", "seed_book_courage_001")
+                    List.of("seed_article_communication_001", "seed_article_communication_002", "seed_article_communication_003"),
+                    List.of("seed_book_nvc_001", "seed_book_courage_001", "seed_book_crucial_001", "seed_book_emotional_blackmail_001", "seed_book_communication_method_001", "seed_book_relationship_001")
             )
     );
 
@@ -102,23 +97,21 @@ public class CmsSeedService {
 
     @PostConstruct
     public void seedDefaults() {
-        seedQuotes();
+        List<String> quoteRotation = seedQuotes();
         seedArticles();
         seedBooks();
         seedPsyCenters();
-        seedDailySchedules();
+        seedDailySchedules(quoteRotation);
     }
 
-    private void seedQuotes() {
+    private List<String> seedQuotes() {
+        List<String> rotation = new ArrayList<>();
         for (QuoteSeed seed : readList("seeds/quotes.json", new TypeReference<List<QuoteSeed>>() {})) {
             try {
-                if (cmsRepository.quoteSeedExists(seed.seedKey())) {
-                    continue;
-                }
-                cmsRepository.insertSeedQuote(new Quote(
+                Quote quote = new Quote(
                         null,
                         seed.content(),
-                        seed.author(),
+                        blankToNull(seed.author()),
                         defaultInt(seed.sortOrder(), 100),
                         defaultBool(seed.recommended(), false),
                         defaultBool(seed.enabled(), true),
@@ -127,21 +120,27 @@ public class CmsSeedService {
                         defaultBool(seed.isActive(), true),
                         null,
                         null
-                ));
+                );
+                if (cmsRepository.quoteSeedExists(seed.seedKey())) {
+                    cmsRepository.updateSeedQuote(quote);
+                } else {
+                    cmsRepository.insertSeedQuote(quote);
+                }
+                if (Boolean.TRUE.equals(quote.enabled()) && Boolean.TRUE.equals(quote.isActive())) {
+                    rotation.add(quote.seedKey());
+                }
             } catch (Exception ex) {
                 log.warn("skip quote seed {}", seed.seedKey(), ex);
             }
         }
+        return rotation;
     }
 
     private void seedArticles() {
         for (ArticleSeed seed : readList("seeds/articles.json", new TypeReference<List<ArticleSeed>>() {})) {
             try {
-                if (cmsRepository.articleSeedExists(seed.seedKey())) {
-                    continue;
-                }
                 String sourceUrl = blankToNull(seed.sourceUrl());
-                cmsRepository.insertSeedArticle(new Article(
+                Article article = new Article(
                         null,
                         seed.title(),
                         blankToNull(seed.coverImageUrl()),
@@ -165,7 +164,12 @@ public class CmsSeedService {
                         parseDateTime(seed.publishedAt()),
                         null,
                         null
-                ));
+                );
+                if (cmsRepository.articleSeedExists(seed.seedKey())) {
+                    cmsRepository.updateSeedArticle(article);
+                    continue;
+                }
+                cmsRepository.insertSeedArticle(article);
             } catch (Exception ex) {
                 log.warn("skip article seed {}", seed.seedKey(), ex);
             }
@@ -175,10 +179,7 @@ public class CmsSeedService {
     private void seedBooks() {
         for (BookSeed seed : readList("seeds/books.json", new TypeReference<List<BookSeed>>() {})) {
             try {
-                if (cmsRepository.bookSeedExists(seed.seedKey())) {
-                    continue;
-                }
-                cmsRepository.insertSeedBook(new Book(
+                Book book = new Book(
                         null,
                         seed.title(),
                         blankToNull(seed.author()),
@@ -197,7 +198,12 @@ public class CmsSeedService {
                         defaultBool(seed.isActive(), true),
                         null,
                         null
-                ));
+                );
+                if (cmsRepository.bookSeedExists(seed.seedKey())) {
+                    cmsRepository.updateSeedBook(book);
+                    continue;
+                }
+                cmsRepository.insertSeedBook(book);
             } catch (Exception ex) {
                 log.warn("skip book seed {}", seed.seedKey(), ex);
             }
@@ -237,27 +243,51 @@ public class CmsSeedService {
         }
     }
 
-    private void seedDailySchedules() {
+    private void seedDailySchedules(List<String> quoteRotation) {
+        if (quoteRotation == null || quoteRotation.isEmpty()) {
+            log.warn("skip daily schedule seeding because quote rotation is empty");
+            return;
+        }
         LocalDate today = LocalDate.now(APP_ZONE);
         for (int offset = -DAILY_SCHEDULE_WINDOW_DAYS; offset <= DAILY_SCHEDULE_WINDOW_DAYS; offset++) {
             LocalDate scheduleDate = today.plusDays(offset);
-            if (contentHubRepository.scheduleDateExists(scheduleDate, null)) {
-                continue;
-            }
-
-            int themeIndex = Math.floorMod(ChronoUnit.DAYS.between(DAILY_SCHEDULE_ANCHOR, scheduleDate), DAILY_THEMES.size());
-            int quoteIndex = Math.floorMod(ChronoUnit.DAYS.between(DAILY_SCHEDULE_ANCHOR, scheduleDate), QUOTE_ROTATION.size());
+            long dayOffset = ChronoUnit.DAYS.between(DAILY_SCHEDULE_ANCHOR, scheduleDate);
+            int themeIndex = Math.floorMod(dayOffset, DAILY_THEMES.size());
+            int quoteIndex = Math.floorMod(dayOffset, quoteRotation.size());
+            long rotationIndex = Math.floorDiv(dayOffset, DAILY_THEMES.size());
 
             DailyThemeSeed theme = DAILY_THEMES.get(themeIndex);
-            Optional<Long> quoteId = contentHubRepository.findQuoteIdBySeedKey(QUOTE_ROTATION.get(quoteIndex));
+            String quoteSeedKey = quoteRotation.get(quoteIndex);
+            Optional<Long> quoteId = contentHubRepository.findQuoteIdBySeedKey(quoteSeedKey);
             if (quoteId.isEmpty()) {
-                log.warn("skip schedule {} because quote seed {} is missing", scheduleDate, QUOTE_ROTATION.get(quoteIndex));
+                log.warn("skip schedule {} because quote seed {} is missing", scheduleDate, quoteSeedKey);
                 continue;
             }
 
-            List<ContentHubRepository.ScheduleItemMutation> items = buildScheduleItems(theme);
+            List<ContentHubRepository.ScheduleItemMutation> items = buildScheduleItems(theme, rotationIndex);
             if (items.isEmpty()) {
                 log.warn("skip schedule {} because schedule items cannot be resolved", scheduleDate);
+                continue;
+            }
+
+            Optional<com.wuhao.aiemotion.domain.DailySchedule> existingSchedule = contentHubRepository.listSchedules(scheduleDate)
+                    .stream()
+                    .findFirst();
+            if (existingSchedule.isPresent()) {
+                com.wuhao.aiemotion.domain.DailySchedule schedule = existingSchedule.get();
+                if (!contentHubRepository.scheduleUsesOnlySeedContent(schedule.id())) {
+                    continue;
+                }
+                contentHubRepository.updateSchedule(
+                        schedule.id(),
+                        scheduleDate,
+                        theme.themeKey(),
+                        theme.themeTitle(),
+                        theme.themeSubtitle(),
+                        quoteId.get(),
+                        defaultStatus(schedule.status())
+                );
+                contentHubRepository.replaceScheduleItems(schedule.id(), items);
                 continue;
             }
 
@@ -273,12 +303,18 @@ public class CmsSeedService {
         }
     }
 
-    private List<ContentHubRepository.ScheduleItemMutation> buildScheduleItems(DailyThemeSeed theme) {
+    private List<ContentHubRepository.ScheduleItemMutation> buildScheduleItems(DailyThemeSeed theme, long rotationIndex) {
         List<ContentHubRepository.ScheduleItemMutation> items = new ArrayList<>();
         int sortOrder = 10;
 
-        Long featuredArticleId = resolveSeedArticleId(theme.articleSeedKeys().get(0));
-        Long featuredBookId = resolveSeedBookId(theme.bookSeedKeys().get(0));
+        List<String> rotatedArticleSeedKeys = rotateSeedKeys(theme.articleSeedKeys(), rotationIndex);
+        List<String> rotatedBookSeedKeys = rotateSeedKeys(theme.bookSeedKeys(), rotationIndex);
+        if (rotatedArticleSeedKeys.isEmpty() || rotatedBookSeedKeys.isEmpty()) {
+            return List.of();
+        }
+
+        Long featuredArticleId = resolveSeedArticleId(rotatedArticleSeedKeys.get(0));
+        Long featuredBookId = resolveSeedBookId(rotatedBookSeedKeys.get(0));
         if (featuredArticleId == null || featuredBookId == null) {
             return List.of();
         }
@@ -286,8 +322,8 @@ public class CmsSeedService {
         items.add(new ContentHubRepository.ScheduleItemMutation("ARTICLE", featuredArticleId, "FEATURED", sortOrder));
         sortOrder += 10;
 
-        for (int index = 1; index < theme.articleSeedKeys().size(); index++) {
-            Long articleId = resolveSeedArticleId(theme.articleSeedKeys().get(index));
+        for (int index = 1; index < rotatedArticleSeedKeys.size(); index++) {
+            Long articleId = resolveSeedArticleId(rotatedArticleSeedKeys.get(index));
             if (articleId != null && !articleId.equals(featuredArticleId)) {
                 items.add(new ContentHubRepository.ScheduleItemMutation("ARTICLE", articleId, "SECONDARY", sortOrder));
                 sortOrder += 10;
@@ -297,8 +333,8 @@ public class CmsSeedService {
         items.add(new ContentHubRepository.ScheduleItemMutation("BOOK", featuredBookId, "FEATURED", sortOrder));
         sortOrder += 10;
 
-        for (int index = 1; index < theme.bookSeedKeys().size(); index++) {
-            Long bookId = resolveSeedBookId(theme.bookSeedKeys().get(index));
+        for (int index = 1; index < rotatedBookSeedKeys.size(); index++) {
+            Long bookId = resolveSeedBookId(rotatedBookSeedKeys.get(index));
             if (bookId != null && !bookId.equals(featuredBookId)) {
                 items.add(new ContentHubRepository.ScheduleItemMutation("BOOK", bookId, "SECONDARY", sortOrder));
                 sortOrder += 10;
@@ -314,6 +350,23 @@ public class CmsSeedService {
 
     private Long resolveSeedBookId(String seedKey) {
         return contentHubRepository.findBookIdBySeedKey(seedKey).orElse(null);
+    }
+
+    private static List<String> rotateSeedKeys(List<String> seedKeys, long rotationIndex) {
+        if (seedKeys == null || seedKeys.isEmpty()) {
+            return List.of();
+        }
+        if (seedKeys.size() == 1) {
+            return List.copyOf(seedKeys);
+        }
+        int shift = Math.floorMod(rotationIndex, seedKeys.size());
+        if (shift == 0) {
+            return List.copyOf(seedKeys);
+        }
+        List<String> rotated = new ArrayList<>(seedKeys.size());
+        rotated.addAll(seedKeys.subList(shift, seedKeys.size()));
+        rotated.addAll(seedKeys.subList(0, shift));
+        return rotated;
     }
 
     private <T> List<T> readList(String path, TypeReference<List<T>> typeReference) {
@@ -353,6 +406,13 @@ public class CmsSeedService {
 
     private static int defaultInt(Integer value, int defaultValue) {
         return value == null ? defaultValue : value;
+    }
+
+    private static String defaultStatus(String value) {
+        if (value == null || value.isBlank()) {
+            return "ACTIVE";
+        }
+        return value.trim();
     }
 
     private record QuoteSeed(

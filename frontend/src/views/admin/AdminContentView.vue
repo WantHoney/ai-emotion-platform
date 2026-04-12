@@ -555,10 +555,10 @@ onMounted(async () => {
       </template>
 
       <template v-if="activeTab === 'article'">
-        <el-form-item label="封面路径">
+        <el-form-item label="主题插画（可选）">
           <el-input v-model="form.imageUrl" placeholder="/assets/articles/..." />
         </el-form-item>
-        <el-form-item label="封面预览">
+        <el-form-item label="插画预览">
           <div class="preview-wrap">
             <SmartImage :src="previewImageUrl" alt="article preview" :kind="previewImageKind" />
           </div>

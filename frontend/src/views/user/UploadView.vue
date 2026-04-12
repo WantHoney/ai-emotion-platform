@@ -303,9 +303,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="upload-page user-layout">
     <SectionBlock
-      eyebrow="语音采集"
-      title="语音上传工作台"
-      description="支持网页录音或本地音频上传，大文件走分片会话并显示实时进度。"
+      eyebrow="开始上传"
+      title="上传一段语音"
+      description="可以直接录音，也可以上传本地音频；上传后会自动开始分析。"
     >
       <ErrorState
         v-if="errorState"
@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
       />
       <template v-else>
         <div class="layout-grid">
-          <LoreCard title="实时录音" subtitle="直接调用浏览器麦克风进行采集。">
+          <LoreCard title="直接录音" subtitle="用浏览器麦克风录一段就可以。">
             <el-alert
               v-if="!recorderSupported"
               title="当前浏览器不支持网页录音，请改用文件上传模式。"
@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
             </p>
           </LoreCard>
 
-          <LoreCard title="文件上传" subtitle="拖拽或选择音频文件（mp3/wav/m4a/webm）。">
+          <LoreCard title="上传音频" subtitle="支持 mp3 / wav / m4a / webm。">
             <LoadingState v-if="uploading && uploadPercent < 5" />
             <el-upload
               drag
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
           </LoreCard>
         </div>
 
-        <LoreCard title="上传会话进度">
+        <LoreCard title="上传进度">
           <el-progress :percentage="uploadPercent" :stroke-width="14" />
           <p class="hint">{{ uploadHint }}</p>
           <el-button v-if="currentUploadId" type="danger" text @click="cancelCurrentUpload">
@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
         <EmptyState
           v-if="!hasUploaded"
           title="尚未上传语音"
-          description="请先录音或选择音频文件，启动分片上传与分析流程。"
+          description="先录一段，或者选一个音频文件上传。"
           action-text="刷新"
           @action="$router.go(0)"
         />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
@@ -13,7 +14,13 @@ import {
   type WarningEventItem,
 } from '@/api/governance'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
-import { SLA_LABEL, formatRiskLevel, formatWarningActionType, formatWarningStatus } from '@/utils/uiText'
+import {
+  SLA_LABEL,
+  formatEmotion,
+  formatRiskLevel,
+  formatWarningActionType,
+  formatWarningStatus,
+} from '@/utils/uiText'
 
 type WarningStatus = '' | 'NEW' | 'ACKED' | 'FOLLOWING' | 'RESOLVED' | 'CLOSED'
 type RiskLevel = '' | 'LOW' | 'MEDIUM' | 'HIGH'
@@ -27,12 +34,18 @@ type WarningTimelineNode = {
   note?: string
 }
 
+type SnapshotLike = Record<string, unknown>
+
+const router = useRouter()
+
 const loading = ref(false)
 const rows = ref<WarningEventItem[]>([])
 const total = ref(0)
 const errorState = ref<ErrorStatePayload | null>(null)
 const selection = ref<WarningEventItem[]>([])
 const batchLoading = ref(false)
+const rowActionId = ref<number | null>(null)
+const rowActionType = ref<string | null>(null)
 
 const actionsLoading = ref(false)
 const actionsError = ref<ErrorStatePayload | null>(null)
@@ -89,21 +102,23 @@ const currentFlowStep = computed(() => {
   return 0
 })
 
-const currentSummary = computed(() => {
-  if (!currentWarning.value) return '-'
-  return `风险等级：${formatRiskLevel(currentWarning.value.risk_level)}，风险分：${currentWarning.value.risk_score}，状态：${formatWarningStatus(currentWarning.value.status)}`
-})
+const currentTriggerReason = computed(() => summarizeTriggerReason(currentWarning.value))
+const currentRiskSummary = computed(() => summarizeRisk(currentWarning.value))
+const currentRelatedSummary = computed(() => summarizeRelated(currentWarning.value))
+const currentLatestAction = computed(() => summarizeLatestAction(currentWarning.value))
 
 const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
   if (!currentWarning.value) return []
   const row = currentWarning.value
+  const snapshot = getSnapshot(row)
+  const runtime = getNestedRecord(snapshot, 'runtime')
   const nodes: WarningTimelineNode[] = [
     {
       key: `created-${row.id}`,
       title: '预警触发',
       timestamp: row.created_at,
       type: 'primary',
-      note: `风险等级 ${formatRiskLevel(row.risk_level)} / 分数 ${row.risk_score}`,
+      note: summarizeTriggerReason(row) || summarizeRisk(row),
     },
   ]
 
@@ -113,7 +128,7 @@ const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
       title: '首次确认',
       timestamp: row.first_acked_at,
       type: 'warning',
-      note: '值班人员已确认',
+      note: '预警已被人工确认，开始进入跟进流程。',
     })
   }
 
@@ -123,7 +138,7 @@ const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
       title: '首次跟进',
       timestamp: row.first_followed_at,
       type: 'warning',
-      note: '已进入跟进流程',
+      note: '预警已进入处置跟进阶段。',
     })
   }
 
@@ -133,17 +148,29 @@ const currentTimelineNodes = computed<WarningTimelineNode[]>(() => {
       title: '结案完成',
       timestamp: row.resolved_at,
       type: 'success',
-      note: '预警处置闭环完成',
+      note: '预警处置闭环已完成。',
     })
   }
 
   if (row.sla_deadline_at) {
     nodes.push({
       key: `deadline-${row.id}`,
-      title: 'SLA 截止',
+      title: `${SLA_LABEL} 截止`,
       timestamp: row.sla_deadline_at,
       type: isBreached(row) ? 'danger' : 'info',
-      note: isBreached(row) ? '已发生超时' : '当前处于 SLA 期内',
+      note: isBreached(row)
+        ? `已超时，建议复盘触发原因与处置链路。`
+        : `当前仍处于 ${SLA_LABEL} 时限内。`,
+    })
+  }
+
+  if (runtime && typeof runtime.trendHitCount !== 'undefined') {
+    nodes.push({
+      key: `trend-${row.id}`,
+      title: '规则命中说明',
+      timestamp: row.created_at,
+      type: 'info',
+      note: `趋势窗口命中 ${runtime.trendHitCount ?? 0} 次，命中条件：${summarizeTriggerReason(row)}`,
     })
   }
 
@@ -193,6 +220,91 @@ const formatDeadlineGap = (deadline?: string) => {
   return diff >= 0 ? `剩余 ${h} 小时 ${m} 分钟` : `超时 ${h} 小时 ${m} 分钟`
 }
 
+function asRecord(value: unknown): SnapshotLike | null {
+  if (!value) return null
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as SnapshotLike) : null
+    } catch {
+      return null
+    }
+  }
+  return typeof value === 'object' && !Array.isArray(value) ? (value as SnapshotLike) : null
+}
+
+function getNestedRecord(source: SnapshotLike | null, key: string) {
+  return asRecord(source?.[key])
+}
+
+function getSnapshot(row: WarningEventItem | null) {
+  return asRecord(row?.trigger_snapshot)
+}
+
+function getWorkflow(row: WarningEventItem | null) {
+  return getNestedRecord(getSnapshot(row), 'workflow')
+}
+
+function getRule(row: WarningEventItem | null) {
+  return getNestedRecord(getSnapshot(row), 'rule')
+}
+
+function getRuntime(row: WarningEventItem | null) {
+  return getNestedRecord(getSnapshot(row), 'runtime')
+}
+
+function summarizeTriggerReason(row: WarningEventItem | null) {
+  if (!row) return '-'
+  const rule = getRule(row)
+  const runtime = getRuntime(row)
+  const ruleName = stringify(rule?.ruleName || rule?.ruleCode)
+  const trendHits = stringify(runtime?.trendHitCount)
+  const parts = [
+    ruleName ? `规则：${ruleName}` : '',
+    trendHits ? `趋势命中：${trendHits}` : '',
+    row.top_emotion ? `主情绪：${formatEmotion(row.top_emotion)}` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(' / ') : '当前预警由规则命中后自动触发。'
+}
+
+function summarizeRisk(row: WarningEventItem | null) {
+  if (!row) return '-'
+  const runtime = getRuntime(row)
+  const riskScore = stringify(runtime?.riskScore) || String(row.risk_score ?? '-')
+  const riskLevel = stringify(runtime?.riskLevel) || row.risk_level
+  const emotion = stringify(runtime?.overallEmotion) || row.top_emotion
+  return `风险等级 ${formatRiskLevel(riskLevel)} / 风险分 ${riskScore} / 主情绪 ${formatEmotion(emotion)}`
+}
+
+function summarizeRelated(row: WarningEventItem | null) {
+  if (!row) return '-'
+  const parts = [
+    row.task_id ? `任务 #${row.task_id}` : '',
+    row.report_id ? `报告 #${row.report_id}` : '',
+    row.user_mask ? `用户 ${row.user_mask}` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(' / ') : '暂无关联对象'
+}
+
+function summarizeLatestAction(row: WarningEventItem | null) {
+  if (!row) return '-'
+  const workflow = getWorkflow(row)
+  if (!workflow) return '尚未产生人工处置动作'
+  const action = formatWarningActionType(stringify(workflow.lastAction))
+  const status = formatWarningStatus(stringify(workflow.lastStatus))
+  const note = stringify(workflow.lastActionNote)
+  const updatedAt = stringify(workflow.updatedAt)
+  return [action, status !== '-' ? `状态：${status}` : '', updatedAt ? `时间：${updatedAt}` : '', note ? `备注：${note}` : '']
+    .filter(Boolean)
+    .join(' / ')
+}
+
+function stringify(value: unknown) {
+  if (value == null) return ''
+  const normalized = String(value).trim()
+  return normalized
+}
+
 const loadWarnings = async () => {
   loading.value = true
   errorState.value = null
@@ -208,6 +320,9 @@ const loadWarnings = async () => {
     rows.value = response.items ?? []
     total.value = response.total ?? 0
     selection.value = []
+    if (currentWarning.value) {
+      currentWarning.value = rows.value.find((item) => item.id === currentWarning.value?.id) ?? currentWarning.value
+    }
   } catch (error) {
     errorState.value = parseError(error, '预警事件加载失败')
   } finally {
@@ -247,148 +362,159 @@ const openTimeline = async (row: WarningEventItem) => {
   await loadActions(row.id)
 }
 
+const openRouteInNewTab = async (routeName: 'adminTaskInspect' | 'adminReportInspect', id?: number) => {
+  if (!id) return
+  const resolved = router.resolve({ name: routeName, params: { id } })
+  window.open(resolved.href, '_blank', 'noopener,noreferrer')
+}
+
 const promptActionNote = async (title: string, placeholder: string) => {
-  const promptRes = await ElMessageBox.prompt('请输入处置备注（可选）', title, {
-    inputType: 'textarea',
-    inputPlaceholder: placeholder,
-    confirmButtonText: '提交',
-    cancelButtonText: '取消',
-    showInput: true,
-  })
-  if (typeof promptRes === 'string') {
-    return undefined
+  try {
+    const result = await ElMessageBox.prompt('请输入处置备注（可选）', title, {
+      inputType: 'textarea',
+      inputPlaceholder: placeholder,
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      showInput: true,
+    })
+    return typeof result === 'string' ? '' : result.value ?? ''
+  } catch {
+    return null
   }
-  return (promptRes.value || '').trim() || undefined
+}
+
+const refreshDrawerIfNeeded = async (affectedIds: number[]) => {
+  if (!currentWarning.value || !affectedIds.includes(currentWarning.value.id)) return
+  const refreshed = rows.value.find((item) => item.id === currentWarning.value?.id)
+  if (refreshed) currentWarning.value = refreshed
+  await loadActions(currentWarning.value.id)
 }
 
 const runAction = async (
-  targetRows: WarningEventItem[],
+  targets: WarningEventItem[],
   options: {
     actionType: string
-    nextStatus: string
+    nextStatus?: string
     title: string
     placeholder: string
   },
 ) => {
-  if (!targetRows.length) {
-    ElMessage.warning('请先选择至少一条预警事件')
-    return
+  const note = await promptActionNote(options.title, options.placeholder)
+  if (note === null) return
+
+  const targetIds = targets.map((item) => item.id)
+  const isBatch = targets.length > 1
+  if (isBatch) {
+    batchLoading.value = true
+  } else {
+    rowActionId.value = targets[0]?.id ?? null
+    rowActionType.value = options.actionType
   }
 
-  try {
-    const note = await promptActionNote(options.title, options.placeholder)
-    batchLoading.value = true
-    const tasks = targetRows.map((row) =>
-      postWarningAction(row.id, {
-        actionType: options.actionType,
-        actionNote: note,
-        templateCode: row.risk_level === 'HIGH' ? 'WARN_HIGH_FOLLOWUP' : undefined,
-        nextStatus: options.nextStatus,
-      }),
-    )
-    const result = await Promise.allSettled(tasks)
-    const successCount = result.filter((item) => item.status === 'fulfilled').length
-    const failCount = result.length - successCount
+  let successCount = 0
+  const failedIds: number[] = []
 
-    if (successCount > 0 && failCount === 0) {
-      ElMessage.success(`已完成 ${successCount} 条处置动作`)
-    } else if (successCount > 0) {
-      ElMessage.warning(`已完成 ${successCount} 条，失败 ${failCount} 条`)
-    } else {
-      ElMessage.error('批量处置失败，请检查网络或权限')
+  try {
+    for (const row of targets) {
+      try {
+        await postWarningAction(row.id, {
+          actionType: options.actionType,
+          actionNote: note || undefined,
+          nextStatus: options.nextStatus,
+        })
+        successCount += 1
+      } catch {
+        failedIds.push(row.id)
+      }
     }
 
     await loadWarnings()
-    if (currentWarning.value && targetRows.some((row) => row.id === currentWarning.value?.id)) {
-      await loadActions(currentWarning.value.id)
+    await refreshDrawerIfNeeded(targetIds)
+
+    if (successCount > 0 && failedIds.length === 0) {
+      ElMessage.success(`${options.title}已完成，共处理 ${successCount} 条。`)
+      return
     }
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    const parsed = parseError(error, '提交处置动作失败')
-    ElMessage.error(parsed.detail)
+
+    if (successCount > 0) {
+      ElMessage.warning(`${options.title}部分完成：成功 ${successCount} 条，失败 ${failedIds.length} 条（ID: ${failedIds.join(', ')}）。`)
+      return
+    }
+
+    ElMessage.error(`${options.title}未成功处理任何记录。`)
   } finally {
     batchLoading.value = false
+    rowActionId.value = null
+    rowActionType.value = null
   }
 }
 
 const markAcked = async (row: WarningEventItem) => {
-  if (!canAck(row)) {
-    ElMessage.warning('仅新建状态可执行确认')
-    return
-  }
   await runAction([row], {
     actionType: 'MARK_FOLLOWED',
     nextStatus: 'ACKED',
     title: `确认预警 #${row.id}`,
-    placeholder: '例如：值班人员已确认',
+    placeholder: '记录确认依据，例如已查看报告、已联系相关人员等。',
   })
 }
 
 const markFollowing = async (row: WarningEventItem) => {
-  if (!canFollow(row)) {
-    ElMessage.warning('当前状态不可执行跟进')
-    return
-  }
   await runAction([row], {
     actionType: 'ADD_NOTE',
     nextStatus: 'FOLLOWING',
     title: `跟进预警 #${row.id}`,
-    placeholder: '例如：已外呼并安排回访',
+    placeholder: '补充当前跟进情况、下一步动作或外部联系情况。',
   })
 }
 
 const markResolved = async (row: WarningEventItem) => {
-  if (!canResolve(row)) {
-    ElMessage.warning('当前状态不可执行结案')
-    return
-  }
   await runAction([row], {
     actionType: 'RESOLVE',
     nextStatus: 'RESOLVED',
     title: `结案预警 #${row.id}`,
-    placeholder: '例如：回访完成，用户状态稳定',
+    placeholder: '填写结案说明，例如已完成复核、已给出建议、无需继续跟进等。',
   })
 }
 
 const batchAck = async () => {
   const rowsValue = selectedAckable.value
   if (!rowsValue.length) {
-    ElMessage.warning('所选项中没有可确认事件（仅新建状态可确认）')
+    ElMessage.warning('当前选中项里没有可确认的预警。')
     return
   }
   await runAction(rowsValue, {
     actionType: 'MARK_FOLLOWED',
     nextStatus: 'ACKED',
     title: `批量确认（${rowsValue.length} 条）`,
-    placeholder: '批量处置备注（可选）',
+    placeholder: '补充批量确认说明，可留空。',
   })
 }
 
 const batchFollow = async () => {
   const rowsValue = selectedFollowable.value
   if (!rowsValue.length) {
-    ElMessage.warning('所选项中无可跟进事件')
+    ElMessage.warning('当前选中项里没有可跟进的预警。')
     return
   }
   await runAction(rowsValue, {
     actionType: 'ADD_NOTE',
     nextStatus: 'FOLLOWING',
     title: `批量跟进（${rowsValue.length} 条）`,
-    placeholder: '批量跟进备注（可选）',
+    placeholder: '补充批量跟进说明，可留空。',
   })
 }
 
 const batchResolve = async () => {
   const rowsValue = selectedResolvable.value
   if (!rowsValue.length) {
-    ElMessage.warning('所选项中无可结案事件')
+    ElMessage.warning('当前选中项里没有可结案的预警。')
     return
   }
   await runAction(rowsValue, {
     actionType: 'RESOLVE',
     nextStatus: 'RESOLVED',
     title: `批量结案（${rowsValue.length} 条）`,
-    placeholder: '批量结案备注（可选）',
+    placeholder: '补充批量结案说明，可留空。',
   })
 }
 
@@ -465,12 +591,12 @@ onBeforeUnmount(() => {
             <el-radio-button label="Y">已超时</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="关键字">
+        <el-form-item label="关键词">
           <el-input
             v-model="query.keyword"
             clearable
-            placeholder="ID/用户标识/任务/报告/情绪"
-            style="width: 240px"
+            placeholder="ID / 用户标识 / 任务 / 报告 / 情绪"
+            style="width: 260px"
           />
         </el-form-item>
         <el-form-item>
@@ -490,7 +616,7 @@ onBeforeUnmount(() => {
     <EmptyState
       v-else-if="rows.length === 0"
       title="暂无预警事件"
-      description="当前筛选条件下未匹配到预警事件。"
+      description="当前筛选条件下还没有可处置的预警记录。"
       action-text="重新加载"
       @action="loadWarnings"
     />
@@ -530,10 +656,33 @@ onBeforeUnmount(() => {
       <el-table :data="rows" border row-key="id" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="50" />
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="user_mask" label="用户脱敏标识" width="120" />
-        <el-table-column prop="task_id" label="任务" width="90" />
-        <el-table-column prop="report_id" label="报告" width="90" />
-        <el-table-column prop="top_emotion" label="主情绪" width="100" />
+        <el-table-column prop="user_mask" label="用户标识" width="130" />
+        <el-table-column label="关联对象" min-width="180">
+          <template #default="scope">
+            <div class="related-links">
+              <el-button
+                v-if="scope.row.task_id"
+                type="primary"
+                link
+                @click="openRouteInNewTab('adminTaskInspect', scope.row.task_id)"
+              >
+                任务 #{{ scope.row.task_id }}
+              </el-button>
+              <el-button
+                v-if="scope.row.report_id"
+                type="primary"
+                link
+                @click="openRouteInNewTab('adminReportInspect', scope.row.report_id)"
+              >
+                报告 #{{ scope.row.report_id }}
+              </el-button>
+              <span v-if="!scope.row.task_id && !scope.row.report_id" class="muted-text">暂无</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="主情绪" width="100">
+          <template #default="scope">{{ formatEmotion(scope.row.top_emotion) }}</template>
+        </el-table-column>
         <el-table-column label="风险" width="110">
           <template #default="scope">
             <el-tag :type="riskType(scope.row.risk_level)">{{ formatRiskLevel(scope.row.risk_level) }}</el-tag>
@@ -542,6 +691,16 @@ onBeforeUnmount(() => {
         <el-table-column prop="risk_score" label="风险分" width="90" />
         <el-table-column label="状态" width="100">
           <template #default="scope">{{ formatWarningStatus(scope.row.status) }}</template>
+        </el-table-column>
+        <el-table-column label="触发原因" min-width="220" show-overflow-tooltip>
+          <template #default="scope">
+            <div class="summary-cell">{{ summarizeTriggerReason(scope.row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近处置" min-width="220" show-overflow-tooltip>
+          <template #default="scope">
+            <div class="summary-cell">{{ summarizeLatestAction(scope.row) }}</div>
+          </template>
         </el-table-column>
         <el-table-column :label="SLA_LABEL" min-width="170">
           <template #default="scope">
@@ -552,12 +711,52 @@ onBeforeUnmount(() => {
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" min-width="165" />
-        <el-table-column label="操作" min-width="300" fixed="right">
+        <el-table-column label="操作" min-width="320" fixed="right">
           <template #default="scope">
             <el-button type="primary" link @click="openTimeline(scope.row)">时间线</el-button>
-            <el-button type="primary" link :disabled="!canAck(scope.row)" @click="markAcked(scope.row)">确认</el-button>
-            <el-button type="warning" link :disabled="!canFollow(scope.row)" @click="markFollowing(scope.row)">跟进</el-button>
-            <el-button type="success" link :disabled="!canResolve(scope.row)" @click="markResolved(scope.row)">结案</el-button>
+            <el-button
+              v-if="scope.row.task_id"
+              type="primary"
+              link
+              @click="openRouteInNewTab('adminTaskInspect', scope.row.task_id)"
+            >
+              查看任务
+            </el-button>
+            <el-button
+              v-if="scope.row.report_id"
+              type="primary"
+              link
+              @click="openRouteInNewTab('adminReportInspect', scope.row.report_id)"
+            >
+              查看报告
+            </el-button>
+            <el-button
+              type="primary"
+              link
+              :loading="rowActionId === scope.row.id && rowActionType === 'MARK_FOLLOWED'"
+              :disabled="!canAck(scope.row)"
+              @click="markAcked(scope.row)"
+            >
+              确认
+            </el-button>
+            <el-button
+              type="warning"
+              link
+              :loading="rowActionId === scope.row.id && rowActionType === 'ADD_NOTE'"
+              :disabled="!canFollow(scope.row)"
+              @click="markFollowing(scope.row)"
+            >
+              跟进
+            </el-button>
+            <el-button
+              type="success"
+              link
+              :loading="rowActionId === scope.row.id && rowActionType === 'RESOLVE'"
+              :disabled="!canResolve(scope.row)"
+              @click="markResolved(scope.row)"
+            >
+              结案
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -576,7 +775,47 @@ onBeforeUnmount(() => {
     </template>
 
     <el-drawer v-model="actionsDrawer" title="预警处置时间线" size="42%">
-      <p class="timeline-summary">{{ currentSummary }}</p>
+      <div v-if="currentWarning" class="detail-grid">
+        <el-card shadow="never">
+          <template #header>触发原因</template>
+          <p class="detail-main">{{ currentTriggerReason }}</p>
+        </el-card>
+        <el-card shadow="never">
+          <template #header>风险摘要</template>
+          <p class="detail-main">{{ currentRiskSummary }}</p>
+        </el-card>
+        <el-card shadow="never">
+          <template #header>关联对象</template>
+          <div class="detail-related">
+            <p class="detail-main">{{ currentRelatedSummary }}</p>
+            <div class="detail-actions">
+              <el-button
+                v-if="currentWarning.task_id"
+                type="primary"
+                plain
+                size="small"
+                @click="openRouteInNewTab('adminTaskInspect', currentWarning.task_id)"
+              >
+                打开任务
+              </el-button>
+              <el-button
+                v-if="currentWarning.report_id"
+                type="primary"
+                plain
+                size="small"
+                @click="openRouteInNewTab('adminReportInspect', currentWarning.report_id)"
+              >
+                打开报告
+              </el-button>
+            </div>
+          </div>
+        </el-card>
+        <el-card shadow="never">
+          <template #header>最近处置</template>
+          <p class="detail-main">{{ currentLatestAction }}</p>
+        </el-card>
+      </div>
+
       <el-steps :active="currentFlowStep" finish-status="success" simple class="flow-steps">
         <el-step v-for="item in flowLabels" :key="item" :title="item" />
       </el-steps>
@@ -592,7 +831,7 @@ onBeforeUnmount(() => {
       <EmptyState
         v-else-if="currentTimelineNodes.length === 0"
         title="暂无处置记录"
-        description="该预警事件尚未产生处置时间线。"
+        description="该预警事件还没有产生可展示的处置时间线。"
         action-text="重新加载"
         @action="currentWarning && loadActions(currentWarning.id)"
       />
@@ -633,15 +872,23 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.batch-note {
+.batch-note,
+.muted-text,
+.sla-gap {
   color: var(--admin-text-muted);
   font-size: 12px;
 }
 
-.sla-gap {
-  margin-top: 4px;
-  color: var(--admin-text-muted);
-  font-size: 12px;
+.related-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.summary-cell {
+  line-height: 1.5;
+  color: var(--admin-text-secondary);
 }
 
 .pager {
@@ -650,9 +897,29 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.timeline-summary {
-  margin: 0 0 10px;
-  color: var(--admin-text-secondary);
+.detail-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-main {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--admin-text-primary);
+}
+
+.detail-related {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .flow-steps {
@@ -668,5 +935,11 @@ onBeforeUnmount(() => {
   margin: 8px 0 0;
   color: var(--admin-text-secondary);
   line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -22,6 +22,7 @@ const saving = ref(false)
 const importing = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
 const rows = ref<AdminPsyCenter[]>([])
+const lastImportResult = ref<{ imported: number; fileName: string; importedAt: string } | null>(null)
 
 const keyword = ref('')
 const cityCode = ref('')
@@ -54,8 +55,8 @@ const form = reactive<Omit<AdminPsyCenter, 'id'>>({
 
 const dialogTitle = computed(() => (dialogMode.value === 'create' ? '新增心理中心' : '编辑心理中心'))
 
-const filteredRows = computed(() => {
-  return rows.value.filter((item) => {
+const filteredRows = computed(() =>
+  rows.value.filter((item) => {
     if (cityCode.value && item.cityCode !== cityCode.value.trim()) return false
     if (!keyword.value.trim()) return true
     const key = keyword.value.trim().toLowerCase()
@@ -65,7 +66,17 @@ const filteredRows = computed(() => {
       item.cityName.toLowerCase().includes(key) ||
       (item.sourceName || '').toLowerCase().includes(key)
     )
-  })
+  }),
+)
+
+const centerStats = computed(() => {
+  const citySet = new Set(rows.value.map((item) => item.cityCode).filter(Boolean))
+  return {
+    total: rows.value.length,
+    enabled: rows.value.filter((item) => item.enabled).length,
+    recommended: rows.value.filter((item) => item.recommended).length,
+    cities: citySet.size,
+  }
 })
 
 const resetForm = () => {
@@ -190,11 +201,15 @@ const saveCenter = async () => {
 
 const removeCenter = async (row: AdminPsyCenter) => {
   try {
-    await ElMessageBox.confirm('删除操作会将当前记录置为停用状态，用户端将不再展示。是否继续？', '停用确认', {
-      type: 'warning',
-      confirmButtonText: '停用',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      '停用后该条资源将不再在用户端展示，但记录仍会保留。确认继续吗？',
+      '停用确认',
+      {
+        type: 'warning',
+        confirmButtonText: '停用',
+        cancelButtonText: '取消',
+      },
+    )
     await deleteAdminPsyCenter(row.id)
     ElMessage.success('已停用')
     await loadRows()
@@ -236,6 +251,11 @@ const handleImportChange = async (event: Event) => {
   try {
     const content = await file.text()
     const result = await importPsyCentersCsv(content)
+    lastImportResult.value = {
+      imported: result.imported ?? 0,
+      fileName: file.name,
+      importedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+    }
     ElMessage.success(`导入完成，共导入 ${result.imported ?? 0} 条`)
     await loadRows()
   } catch (error) {
@@ -266,6 +286,39 @@ onMounted(async () => {
     </template>
 
     <input ref="importInputRef" class="hidden-input" type="file" accept=".csv,text/csv" @change="handleImportChange" />
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span>中心总数</span>
+        <strong>{{ centerStats.total }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>启用中</span>
+        <strong>{{ centerStats.enabled }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>推荐资源</span>
+        <strong>{{ centerStats.recommended }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>覆盖城市</span>
+        <strong>{{ centerStats.cities }}</strong>
+      </div>
+    </div>
+
+    <el-alert
+      v-if="lastImportResult"
+      class="import-alert"
+      type="success"
+      :closable="false"
+      show-icon
+      :title="`最近一次导入：${lastImportResult.imported} 条`"
+      :description="`${lastImportResult.fileName} / ${lastImportResult.importedAt}`"
+    />
+
+    <div class="ops-hint">
+      支持按城市筛选、CSV 导入导出与单条编辑。建议优先维护“启用中”和“推荐资源”两类条目。
+    </div>
 
     <el-form inline>
       <el-form-item label="城市">
@@ -339,7 +392,7 @@ onMounted(async () => {
       type="info"
       :closable="false"
       title="数据来源：默认种子"
-      description="可编辑，但来源标记不变。"
+      description="该资源可继续编辑，但会保留原始来源标记。"
     />
 
     <el-form label-width="118px">
@@ -368,7 +421,7 @@ onMounted(async () => {
         <el-input-number v-model="form.longitude" :precision="6" :step="0.0001" />
       </el-form-item>
       <el-form-item label="来源名称">
-        <el-input v-model="form.sourceName" placeholder="例如：北京大学第六医院" />
+        <el-input v-model="form.sourceName" placeholder="例如：某市精神卫生中心" />
       </el-form-item>
       <el-form-item label="来源链接">
         <el-input v-model="form.sourceUrl" placeholder="https://..." />
@@ -419,6 +472,44 @@ onMounted(async () => {
 
 .hidden-input {
   display: none;
+}
+
+.stats-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(96, 119, 158, 0.16);
+  border-radius: 14px;
+  background: rgba(9, 18, 36, 0.32);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-card span {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
+.stat-card strong {
+  color: var(--admin-text-primary);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.import-alert {
+  margin-bottom: 12px;
+}
+
+.ops-hint {
+  margin-bottom: 16px;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
 }
 
 .seed-alert {

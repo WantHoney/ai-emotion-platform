@@ -19,6 +19,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Component
 public class SerClient {
@@ -117,6 +119,20 @@ public class SerClient {
     public boolean probeHealth() {
         RestTemplate rt = buildRestTemplate(properties.getHealthTimeoutMs(), properties.getHealthTimeoutMs());
         return callGet(rt, serUrl("/health"));
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> fetchHealthDetails() {
+        RestTemplate restTemplate = buildRestTemplate(properties.getHealthTimeoutMs(), properties.getHealthTimeoutMs());
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(serUrl("/health"), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return Map.of();
+            }
+            return new LinkedHashMap<>(response.getBody());
+        } catch (HttpStatusCodeException | ResourceAccessException e) {
+            return Map.of();
+        }
     }
 
     public boolean warmup() {

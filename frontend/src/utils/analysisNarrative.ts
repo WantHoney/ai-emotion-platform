@@ -62,12 +62,12 @@ export const buildNarrativeSourceNote = (narrative?: NarrativeMetaLike | null): 
   if (narrative?.status === 'ready') {
     const modelLabel = formatNarrativeModel(narrative.model)
     const modelName = modelLabel?.startsWith('Gemma 4') ? 'Gemma 4 模型' : '本地模型'
-    return `以下解释与建议由本地部署的 ${modelName} 辅助生成，数据不会上传至外部服务。`
+    return `以上解释与建议由本地部署的 ${modelName} 辅助生成，数据不会上传至外部服务。`
   }
   if (narrative?.status === 'disabled') {
-    return '当前未启用本地模型增强，以下内容为系统基础建议。'
+    return '当前未启用本地模型增强，以上内容为系统基础建议。'
   }
-  return '当前以系统基础建议为主，本地模型结果暂未成功生成。'
+  return '当前以系统基础建议为主，本地模型结果暂未成功生成，以上内容以基础建议为主。'
 }
 
 export const buildNarrativeTechNote = (narrative?: NarrativeMetaLike | null): string | null => {

@@ -56,7 +56,7 @@ public record SerAnalyzeResponse(
             Double temperature,
             java.util.Map<String, Double> scoresRaw,
             java.util.Map<String, Double> scores,
-            java.util.Map<String, Double> features,
+            java.util.Map<String, Object> features,
             String error
     ) {
     }

@@ -10,9 +10,19 @@ import java.util.Locale;
 @Service
 public class PsychologicalRiskScoringService {
 
+    public static final String PSI_VERSION = "psi_heuristic_v2_light_tuned";
+
     private static final double WEIGHT_SAD = 0.45;
-    private static final double WEIGHT_ANGRY = 0.25;
-    private static final double WEIGHT_VAR_CONF = 0.10;
+    private static final double WEIGHT_ANGRY = 0.22;
+    private static final double WEIGHT_HAPPY_OFFSET = 0.28;
+    private static final double WEIGHT_NEUTRAL_OFFSET = 0.08;
+    private static final double WEIGHT_VAR_CONF = 0.08;
+    private static final double WEIGHT_VOICE_IN_PSI = 0.65;
+    private static final double WEIGHT_TEXT_IN_PSI = 0.35;
+    private static final double TEXT_NEG_CONFLICT_DISCOUNT = 0.75;
+    private static final double TEXT_NEG_CONFLICT_MIN_HAPPY = 0.35;
+    private static final double TEXT_NEG_CONFLICT_MIN_TEXT_NEG = 0.50;
+    private static final double TEXT_NEG_CONFLICT_MAX_SAD = 0.35;
     public static final double ATTENTION_THRESHOLD_SCORE = 40.0D;
     public static final double HIGH_RISK_THRESHOLD_SCORE = 70.0D;
 
@@ -23,22 +33,41 @@ public class PsychologicalRiskScoringService {
     }
 
     public AnalysisTaskResultResponse.RiskAssessmentPayload evaluate(List<AnalysisSegment> segments) {
-        return evaluate(segments, 0.0D);
+        return evaluate(segments, null, null, null, 0.0D);
     }
 
     public AnalysisTaskResultResponse.RiskAssessmentPayload evaluate(List<AnalysisSegment> segments, double textNeg) {
-        double pSad = durationRatioByEmotion(segments, "sad");
-        double pAngry = durationRatioByEmotion(segments, "angry");
+        return evaluate(segments, null, null, null, textNeg);
+    }
+
+    public AnalysisTaskResultResponse.RiskAssessmentPayload evaluate(List<AnalysisSegment> segments,
+                                                                     Double pSadOverride,
+                                                                     Double pAngryOverride,
+                                                                     Double pHappyOverride,
+                                                                     double textNeg) {
+        double pSad = probabilityOrFallback(pSadOverride, segments, "sad");
+        double pAngry = probabilityOrFallback(pAngryOverride, segments, "angry");
+        double pHappy = probabilityOrFallback(pHappyOverride, segments, "happy");
+        double pNeutral = clamp(1.0D - pSad - pAngry - pHappy, 0.0D, 1.0D);
         double varConf = confidenceVariance(segments);
         double normalizedTextNeg = clamp(textNeg, 0.0D, 1.0D);
+        double adjustedTextNeg = applyTextNegCalibration(normalizedTextNeg, pSad, pHappy);
 
-        double voiceRisk = 100.0D * (
+        double voiceRisk = 100.0D * clamp(
                 WEIGHT_SAD * pSad
                         + WEIGHT_ANGRY * pAngry
                         + WEIGHT_VAR_CONF * varConf
+                        - WEIGHT_HAPPY_OFFSET * pHappy
+                        - WEIGHT_NEUTRAL_OFFSET * pNeutral,
+                0.0D,
+                1.0D
         );
-        double textRisk = 100.0D * normalizedTextNeg;
-        double riskScore = clamp(0.6D * voiceRisk + 0.4D * textRisk, 0.0D, 100.0D);
+        double textRisk = 100.0D * adjustedTextNeg;
+        double riskScore = clamp(
+                WEIGHT_VOICE_IN_PSI * voiceRisk + WEIGHT_TEXT_IN_PSI * textRisk,
+                0.0D,
+                100.0D
+        );
         String riskLevel = toRiskLevel(riskScore);
         String adviceText = interventionAdviceService.buildAdvice(
                 riskLevel,
@@ -46,7 +75,7 @@ public class PsychologicalRiskScoringService {
                 pSad,
                 pAngry,
                 varConf,
-                normalizedTextNeg
+                adjustedTextNeg
         );
 
         return new AnalysisTaskResultResponse.RiskAssessmentPayload(
@@ -55,9 +84,26 @@ public class PsychologicalRiskScoringService {
                 adviceText,
                 round4(pSad),
                 round4(pAngry),
+                round4(pHappy),
                 round4(varConf),
-                round4(normalizedTextNeg)
+                round4(adjustedTextNeg)
         );
+    }
+
+    private double applyTextNegCalibration(double textNeg, double pSad, double pHappy) {
+        if (pHappy >= TEXT_NEG_CONFLICT_MIN_HAPPY
+                && textNeg >= TEXT_NEG_CONFLICT_MIN_TEXT_NEG
+                && pSad <= TEXT_NEG_CONFLICT_MAX_SAD) {
+            return clamp(textNeg * TEXT_NEG_CONFLICT_DISCOUNT, 0.0D, 1.0D);
+        }
+        return textNeg;
+    }
+
+    private double probabilityOrFallback(Double overrideValue, List<AnalysisSegment> segments, String emotionCode) {
+        if (overrideValue != null && Double.isFinite(overrideValue)) {
+            return clamp(overrideValue, 0.0D, 1.0D);
+        }
+        return durationRatioByEmotion(segments, emotionCode);
     }
 
     private double durationRatioByEmotion(List<AnalysisSegment> segments, String emotionCode) {

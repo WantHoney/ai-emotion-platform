@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
@@ -8,6 +10,7 @@ import {
   getAnalyticsQuality,
   getDailyAnalytics,
   getGovernanceSummary,
+  triggerGovernanceDriftScan,
   type AnalyticsQualityResponse,
   type DailyAnalyticsItem,
   type GovernanceSummary,
@@ -15,7 +18,10 @@ import {
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 import { SLA_LABEL, formatEmotion } from '@/utils/uiText'
 
+const router = useRouter()
+
 const loading = ref(false)
+const driftScanning = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
 const dailyRows = ref<DailyAnalyticsItem[]>([])
 const days = ref(14)
@@ -60,6 +66,33 @@ const errorCategoryRows = computed(() => quality.value?.errorCategoryStats ?? []
 const errorSamples = computed(() => quality.value?.errorSamples ?? [])
 const slaTrendRows = computed(() => quality.value?.slaTrend ?? [])
 
+const dashboardCards = computed(() => [
+  {
+    title: '预警总量',
+    value: summary.value.warningCount,
+    note: '跳转预警处置台查看当前闭环进度',
+    routeName: 'adminWarnings',
+  },
+  {
+    title: '启用规则数',
+    value: summary.value.enabledRuleCount,
+    note: '跳转预警规则查看当前生效阈值',
+    routeName: 'adminRules',
+  },
+  {
+    title: '有数据日期数',
+    value: activeDayCount.value,
+    note: '当前统计窗口内实际有数据的日期数',
+    routeName: 'adminDashboard',
+  },
+  {
+    title: '漂移样本数',
+    value: emotionDriftRows.value.length,
+    note: '跳转模型治理核对当前运行态与登记态',
+    routeName: 'adminModels',
+  },
+])
+
 const loadData = async () => {
   loading.value = true
   errorState.value = null
@@ -83,8 +116,29 @@ const loadData = async () => {
   }
 }
 
-onMounted(async () => {
-  await loadData()
+const runDriftScan = async () => {
+  driftScanning.value = true
+  try {
+    const result = await triggerGovernanceDriftScan({
+      windowDays: Math.min(days.value, 30),
+      baselineDays: 7,
+    })
+    ElMessage.success(`漂移扫描已执行，本次新增 ${result.created ?? 0} 条漂移预警`)
+    await loadData()
+  } catch (error) {
+    const parsed = parseError(error, '执行漂移扫描失败')
+    ElMessage.error(parsed.detail)
+  } finally {
+    driftScanning.value = false
+  }
+}
+
+const goTo = async (name: string, params?: Record<string, string | number>) => {
+  await router.push({ name, params })
+}
+
+onMounted(() => {
+  void loadData()
 })
 </script>
 
@@ -92,10 +146,11 @@ onMounted(async () => {
   <el-card>
     <template #header>
       <div class="header-row">
-        <span>管理端统计分析</span>
+        <span>管理看板</span>
         <div class="header-actions">
           <span class="days-label">统计天数</span>
           <el-input-number v-model="days" :min="1" :max="30" size="small" />
+          <el-button :loading="driftScanning" @click="runDriftScan">执行漂移扫描</el-button>
           <el-button @click="loadData">刷新</el-button>
         </div>
       </div>
@@ -110,30 +165,40 @@ onMounted(async () => {
       @retry="loadData"
     />
     <template v-else>
-      <el-row :gutter="16">
-        <el-col :xs="24" :md="6"><el-statistic title="规则总数" :value="summary.ruleCount" /></el-col>
-        <el-col :xs="24" :md="6"><el-statistic title="启用规则数" :value="summary.enabledRuleCount" /></el-col>
-        <el-col :xs="24" :md="6"><el-statistic title="预警总量" :value="summary.warningCount" /></el-col>
-        <el-col :xs="24" :md="6"><el-statistic title="有数据日期数" :value="activeDayCount" /></el-col>
-      </el-row>
+      <div class="overview-grid">
+        <button
+          v-for="card in dashboardCards"
+          :key="card.title"
+          class="overview-card"
+          type="button"
+          @click="goTo(card.routeName)"
+        >
+          <span>{{ card.title }}</span>
+          <strong>{{ card.value }}</strong>
+          <p>{{ card.note }}</p>
+        </button>
+      </div>
 
       <el-row :gutter="16" class="mt-16">
+        <el-col :xs="24" :md="6"><el-statistic title="规则总数" :value="summary.ruleCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="日活用户累计" :value="totals.dau" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="上传累计" :value="totals.uploadCount" /></el-col>
         <el-col :xs="24" :md="6"><el-statistic title="报告累计" :value="totals.reportCount" /></el-col>
-        <el-col :xs="24" :md="6"><el-statistic title="预警累计" :value="totals.warningCount" /></el-col>
       </el-row>
 
       <el-row v-if="quality" :gutter="16" class="mt-16">
         <el-col :xs="24" :md="8">
           <el-card shadow="never" class="metric-card">
-            <template #header>{{ `${SLA_LABEL}概览` }}</template>
+            <template #header>{{ `${SLA_LABEL} 概览` }}</template>
             <p>总数：{{ quality.slaOverview.total ?? 0 }}</p>
             <p>已解决：{{ quality.slaOverview.resolved ?? 0 }}</p>
             <p>已超时：{{ quality.slaOverview.breached ?? 0 }}</p>
             <p>已确认：{{ quality.slaOverview.acked ?? 0 }}</p>
             <p>平均确认时长（分钟）：{{ Number(quality.slaOverview.avg_ack_minutes ?? 0).toFixed(1) }}</p>
             <p>平均解决时长（分钟）：{{ Number(quality.slaOverview.avg_resolve_minutes ?? 0).toFixed(1) }}</p>
+            <div class="metric-actions">
+              <el-button link type="primary" @click="goTo('adminWarnings')">前往预警处置台</el-button>
+            </div>
           </el-card>
         </el-col>
 
@@ -155,6 +220,11 @@ onMounted(async () => {
                   <el-tag :type="scope.row.drift >= 0 ? 'danger' : 'success'">
                     {{ scope.row.drift >= 0 ? '+' : '' }}{{ (scope.row.drift * 100).toFixed(1) }}%
                   </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="140">
+                <template #default>
+                  <el-button link type="primary" @click="goTo('adminModels')">查看模型治理</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -195,6 +265,11 @@ onMounted(async () => {
               <el-table-column prop="audio_file_id" label="音频" width="90" />
               <el-table-column prop="error_message" label="错误信息" min-width="260" show-overflow-tooltip />
               <el-table-column prop="updated_at" label="更新时间" min-width="160" />
+              <el-table-column label="操作" width="110">
+                <template #default="scope">
+                  <el-button link type="primary" @click="goTo('adminTaskInspect', { id: scope.row.id })">查看任务</el-button>
+                </template>
+              </el-table-column>
             </el-table>
             <p v-else class="section-empty">当前时间范围内暂无错误样本。</p>
           </el-card>
@@ -202,7 +277,7 @@ onMounted(async () => {
       </el-row>
 
       <el-card v-if="quality" shadow="never" class="mt-16">
-        <template #header>{{ `${SLA_LABEL}趋势` }}</template>
+        <template #header>{{ `${SLA_LABEL} 趋势` }}</template>
         <el-table v-if="slaTrendRows.length" :data="slaTrendRows" size="small" border>
           <el-table-column prop="stat_date" label="日期" min-width="140" />
           <el-table-column prop="total" label="总数" width="110" />
@@ -253,9 +328,56 @@ onMounted(async () => {
   margin-top: 16px;
 }
 
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(96, 119, 158, 0.16);
+  background: rgba(12, 21, 38, 0.76);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.overview-card span,
+.bar-label {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
+.overview-card strong {
+  display: block;
+  margin-top: 10px;
+  color: var(--admin-text-primary);
+  font-size: 30px;
+}
+
+.overview-card p,
+.section-empty {
+  margin: 10px 0 0;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .metric-card p {
   margin: 6px 0;
   color: var(--admin-text-primary);
+}
+
+.metric-actions {
+  margin-top: 12px;
 }
 
 .bar-row {
@@ -264,11 +386,6 @@ onMounted(async () => {
   gap: 8px;
   align-items: center;
   margin-bottom: 10px;
-}
-
-.bar-label {
-  color: var(--admin-text-secondary);
-  font-size: 13px;
 }
 
 .bar-track {
@@ -287,14 +404,6 @@ onMounted(async () => {
   text-align: right;
   color: var(--admin-text-primary);
   font-size: 12px;
-}
-
-.section-empty {
-  margin: 0;
-  padding: 18px 0 6px;
-  color: var(--admin-text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 :deep(.el-statistic__head) {

@@ -8,6 +8,7 @@ export interface RiskAssessmentPayload {
   advice_text: string
   p_sad: number
   p_angry: number
+  p_happy: number
   var_conf: number
   text_neg: number
 }

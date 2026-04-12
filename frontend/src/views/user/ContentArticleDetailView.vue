@@ -3,9 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getContentArticleDetail, postContentHistory, type ArticleDetailPayload } from '@/api/content'
-import ArticleFeatureCard from '@/components/content/ArticleFeatureCard.vue'
 import BookShelfCard from '@/components/content/BookShelfCard.vue'
-import SmartImage from '@/components/ui/SmartImage.vue'
 import EmptyState from '@/components/states/EmptyState.vue'
 import ErrorState from '@/components/states/ErrorState.vue'
 import LoadingState from '@/components/states/LoadingState.vue'
@@ -34,10 +32,6 @@ const loadDetail = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const openArticle = async (id: number) => {
-  await router.push(`/app/content/articles/${id}`)
 }
 
 const openBook = async (id: number) => {
@@ -72,16 +66,12 @@ onMounted(() => {
     <EmptyState
       v-else-if="!payload"
       title="文章不存在"
-      description="未找到对应文章内容。"
+      description="未找到对应的文章内容。"
       action-text="返回专栏"
       @action="router.push('/app/content')"
     />
     <template v-else>
       <section class="detail-hero">
-        <div class="detail-hero__cover">
-          <SmartImage :src="payload.article.coverImageUrl" :alt="payload.article.title" kind="article" fit="cover" />
-        </div>
-
         <div class="detail-hero__body">
           <div class="detail-hero__meta">
             <span class="pill pill-muted">
@@ -98,18 +88,12 @@ onMounted(() => {
           <div class="detail-hero__head">
             <p class="detail-hero__eyebrow">站内导读</p>
             <h1>{{ payload.article.title }}</h1>
-            <p>{{ payload.article.summary }}</p>
-          </div>
-
-          <div class="detail-hero__notes">
-            <div class="detail-note">
-              <span>推荐理由</span>
-              <p>{{ payload.article.recommendReason || '这篇内容适合用来建立问题的第一层理解。' }}</p>
-            </div>
-            <div class="detail-note">
-              <span>适合谁</span>
-              <p>{{ payload.article.fitFor || '适合此刻想先搞清楚自己发生了什么的人。' }}</p>
-            </div>
+            <p>
+              {{
+                payload.article.summary ||
+                '先在站内把这篇文章适合谁、能解决什么问题看清楚，再决定要不要去原始来源继续深入。'
+              }}
+            </p>
           </div>
 
           <div class="detail-hero__actions">
@@ -117,49 +101,35 @@ onMounted(() => {
             <el-button type="primary" @click="openSource">前往原始来源</el-button>
           </div>
         </div>
+
+        <div class="detail-hero__aside">
+          <div class="detail-note">
+            <span>为什么读</span>
+            <p>{{ payload.article.recommendReason || '先建立问题的第一层理解，再决定下一步。' }}</p>
+          </div>
+          <div class="detail-note">
+            <span>适合谁</span>
+            <p>{{ payload.article.fitFor || '适合想先看清楚自己正在经历什么的人。' }}</p>
+          </div>
+          <div class="detail-note">
+            <span>来源机构</span>
+            <p>{{ payload.article.sourceName || '已配置来源' }}</p>
+          </div>
+          <div class="detail-note">
+            <span>打开方式</span>
+            <p>{{ payload.article.isExternal ? '将打开外部来源页面' : '继续在站内打开' }}</p>
+          </div>
+        </div>
       </section>
 
       <section class="detail-section">
         <div class="section-head">
-          <h2>读完你会得到什么</h2>
-          <p>先在站内把内容价值和适配人群看清楚，再决定是否去原始来源深入阅读。</p>
+          <h2>读完你会带走什么</h2>
+          <p>先把这篇文章最值得拿走的几件事看清楚，再决定要不要继续深读。</p>
         </div>
         <ul class="detail-list">
           <li v-for="item in payload.article.highlights" :key="item">{{ item }}</li>
         </ul>
-      </section>
-
-      <section class="detail-section">
-        <div class="section-head">
-          <h2>来源说明</h2>
-          <p>保持站内可读性，同时把来源透明地交给用户。</p>
-        </div>
-        <div class="source-panel">
-          <div>
-            <span>来源机构</span>
-            <p>{{ payload.article.sourceName || '已配置来源' }}</p>
-          </div>
-          <div>
-            <span>打开方式</span>
-            <p>{{ payload.article.isExternal ? '将打开外部来源页' : '站内继续打开' }}</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="detail-section" v-if="payload.relatedArticles.length">
-        <div class="section-head">
-          <h2>同主题文章</h2>
-          <p>如果这篇对你有帮助，可以继续往同一主题深一点读。</p>
-        </div>
-        <div class="detail-grid">
-          <ArticleFeatureCard
-            v-for="item in payload.relatedArticles"
-            :key="`article-${item.id}`"
-            :article="item"
-            dense
-            @action="openArticle(item.id)"
-          />
-        </div>
       </section>
 
       <section class="detail-section" v-if="payload.relatedBooks.length">
@@ -190,7 +160,7 @@ onMounted(() => {
 
 .detail-hero {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.86fr);
   gap: 22px;
   padding: 24px;
   border-radius: 28px;
@@ -200,23 +170,38 @@ onMounted(() => {
     linear-gradient(145deg, rgba(16, 27, 48, 0.96), rgba(9, 15, 28, 0.96));
 }
 
-.detail-hero__cover {
-  overflow: hidden;
-  min-height: 320px;
-  border-radius: 24px;
-  border: 1px solid rgba(168, 189, 221, 0.18);
-}
-
 .detail-hero__body,
 .detail-hero__meta,
-.detail-hero__actions {
+.detail-hero__actions,
+.detail-hero__aside {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.detail-hero__body {
+.detail-hero__body,
+.detail-hero__aside {
   flex-direction: column;
+}
+
+.detail-hero__aside {
+  gap: 12px;
+}
+
+.detail-hero__actions {
+  margin-top: 8px;
+}
+
+.detail-hero__actions :deep(.el-button) {
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.detail-hero__actions :deep(.el-button--primary) {
+  min-width: 156px;
 }
 
 .detail-hero__eyebrow {
@@ -241,29 +226,20 @@ onMounted(() => {
 
 .detail-hero__head p,
 .section-head p,
-.detail-note p,
-.source-panel p {
+.detail-note p {
   margin: 12px 0 0;
   color: #b3c6e4;
   line-height: 1.7;
 }
 
-.detail-hero__notes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.detail-note,
-.source-panel > div {
+.detail-note {
   padding: 16px;
   border-radius: 18px;
   background: rgba(14, 23, 39, 0.72);
   border: 1px solid rgba(120, 144, 181, 0.16);
 }
 
-.detail-note span,
-.source-panel span {
+.detail-note span {
   color: #8fc4c8;
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -287,7 +263,6 @@ onMounted(() => {
   color: #eff6ff;
 }
 
-.source-panel,
 .detail-grid {
   display: grid;
   gap: 14px;
@@ -319,10 +294,6 @@ onMounted(() => {
 
 @media (max-width: 980px) {
   .detail-hero {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-hero__notes {
     grid-template-columns: 1fr;
   }
 }

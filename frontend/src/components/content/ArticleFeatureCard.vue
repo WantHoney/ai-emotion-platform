@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import SmartImage from '@/components/ui/SmartImage.vue'
 import type { ContentArticle } from '@/api/content'
 import { ARTICLE_CATEGORY_LABELS, ARTICLE_DIFFICULTY_LABELS } from '@/constants/contentMeta'
+import SmartImage from '@/components/ui/SmartImage.vue'
 
 defineEmits<{
   action: []
@@ -14,6 +14,7 @@ const props = withDefaults(
     article: ContentArticle
     dense?: boolean
     quiet?: boolean
+    variant?: 'cover' | 'text'
     actionText?: string
     showAction?: boolean
     highlightLimit?: number
@@ -21,19 +22,47 @@ const props = withDefaults(
   {
     dense: false,
     quiet: false,
+    variant: 'cover',
     actionText: '查看详情',
     showAction: true,
   },
 )
 
-const visibleHighlights = computed(() =>
-  props.article.highlights.slice(0, props.highlightLimit ?? (props.dense ? 1 : 2)),
-)
+const visibleHighlights = computed(() => {
+  const fallbackLimit = props.variant === 'text'
+    ? props.dense || props.quiet
+      ? 1
+      : 2
+    : props.dense
+      ? 1
+      : 2
+  return props.article.highlights.slice(0, props.highlightLimit ?? fallbackLimit)
+})
+
+const compactNote = computed(() => {
+  if (!(props.variant === 'text' && props.quiet)) return ''
+  return props.article.recommendReason || props.article.fitFor || ''
+})
+
+const showSource = computed(() => {
+  if (props.variant === 'text') {
+    return !props.quiet || props.showAction
+  }
+  return !props.quiet
+})
 </script>
 
 <template>
-  <article class="article-card" :class="{ dense, quiet, 'article-card--passive': !showAction }">
-    <div class="article-card__cover">
+  <article
+    class="article-card"
+    :class="{
+      dense,
+      quiet,
+      'article-card--text': variant === 'text',
+      'article-card--passive': !showAction,
+    }"
+  >
+    <div v-if="variant === 'cover'" class="article-card__cover">
       <SmartImage :src="article.coverImageUrl" :alt="article.title" kind="article" fit="cover" />
     </div>
 
@@ -55,6 +84,8 @@ const visibleHighlights = computed(() =>
 
       <p v-if="article.summary" class="article-card__summary">{{ article.summary }}</p>
 
+      <p v-if="compactNote" class="article-card__note">{{ compactNote }}</p>
+
       <div v-if="!dense && !quiet" class="article-card__details">
         <div v-if="article.recommendReason" class="article-card__detail">
           <span>为什么读</span>
@@ -71,11 +102,11 @@ const visibleHighlights = computed(() =>
       </ul>
 
       <div
-        v-if="showAction || !quiet"
+        v-if="showAction || showSource"
         class="article-card__footer"
-        :class="{ 'article-card__footer--solo': !showAction || quiet }"
+        :class="{ 'article-card__footer--solo': !showAction }"
       >
-        <span v-if="!quiet" class="article-card__source">来源：{{ article.sourceName || '已配置来源' }}</span>
+        <span v-if="showSource" class="article-card__source">来源：{{ article.sourceName || '已配置来源' }}</span>
         <el-button v-if="showAction" type="primary" plain size="small" @click="$emit('action')">{{ actionText }}</el-button>
       </div>
     </div>
@@ -105,8 +136,32 @@ const visibleHighlights = computed(() =>
 }
 
 .article-card.quiet {
-  gap: var(--content-gap-2);
   padding: 16px;
+  gap: var(--content-gap-2);
+}
+
+.article-card--text {
+  position: relative;
+  overflow: hidden;
+  grid-template-columns: 1fr;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(106, 182, 148, 0.1), transparent 22%),
+    radial-gradient(circle at 82% 78%, rgba(105, 136, 193, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(16, 26, 44, 0.96), rgba(10, 17, 31, 0.94));
+}
+
+.article-card--text.dense {
+  padding: 16px;
+}
+
+.article-card--text.quiet {
+  min-height: 174px;
+  padding: 18px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0)),
+    radial-gradient(circle at 92% 18%, rgba(131, 193, 199, 0.14), transparent 20%),
+    linear-gradient(180deg, rgba(13, 21, 36, 0.94), rgba(10, 17, 31, 0.92));
+  box-shadow: none;
 }
 
 .article-card__cover {
@@ -120,10 +175,6 @@ const visibleHighlights = computed(() =>
 
 .article-card.dense .article-card__cover {
   min-height: 152px;
-}
-
-.article-card.quiet .article-card__cover {
-  min-height: 136px;
 }
 
 .article-card__content,
@@ -140,6 +191,16 @@ const visibleHighlights = computed(() =>
   min-width: 0;
 }
 
+.article-card--text .article-card__content {
+  position: relative;
+  z-index: 1;
+  max-width: 58ch;
+}
+
+.article-card--text.quiet .article-card__content {
+  max-width: 46ch;
+}
+
 .article-card__head {
   display: grid;
   gap: 6px;
@@ -149,15 +210,23 @@ const visibleHighlights = computed(() =>
   margin: 0;
   color: #f5fbff;
   font-size: 28px;
-  line-height: 1.18;
+  line-height: 1.16;
 }
 
 .article-card.dense .article-card__head h3 {
   font-size: 22px;
 }
 
-.article-card.quiet .article-card__head h3 {
-  font-size: 20px;
+.article-card--text .article-card__head h3 {
+  font-size: 30px;
+}
+
+.article-card--text.dense .article-card__head h3 {
+  font-size: 22px;
+}
+
+.article-card--text.quiet .article-card__head h3 {
+  font-size: 19px;
 }
 
 .article-card__head p,
@@ -182,12 +251,22 @@ const visibleHighlights = computed(() =>
   -webkit-line-clamp: 3;
 }
 
-.article-card.dense .article-card__summary {
+.article-card--text .article-card__summary {
+  -webkit-line-clamp: 4;
+}
+
+.article-card.dense .article-card__summary,
+.article-card--text.dense .article-card__summary,
+.article-card--text.quiet .article-card__summary {
   -webkit-line-clamp: 2;
 }
 
-.article-card.quiet .article-card__summary {
-  -webkit-line-clamp: 2;
+.article-card__note {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--content-border-1);
+  color: #9eb8d9;
+  line-height: 1.65;
 }
 
 .article-card__details {
@@ -223,6 +302,11 @@ const visibleHighlights = computed(() =>
   margin-top: auto;
   justify-content: space-between;
   align-items: center;
+}
+
+.article-card--text .article-card__footer {
+  padding-top: 10px;
+  border-top: 1px solid var(--content-border-1);
 }
 
 .article-card__footer--solo {

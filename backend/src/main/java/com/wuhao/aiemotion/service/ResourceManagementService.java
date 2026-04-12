@@ -2,6 +2,7 @@ package com.wuhao.aiemotion.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wuhao.aiemotion.domain.AnalysisSegment;
 import com.wuhao.aiemotion.domain.AnalysisTask;
 import com.wuhao.aiemotion.domain.AudioFile;
 import com.wuhao.aiemotion.domain.ReportResource;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -48,6 +50,7 @@ public class ResourceManagementService {
     private final TaskNoFormatter taskNoFormatter;
     private final ReportNoFormatter reportNoFormatter;
     private final TrendInsightGenerationService trendInsightGenerationService;
+    private final PsychologicalRiskScoringService riskScoringService;
 
     public ResourceManagementService(AnalysisTaskRepository analysisTaskRepository,
                                      AnalysisResultRepository analysisResultRepository,
@@ -59,7 +62,8 @@ public class ResourceManagementService {
                                      WarningEventTriggerService warningEventTriggerService,
                                      TaskNoFormatter taskNoFormatter,
                                      ReportNoFormatter reportNoFormatter,
-                                     TrendInsightGenerationService trendInsightGenerationService) {
+                                     TrendInsightGenerationService trendInsightGenerationService,
+                                     PsychologicalRiskScoringService riskScoringService) {
         this.analysisTaskRepository = analysisTaskRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.analysisSegmentRepository = analysisSegmentRepository;
@@ -71,6 +75,7 @@ public class ResourceManagementService {
         this.taskNoFormatter = taskNoFormatter;
         this.reportNoFormatter = reportNoFormatter;
         this.trendInsightGenerationService = trendInsightGenerationService;
+        this.riskScoringService = riskScoringService;
     }
 
     public TaskListResponse tasks(int page,
@@ -259,9 +264,9 @@ public class ResourceManagementService {
             if (riskNode.isTextual()) {
                 riskLevel = riskNode.asText();
             }
-            JsonNode overallNode = node.at("/ser/overall/emotionCode");
-            if (overallNode.isTextual()) {
-                overall = overallNode.asText();
+            DisplayEmotion displayEmotion = resolveDisplayEmotion(node, defaultEmotion, confidence);
+            if (hasText(displayEmotion.emotionCode())) {
+                overall = displayEmotion.emotionCode();
             }
         } catch (Exception ignored) {
         }
@@ -279,36 +284,14 @@ public class ResourceManagementService {
         List<ReportListResponse.SegmentDTO> segments = List.of();
         try {
             JsonNode root = objectMapper.readTree(report.reportJson());
-            JsonNode serOverall = root.at("/ser/overall");
-            JsonNode serFusion = root.at("/ser/fusion");
-            Double fusionConfidence = null;
-            if (serOverall.hasNonNull("emotionCode")) {
-                overall = serOverall.get("emotionCode").asText();
+            DisplayEmotion displayEmotion = resolveDisplayEmotion(root, overall, confidence);
+            if (hasText(displayEmotion.emotionCode())) {
+                overall = displayEmotion.emotionCode();
             }
-            if (serOverall.has("confidence") && serOverall.get("confidence").isNumber()) {
-                confidence = serOverall.get("confidence").asDouble();
+            if (displayEmotion.confidence() != null) {
+                confidence = displayEmotion.confidence();
             }
-            if (serFusion.isObject()) {
-                if (serFusion.hasNonNull("label")) {
-                    String fusionLabel = serFusion.get("label").asText();
-                    if (!fusionLabel.isBlank()) {
-                        overall = fusionLabel;
-                    }
-                }
-                boolean fusionEnabled = serFusion.path("enabled").asBoolean(false);
-                boolean fusionReady = serFusion.path("ready").asBoolean(false);
-                JsonNode fusionConfidenceNode = serFusion.get("confidence");
-                if (fusionEnabled && fusionReady && fusionConfidenceNode != null && fusionConfidenceNode.isNumber()) {
-                    fusionConfidence = fusionConfidenceNode.asDouble();
-                }
-            }
-            if (fusionConfidence != null) {
-                confidence = fusionConfidence;
-            }
-            JsonNode riskNode = root.at("/riskAssessment");
-            if (riskNode.isObject()) {
-                risk = new ReportListResponse.RiskDTO(riskNode.path("risk_score").asDouble(0D), riskNode.path("risk_level").asText(report.riskLevel()));
-            }
+            risk = recomputeRisk(root, report.taskId(), risk, report.riskLevel());
             JsonNode arr = root.at("/ser/segments");
             if (arr.isArray()) {
                 segments = new java.util.ArrayList<>();
@@ -336,6 +319,126 @@ public class ResourceManagementService {
                 format(report.createdAt()),
                 audio
         );
+    }
+
+    private ReportListResponse.RiskDTO recomputeRisk(JsonNode root,
+                                                     long taskId,
+                                                     ReportListResponse.RiskDTO fallback,
+                                                     String fallbackRiskLevel) {
+        try {
+            List<AnalysisSegment> segments = analysisSegmentRepository.findByTaskIdOrderByStartMs(taskId);
+            double textNeg = firstNumber(
+                    numericValue(root.at("/textNegFusion/fusedTextNeg")),
+                    numericValue(root.at("/textSentiment/negativeScore")),
+                    numericValue(root.at("/textNeg/textNeg")),
+                    numericValue(root.at("/riskAssessment/text_neg")),
+                    0.0D
+            );
+            Double pSad = numericValue(root.at("/ser/audioSummary/audio_prob_sad"));
+            Double pAngry = numericValue(root.at("/ser/audioSummary/audio_prob_ang"));
+            Double pHappy = numericValue(root.at("/ser/audioSummary/audio_prob_hap"));
+            var risk = riskScoringService.evaluate(segments, pSad, pAngry, pHappy, textNeg);
+            return new ReportListResponse.RiskDTO(risk.risk_score(), risk.risk_level());
+        } catch (Exception ex) {
+            log.debug("failed to recompute PSI for report taskId={}, fallback to persisted risk", taskId, ex);
+            JsonNode persistedRisk = root.at("/riskAssessment");
+            if (persistedRisk.isObject()) {
+                return new ReportListResponse.RiskDTO(
+                        persistedRisk.path("risk_score").asDouble(fallback.score()),
+                        persistedRisk.path("risk_level").asText(fallbackRiskLevel)
+                );
+            }
+            return fallback;
+        }
+    }
+
+    private DisplayEmotion resolveDisplayEmotion(JsonNode root, String fallbackOverall, Double fallbackConfidence) {
+        String voiceLabel = textValue(root.at("/ser/audioSummary/dominantEmotion"));
+        if (!hasText(voiceLabel)) {
+            voiceLabel = textValue(root.at("/ser/overall/emotionCode"));
+        }
+        Double voiceConfidence = numericValue(root.at("/ser/audioSummary/audio_confidence"));
+        if (voiceConfidence == null) {
+            voiceConfidence = numericValue(root.at("/ser/overall/confidence"));
+        }
+
+        String fusionLabel = textValue(root.at("/ser/fusion/label"));
+        boolean fusionReady = root.at("/ser/fusion/ready").asBoolean(false);
+        Double fusionConfidence = numericValue(root.at("/ser/fusion/confidence"));
+
+        String textLabel = textValue(root.at("/textSentiment/emotion4Label"));
+        Double textNegative = numericValue(root.at("/textSentiment/negativeScore"));
+        int lexiconHitCount = root.at("/textNeg/hitCount").asInt(0);
+        double voiceHappy = root.at("/ser/audioSummary/audio_prob_hap").asDouble(0D);
+        double voiceSad = root.at("/ser/audioSummary/audio_prob_sad").asDouble(0D);
+
+        if (shouldPreferVoiceEmotion(
+                voiceLabel,
+                voiceConfidence,
+                voiceHappy,
+                voiceSad,
+                fusionLabel,
+                fusionConfidence,
+                textLabel,
+                textNegative,
+                lexiconHitCount
+        ) && hasText(voiceLabel)) {
+            return new DisplayEmotion(voiceLabel, voiceConfidence);
+        }
+        if (fusionReady && hasText(fusionLabel)) {
+            return new DisplayEmotion(fusionLabel, fusionConfidence);
+        }
+        if (hasText(voiceLabel)) {
+            return new DisplayEmotion(voiceLabel, voiceConfidence);
+        }
+        return new DisplayEmotion(fallbackOverall, fallbackConfidence);
+    }
+
+    private boolean shouldPreferVoiceEmotion(String voiceLabel,
+                                             Double voiceConfidence,
+                                             double voiceHappy,
+                                             double voiceSad,
+                                             String fusionLabel,
+                                             Double fusionConfidence,
+                                             String textLabel,
+                                             Double textNegative,
+                                             int lexiconHitCount) {
+        return isEmotionCode(voiceLabel, "HAPPY")
+                && isEmotionCode(fusionLabel, "SAD")
+                && voiceConfidence != null
+                && voiceConfidence >= 0.40D
+                && voiceHappy >= 0.42D
+                && voiceHappy > voiceSad
+                && (isEmotionCode(textLabel, "SAD") || (textNegative != null && textNegative >= 0.55D))
+                && lexiconHitCount == 0
+                && (fusionConfidence == null || fusionConfidence <= 0.55D);
+    }
+
+    private boolean isEmotionCode(String value, String target) {
+        return hasText(value) && target.equalsIgnoreCase(value.trim());
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String textValue(JsonNode node) {
+        return node != null && node.isTextual() ? node.asText() : null;
+    }
+
+    private Double numericValue(JsonNode node) {
+        return node != null && node.isNumber() ? node.asDouble() : null;
+    }
+
+    private double firstNumber(Double first, Double second, Double third, Double fourth, double fallback) {
+        if (first != null) return first;
+        if (second != null) return second;
+        if (third != null) return third;
+        if (fourth != null) return fourth;
+        return fallback;
+    }
+
+    private record DisplayEmotion(String emotionCode, Double confidence) {
     }
 
     private Map<String, Object> toTrendItem(Map<String, Object> row) {

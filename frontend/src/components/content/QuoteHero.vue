@@ -39,7 +39,7 @@ defineProps<{
         <blockquote>
           {{ quote?.content || '允许自己慢一点，不是退步，而是在给情绪留出被看见的时间。' }}
         </blockquote>
-        <p class="quote-hero__author">{{ quote?.author || 'AI Emotion 编辑部' }}</p>
+        <p v-if="quote?.author" class="quote-hero__author">{{ quote.author }}</p>
       </div>
     </div>
   </section>
@@ -105,7 +105,7 @@ defineProps<{
   display: grid;
   grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.82fr);
   gap: var(--content-gap-4);
-  align-items: start;
+  align-items: stretch;
 }
 
 .quote-hero__theme {
@@ -132,7 +132,12 @@ defineProps<{
 }
 
 .quote-hero__quote {
-  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 100%;
+  padding: 22px 24px;
   border-radius: var(--content-radius-2);
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-inset);
@@ -140,12 +145,13 @@ defineProps<{
 }
 
 .quote-hero__quote blockquote {
+  margin: 0;
   font-size: clamp(22px, 2.7vw, 32px);
   line-height: 1.34;
 }
 
 .quote-hero__author {
-  margin: 14px 0 0;
+  margin: 4px 0 0;
   color: #b8cae7;
 }
 

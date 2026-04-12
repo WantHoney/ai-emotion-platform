@@ -327,7 +327,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!task && !streamSnapshot"
         title="暂无任务数据"
-        description="任务可能还未创建完成，请稍后重试。"
+        description="这条任务现在还没准备好，请稍后刷新。"
         action-text="重新加载"
         @action="start"
       />
@@ -338,8 +338,8 @@ onMounted(() => {
           type="warning"
           show-icon
           :closable="false"
-          :title="`实时通道未连接，当前使用轮询兜底（${pollStatusText}）`"
-          :description="streamError || '连接恢复后将自动切换到实时推送。'"
+          :title="`实时连接暂时不可用，先用刷新方式继续跟踪进度（${pollStatusText}）`"
+          :description="streamError || '连接恢复后会自动切回实时更新。'"
         />
 
         <el-steps simple class="step-row">

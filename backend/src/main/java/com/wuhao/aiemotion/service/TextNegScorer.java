@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,9 +38,14 @@ public class TextNegScorer {
     private static final Map<String, Pattern> ENGLISH_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private static final Map<String, Double> NEGATIVE_TERM_WEIGHTS = buildNegativeTermWeights();
+    private static final List<String> POSITIVE_TERMS = buildPositiveTerms();
+    private static final List<String> ANGER_TERMS = buildAngerTerms();
+    private static final List<String> SAD_TERMS = buildSadTerms();
+    private static final List<String> NEUTRAL_CUE_TERMS = buildNeutralCueTerms();
     private static final List<String> HIGH_RISK_TERMS = buildHighRiskTerms();
     private static final List<String> NEGATION_TERMS = buildNegationTerms();
     private static final Map<String, Double> DEGREE_TERMS = buildDegreeTerms();
+    private static final Map<String, String> DIAGNOSTIC_TERM_GROUPS = buildDiagnosticTermGroups();
 
     private final double normalizer;
     private final double highRiskFloor;
@@ -56,13 +62,12 @@ public class TextNegScorer {
 
     public TextNegScoreResult score(String transcript) {
         if (transcript == null || transcript.isBlank()) {
-            return new TextNegScoreResult(0.0D, 0, List.of(), false);
+            return new TextNegScoreResult(0.0D, 0, List.of(), false, "NEU", 0.0D, defaultEmotion4Scores(), 0);
         }
 
         String normalized = normalize(transcript);
         double weightedHits = 0.0D;
         int hitCount = 0;
-        List<String> hits = new ArrayList<>();
 
         for (Map.Entry<String, Double> entry : NEGATIVE_TERM_WEIGHTS.entrySet()) {
             String term = entry.getKey();
@@ -80,16 +85,25 @@ public class TextNegScorer {
                 termScore += local;
             }
             weightedHits += termScore;
-            hits.add(term + "x" + positions.size());
         }
 
+        DiagnosticSummary diagnostic = buildDiagnosticSummary(normalized);
         boolean highRiskHit = hasAnyTerm(normalized, HIGH_RISK_TERMS);
         double textNeg = clamp(weightedHits / normalizer, 0.0D, 1.0D);
         if (highRiskHit) {
             textNeg = Math.max(textNeg, highRiskFloor);
         }
 
-        return new TextNegScoreResult(round4(textNeg), hitCount, List.copyOf(hits), highRiskHit);
+        return new TextNegScoreResult(
+                round4(textNeg),
+                hitCount,
+                diagnostic.hits(),
+                highRiskHit,
+                diagnostic.dominantEmotion(),
+                round4(diagnostic.diagnosticScore()),
+                diagnostic.emotion4Scores(),
+                diagnostic.hitCount()
+        );
     }
 
     private static Map<String, Double> buildNegativeTermWeights() {
@@ -133,6 +147,65 @@ public class TextNegScorer {
         log.info("TextNegScorer negative lexicon loaded: zhTerms={}, enTerms={}, activeTerms={}",
                 zh.size(), en.size(), loaded.size());
         return Map.copyOf(loaded);
+    }
+
+    private static List<String> buildPositiveTerms() {
+        List<String> defaults = List.of(
+                "开心", "高兴", "快乐", "愉快", "喜悦", "幸福", "真好", "很好", "挺好", "不错",
+                "舒服", "放松", "满足", "喜欢", "心情很好", "太阳非常好", "散步", "休息得很好",
+                "休息的很好", "开心极了", "很开心", "超开心", "蛮开心", "轻松", "顺利"
+        );
+
+        List<String> loaded = readTermLexicon(LEXICON_ROOT + "text_positive_zh.txt");
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer positive lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+        log.info("TextNegScorer positive lexicon loaded: {}", loaded.size());
+        return List.copyOf(loaded);
+    }
+
+    private static List<String> buildAngerTerms() {
+        List<String> defaults = List.of(
+                "愤怒", "生气", "气愤", "恼火", "火大", "暴躁", "发火", "气死", "烦死", "怒"
+        );
+
+        List<String> loaded = readTermLexicon(LEXICON_ROOT + "text_anger_zh.txt");
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer anger lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+        log.info("TextNegScorer anger lexicon loaded: {}", loaded.size());
+        return List.copyOf(loaded);
+    }
+
+    private static List<String> buildSadTerms() {
+        List<String> defaults = List.of(
+                "难过", "伤心", "悲伤", "想哭", "沮丧", "低落", "失落", "难受", "委屈", "郁闷",
+                "不开心", "心酸", "糟糕"
+        );
+
+        List<String> loaded = readTermLexicon(LEXICON_ROOT + "text_sad_zh.txt");
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer sad lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+        log.info("TextNegScorer sad lexicon loaded: {}", loaded.size());
+        return List.copyOf(loaded);
+    }
+
+    private static List<String> buildNeutralCueTerms() {
+        List<String> defaults = List.of(
+                "是什么情绪", "什么情绪", "能听见", "测试", "录音", "请问", "嗯", "啊"
+        );
+
+        List<String> loaded = readTermLexicon(LEXICON_ROOT + "text_neutral_cues_zh.txt");
+        if (loaded.isEmpty()) {
+            log.warn("TextNegScorer neutral cue lexicon load failed, fallback to defaults.");
+            loaded = defaults;
+        }
+        log.info("TextNegScorer neutral cue lexicon loaded: {}", loaded.size());
+        return List.copyOf(loaded);
     }
 
     private static List<String> buildHighRiskTerms() {
@@ -271,6 +344,15 @@ public class TextNegScorer {
         }
     }
 
+    private static Map<String, String> buildDiagnosticTermGroups() {
+        LinkedHashMap<String, String> groups = new LinkedHashMap<>();
+        NEGATIVE_TERM_WEIGHTS.keySet().forEach(term -> groups.put(term, "NEG"));
+        SAD_TERMS.forEach(term -> groups.put(term, "SAD"));
+        ANGER_TERMS.forEach(term -> groups.put(term, "ANG"));
+        POSITIVE_TERMS.forEach(term -> groups.put(term, "HAP"));
+        return Map.copyOf(groups);
+    }
+
     private String normalize(String text) {
         return text
                 .toLowerCase(Locale.ROOT)
@@ -323,6 +405,154 @@ public class TextNegScorer {
 
     private boolean isEnglishTerm(String term) {
         return term != null && !term.isBlank() && term.matches("[a-z0-9 ]+");
+    }
+
+    private DiagnosticSummary buildDiagnosticSummary(String text) {
+        List<DiagnosticHit> hits = collectNonOverlappingDiagnosticHits(text);
+        List<DiagnosticHit> neutralHits = collectNeutralCueHits(text);
+
+        int positiveCount = countGroupHits(hits, "HAP");
+        int angerCount = countGroupHits(hits, "ANG");
+        int sadCount = countGroupHits(hits, "SAD");
+        int negativeCount = countGroupHits(hits, "NEG");
+        int neutralCueCount = neutralHits.size();
+
+        double positiveRaw = positiveCount;
+        double angerRaw = angerCount;
+        double sadRaw = sadCount;
+        double negativeRaw = negativeCount;
+
+        Map<String, Double> emotion4Scores = normalizeEmotion4Scores(Map.of(
+                "ANG", angerRaw + negativeRaw * 0.35D,
+                "HAP", positiveRaw,
+                "NEU", (positiveRaw + angerRaw + sadRaw + negativeRaw) <= 0.0D
+                        ? 1.2D
+                        : (neutralCueCount > 0 ? 0.45D : 0.2D),
+                "SAD", sadRaw + negativeRaw * 0.55D
+        ));
+
+        String dominantEmotion = maxEmotionLabel(emotion4Scores);
+        double evidence = positiveRaw + angerRaw + sadRaw + negativeRaw + neutralCueCount * 0.5D;
+        double diagnosticScore = clamp(evidence / 3.0D, 0.0D, 1.0D);
+
+        List<String> aggregatedHits = aggregateDiagnosticHits(hits, neutralHits);
+        return new DiagnosticSummary(
+                dominantEmotion,
+                diagnosticScore,
+                emotion4Scores,
+                aggregatedHits,
+                hits.size() + neutralHits.size()
+        );
+    }
+
+    private List<DiagnosticHit> collectNonOverlappingDiagnosticHits(String text) {
+        List<Map.Entry<String, String>> candidates = DIAGNOSTIC_TERM_GROUPS.entrySet().stream()
+                .sorted(Comparator
+                        .<Map.Entry<String, String>>comparingInt(entry -> entry.getKey().length())
+                        .reversed()
+                        .thenComparing(Map.Entry::getKey))
+                .toList();
+
+        boolean[] occupied = new boolean[Math.max(1, text.length())];
+        List<DiagnosticHit> hits = new ArrayList<>();
+        for (Map.Entry<String, String> entry : candidates) {
+            String term = entry.getKey();
+            for (int start : findTermPositions(text, term)) {
+                int end = Math.min(text.length(), start + term.length());
+                if (isOccupied(occupied, start, end)) {
+                    continue;
+                }
+                markOccupied(occupied, start, end);
+                hits.add(new DiagnosticHit(term, entry.getValue(), start, end));
+            }
+        }
+        hits.sort(Comparator.comparingInt(DiagnosticHit::start));
+        return hits;
+    }
+
+    private List<DiagnosticHit> collectNeutralCueHits(String text) {
+        List<DiagnosticHit> hits = new ArrayList<>();
+        for (String term : NEUTRAL_CUE_TERMS) {
+            for (int start : findTermPositions(text, term)) {
+                hits.add(new DiagnosticHit(term, "NEU", start, Math.min(text.length(), start + term.length())));
+            }
+        }
+        hits.sort(Comparator.comparingInt(DiagnosticHit::start));
+        return hits;
+    }
+
+    private boolean isOccupied(boolean[] occupied, int start, int end) {
+        for (int index = start; index < end && index < occupied.length; index++) {
+            if (occupied[index]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void markOccupied(boolean[] occupied, int start, int end) {
+        for (int index = start; index < end && index < occupied.length; index++) {
+            occupied[index] = true;
+        }
+    }
+
+    private int countGroupHits(List<DiagnosticHit> hits, String group) {
+        int count = 0;
+        for (DiagnosticHit hit : hits) {
+            if (group.equals(hit.group())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private List<String> aggregateDiagnosticHits(List<DiagnosticHit> hits, List<DiagnosticHit> neutralHits) {
+        LinkedHashMap<String, Integer> counters = new LinkedHashMap<>();
+        for (DiagnosticHit hit : hits) {
+            counters.merge(hit.group() + ":" + hit.term(), 1, Integer::sum);
+        }
+        for (DiagnosticHit hit : neutralHits) {
+            counters.merge(hit.group() + ":" + hit.term(), 1, Integer::sum);
+        }
+
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counters.entrySet()) {
+            result.add(entry.getKey() + "x" + entry.getValue());
+        }
+        return List.copyOf(result);
+    }
+
+    private Map<String, Double> normalizeEmotion4Scores(Map<String, Double> rawScores) {
+        LinkedHashMap<String, Double> normalized = new LinkedHashMap<>();
+        double total = 0.0D;
+        for (String label : List.of("ANG", "HAP", "NEU", "SAD")) {
+            double value = Math.max(0.0D, rawScores.getOrDefault(label, 0.0D));
+            normalized.put(label, value);
+            total += value;
+        }
+        if (total <= 0.0D) {
+            return defaultEmotion4Scores();
+        }
+        for (String label : normalized.keySet()) {
+            normalized.put(label, round4(normalized.get(label) / total));
+        }
+        return Map.copyOf(normalized);
+    }
+
+    private Map<String, Double> defaultEmotion4Scores() {
+        return Map.of(
+                "ANG", 0.0D,
+                "HAP", 0.0D,
+                "NEU", 1.0D,
+                "SAD", 0.0D
+        );
+    }
+
+    private String maxEmotionLabel(Map<String, Double> scores) {
+        return scores.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("NEU");
     }
 
     private boolean isNegated(String text, int start) {
@@ -405,6 +635,27 @@ public class TextNegScorer {
         return Math.round(value * 10000.0D) / 10000.0D;
     }
 
-    public record TextNegScoreResult(double textNeg, int hitCount, List<String> hits, boolean highRiskHit) {
+    private record DiagnosticHit(String term, String group, int start, int end) {
+    }
+
+    private record DiagnosticSummary(
+            String dominantEmotion,
+            double diagnosticScore,
+            Map<String, Double> emotion4Scores,
+            List<String> hits,
+            int hitCount
+    ) {
+    }
+
+    public record TextNegScoreResult(
+            double textNeg,
+            int hitCount,
+            List<String> hits,
+            boolean highRiskHit,
+            String dominantEmotion,
+            double diagnosticScore,
+            Map<String, Double> emotion4Scores,
+            int diagnosticHitCount
+    ) {
     }
 }

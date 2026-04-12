@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { DocumentCopy } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -67,10 +67,16 @@ const nowMs = ref(Date.now())
 let nowTimer: number | null = null
 
 const WEIGHT_SAD = 0.45
-const WEIGHT_ANGRY = 0.25
-const WEIGHT_VAR_CONF = 0.1
-const WEIGHT_VOICE_IN_PSI = 0.6
-const WEIGHT_TEXT_IN_PSI = 0.4
+const WEIGHT_ANGRY = 0.22
+const WEIGHT_HAPPY_OFFSET = 0.28
+const WEIGHT_NEUTRAL_OFFSET = 0.08
+const WEIGHT_VAR_CONF = 0.08
+const WEIGHT_VOICE_IN_PSI = 0.65
+const WEIGHT_TEXT_IN_PSI = 0.35
+const TEXT_NEG_CONFLICT_DISCOUNT = 0.75
+const TEXT_NEG_CONFLICT_MIN_HAPPY = 0.35
+const TEXT_NEG_CONFLICT_MIN_TEXT_NEG = 0.5
+const TEXT_NEG_CONFLICT_MAX_SAD = 0.35
 
 const STREAM_STATE_LABELS: Record<string, string> = {
   idle: '实时通道未连接',
@@ -163,6 +169,20 @@ const PHASE_PRESENTATIONS = {
 } satisfies Record<string, ProgressPhasePresentation>
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const inferNeutralProbability = (source: RiskAssessmentPayload) =>
+  clamp(1 - source.p_sad - source.p_angry - source.p_happy, 0, 1)
+
+const adjustPsiTextNeg = (source: RiskAssessmentPayload) => {
+  if (
+    source.p_happy >= TEXT_NEG_CONFLICT_MIN_HAPPY &&
+    source.text_neg >= TEXT_NEG_CONFLICT_MIN_TEXT_NEG &&
+    source.p_sad <= TEXT_NEG_CONFLICT_MAX_SAD
+  ) {
+    return clamp(source.text_neg * TEXT_NEG_CONFLICT_DISCOUNT, 0, 1)
+  }
+  return clamp(source.text_neg, 0, 1)
+}
 
 const toNumber = (value: unknown): number | undefined => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -334,16 +354,24 @@ const riskScorePercent = computed(() => {
 const voiceRiskScore = computed(() => {
   const source = riskAssessment.value
   if (!source) return 0
+  const pNeutral = inferNeutralProbability(source)
   return (
     100 *
-    (WEIGHT_SAD * source.p_sad + WEIGHT_ANGRY * source.p_angry + WEIGHT_VAR_CONF * source.var_conf)
+    Math.max(
+      0,
+      WEIGHT_SAD * source.p_sad +
+        WEIGHT_ANGRY * source.p_angry +
+        WEIGHT_VAR_CONF * source.var_conf -
+        WEIGHT_HAPPY_OFFSET * source.p_happy -
+        WEIGHT_NEUTRAL_OFFSET * pNeutral,
+    )
   )
 })
 
 const textRiskScore = computed(() => {
   const source = riskAssessment.value
   if (!source) return 0
-  return 100 * source.text_neg
+  return 100 * adjustPsiTextNeg(source)
 })
 
 const riskLevel = computed(() =>
@@ -575,21 +603,39 @@ const serFusionInfo = computed(() => {
 const psiContributionRows = computed(() => {
   const source = riskAssessment.value
   if (!source) return []
+  const pNeutral = inferNeutralProbability(source)
+  const adjustedTextNeg = adjustPsiTextNeg(source)
   const sadPart = 100 * WEIGHT_VOICE_IN_PSI * WEIGHT_SAD * source.p_sad
   const angryPart = 100 * WEIGHT_VOICE_IN_PSI * WEIGHT_ANGRY * source.p_angry
+  const happyPart = -100 * WEIGHT_VOICE_IN_PSI * WEIGHT_HAPPY_OFFSET * source.p_happy
+  const neutralPart = -100 * WEIGHT_VOICE_IN_PSI * WEIGHT_NEUTRAL_OFFSET * pNeutral
   const varPart = 100 * WEIGHT_VOICE_IN_PSI * WEIGHT_VAR_CONF * source.var_conf
-  const textPart = 100 * WEIGHT_TEXT_IN_PSI * source.text_neg
+  const textPart = 100 * WEIGHT_TEXT_IN_PSI * adjustedTextNeg
   const rows = [
-    { key: 'sad', label: '悲伤', value: sadPart, formula: '语音权重 × 悲伤概率' },
-    { key: 'angry', label: '愤怒', value: angryPart, formula: '语音权重 × 愤怒概率' },
-    { key: 'var', label: '波动', value: varPart, formula: '语音权重 × 波动系数' },
-    { key: 'text', label: '文本', value: textPart, formula: '文本权重 × 文本负向值' },
+    { key: 'sad', label: '悲伤拉升', value: sadPart, formula: '语音权重 × 悲伤概率' },
+    { key: 'angry', label: '愤怒拉升', value: angryPart, formula: '语音权重 × 愤怒概率' },
+    { key: 'happy', label: '积极缓冲', value: happyPart, formula: '语音权重 × 高兴缓冲' },
+    { key: 'neutral', label: '平静缓冲', value: neutralPart, formula: '语音权重 × 平静缓冲' },
+    { key: 'var', label: '波动拉升', value: varPart, formula: '语音权重 × 波动系数' },
+    {
+      key: 'text',
+      label: '文本负向拉升',
+      value: textPart,
+      formula:
+        adjustedTextNeg === source.text_neg
+          ? '文本权重 × 文本负向值'
+          : '文本权重 × 轻量折减后的文本负向值',
+    },
   ]
-  const total = Math.max(riskScorePercent.value, 0.0001)
-  return rows.map((row) => ({ ...row, percent: clamp((row.value / total) * 100, 0, 100) }))
+  const total = Math.max(
+    rows.reduce((sum, row) => sum + Math.abs(row.value), 0),
+    0.0001,
+  )
+  return rows.map((row) => ({ ...row, percent: clamp((Math.abs(row.value) / total) * 100, 0, 100) }))
 })
 
 const contributionStatus = (key: string): 'success' | 'warning' | 'exception' => {
+  if (key === 'happy' || key === 'neutral') return 'success'
   if (key === 'text') return 'success'
   if (key === 'sad' || key === 'angry') return 'warning'
   return 'exception'
@@ -646,7 +692,7 @@ onUnmounted(() => {
       <EmptyState
         v-else-if="!task && !streamSnapshot"
         title="任务不可用"
-        description="该任务暂时不可用，可能仍在初始化中。"
+          description="这条任务现在还没准备好，请稍后再来看看。"
         action-text="重新加载"
         @action="start"
       />
@@ -910,7 +956,7 @@ onUnmounted(() => {
         </el-descriptions>
 
         <el-alert
-          title="分析在服务端持续执行，离开当前页面只会停止前端实时同步与轮询。"
+          title="这次分析还在继续进行，你离开页面也不会影响服务端处理。"
           type="info"
           :closable="false"
           class="polling-hint"

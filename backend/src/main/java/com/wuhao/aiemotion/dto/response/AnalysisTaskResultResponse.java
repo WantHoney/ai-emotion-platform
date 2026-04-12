@@ -15,6 +15,7 @@ public record AnalysisTaskResultResponse(
             String advice_text,
             double p_sad,
             double p_angry,
+            double p_happy,
             double var_conf,
             double text_neg
     ) {

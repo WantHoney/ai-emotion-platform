@@ -13,11 +13,12 @@ const adminAuthStore = useAdminAuthStore()
 const sidebarOpen = ref(true)
 
 const adminNavItems = [
-  { label: '看板', path: '/admin/dashboard' },
+  { label: '管理看板', path: '/admin/dashboard' },
   { label: '轮播图管理', path: '/admin/content/banners' },
   { label: '语录管理', path: '/admin/content/quotes' },
   { label: '文章管理', path: '/admin/content/articles' },
   { label: '书籍管理', path: '/admin/content/books' },
+  { label: '书籍总览', path: '/admin/content/books-overview' },
   { label: '每日排期', path: '/admin/content/schedules' },
   { label: '心理中心管理', path: '/admin/psy-centers' },
   { label: '预警处置台', path: '/admin/warnings' },
@@ -36,7 +37,7 @@ const activeAdminPath = computed(() => {
 
 const pageTitle = computed(() => String(route.meta.title ?? '管理控制台'))
 const pageDescription = computed(() =>
-  String(route.meta.description ?? '模型、规则、内容与预警管理工作台'),
+  String(route.meta.description ?? '统一查看模型、规则、内容与预警处置状态。'),
 )
 const breadcrumbs = computed(() => {
   const items = route.meta.breadcrumb
@@ -59,7 +60,10 @@ const handleAdminSelect = async (path: string) => {
   <div class="admin-layout">
     <el-container class="admin-shell">
       <el-aside :width="sidebarOpen ? '252px' : '74px'" class="admin-sider">
-        <div class="admin-brand">{{ sidebarOpen ? '情绪预警管理台' : '预警' }}</div>
+        <div class="admin-brand">
+          <div class="admin-brand__title">{{ sidebarOpen ? '情绪预警管理台' : '管理台' }}</div>
+          <div v-if="sidebarOpen" class="admin-brand__subtitle">治理、运营与答辩演示后台</div>
+        </div>
         <el-menu :default-active="activeAdminPath" :collapse="!sidebarOpen" @select="handleAdminSelect">
           <el-menu-item-group title="管理中心">
             <el-menu-item v-for="item in adminNavItems" :key="item.path" :index="item.path">
@@ -89,7 +93,7 @@ const handleAdminSelect = async (path: string) => {
             <el-dropdown>
               <el-button text>
                 <el-icon><UserFilled /></el-icon>
-                <span style="margin-left: 6px">
+                <span class="admin-user">
                   {{ adminAuthStore.currentUser?.username }}（管理员）
                 </span>
               </el-button>
@@ -127,15 +131,25 @@ const handleAdminSelect = async (path: string) => {
 }
 
 .admin-brand {
-  height: 60px;
+  height: 72px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  border-bottom: 1px solid rgba(71, 92, 127, 0.44);
+}
+
+.admin-brand__title {
   color: #d6e3fa;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.08em;
   font-size: 14px;
   text-transform: uppercase;
-  border-bottom: 1px solid rgba(71, 92, 127, 0.44);
+}
+
+.admin-brand__subtitle {
+  color: rgba(214, 227, 250, 0.66);
+  font-size: 12px;
 }
 
 .admin-header {
@@ -162,6 +176,10 @@ const handleAdminSelect = async (path: string) => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.admin-user {
+  margin-left: 6px;
 }
 
 .admin-content {

@@ -211,12 +211,12 @@ onUnmounted(() => {
 
 .task-no-cell span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--user-text-secondary);
 }
 
 .auto-refresh-tip {
   margin: 0 0 12px;
-  color: #64748b;
+  color: var(--user-text-secondary);
   font-size: 13px;
 }
 

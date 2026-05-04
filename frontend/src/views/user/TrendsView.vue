@@ -558,7 +558,7 @@ onMounted(() => {
 
 .trend-insight-kicker {
   margin: 0;
-  color: rgba(141, 192, 234, 0.82);
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -566,36 +566,34 @@ onMounted(() => {
 
 .trend-insight-headline {
   margin: 0;
-  color: #f7fbff;
+  color: var(--content-text-primary);
   font-size: 24px;
   line-height: 1.2;
 }
 
 .trend-insight-summary {
   margin: 0;
-  color: rgba(223, 234, 248, 0.92);
+  color: var(--content-text-secondary);
   line-height: 1.8;
 }
 
 .trend-insight-note {
   margin: 0;
-  color: rgba(160, 182, 214, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
   line-height: 1.7;
 }
 
 .trend-insight-side {
-  border: 1px solid rgba(147, 170, 211, 0.18);
+  border: 1px solid var(--content-border-1);
   border-radius: 14px;
   padding: 14px;
-  background:
-    linear-gradient(180deg, rgba(17, 29, 50, 0.72), rgba(10, 17, 31, 0.76)),
-    radial-gradient(circle at top right, rgba(93, 140, 205, 0.12), transparent 42%);
+  background: var(--content-card-bg-soft);
 }
 
 .trend-insight-side-title {
   margin: 0 0 10px;
-  color: #eaf2ff;
+  color: var(--content-text-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -603,7 +601,7 @@ onMounted(() => {
 .trend-insight-list {
   margin: 0;
   padding-left: 18px;
-  color: rgba(220, 231, 247, 0.9);
+  color: var(--content-text-secondary);
   line-height: 1.8;
 }
 
@@ -613,13 +611,13 @@ onMounted(() => {
 }
 
 .trend-insight-source {
-  color: rgba(184, 204, 236, 0.8);
+  color: var(--content-text-tertiary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .trend-insight-tech {
-  color: rgba(146, 170, 209, 0.76);
+  color: var(--content-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -635,14 +633,14 @@ onMounted(() => {
   margin-bottom: 10px;
   font-size: 12px;
   line-height: 1.7;
-  color: rgba(188, 199, 220, 0.76);
+  color: var(--content-chart-note);
 }
 
 .legend-row {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  color: rgba(231, 237, 247, 0.86);
+  color: var(--content-text-secondary);
   font-size: 13px;
 }
 
@@ -665,7 +663,7 @@ onMounted(() => {
 
 .legend-line {
   height: 2px;
-  background: #e2b980;
+  background: var(--content-chart-line);
 }
 
 .legend-band-low {
@@ -682,12 +680,12 @@ onMounted(() => {
 
 .chart-wrap {
   width: 100%;
-  border: 1px solid rgba(145, 166, 206, 0.28);
+  border: 1px solid var(--content-chart-border);
   border-radius: 16px;
   padding: 14px;
   background:
-    radial-gradient(circle at top left, rgba(76, 133, 188, 0.12), transparent 42%),
-    rgba(8, 17, 32, 0.92);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--user-accent-cyan) 16%, transparent), transparent 42%),
+    var(--content-chart-bg);
 }
 
 .chart {
@@ -697,7 +695,7 @@ onMounted(() => {
 
 .plot-frame {
   fill: none;
-  stroke: rgba(151, 174, 214, 0.12);
+  stroke: var(--content-border-1);
   stroke-width: 1;
 }
 
@@ -714,7 +712,7 @@ onMounted(() => {
 }
 
 .grid-line {
-  stroke: rgba(164, 183, 219, 0.16);
+  stroke: var(--content-chart-grid);
   stroke-dasharray: 4 5;
 }
 
@@ -732,7 +730,7 @@ onMounted(() => {
 }
 
 .axis {
-  stroke: rgba(148, 170, 208, 0.82);
+  stroke: var(--content-chart-axis);
   stroke-width: 1.15;
 }
 
@@ -746,21 +744,21 @@ onMounted(() => {
 
 .risk-line {
   fill: none;
-  stroke: #e2b980;
+  stroke: var(--content-chart-line);
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .risk-point {
-  fill: #f2d4a8;
-  stroke: rgba(10, 18, 32, 0.96);
+  fill: var(--content-chart-point);
+  stroke: var(--content-chart-point-stroke);
   stroke-width: 1.4;
 }
 
 .axis-title,
 .axis-label {
-  fill: rgba(221, 229, 243, 0.88);
+  fill: var(--content-chart-label);
 }
 
 .axis-title {
@@ -787,7 +785,7 @@ onMounted(() => {
 .chart-note {
   margin-top: 12px;
   font-size: 12px;
-  color: rgba(188, 199, 220, 0.74);
+  color: var(--content-chart-note);
   line-height: 1.7;
 }
 

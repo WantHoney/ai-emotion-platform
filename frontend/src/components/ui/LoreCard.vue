@@ -24,10 +24,8 @@ defineProps<{
 <style scoped>
 .lore-card {
   border-radius: 16px;
-  border: 1px solid rgba(180, 194, 226, 0.24);
-  background:
-    linear-gradient(120deg, rgba(17, 29, 50, 0.82), rgba(11, 18, 32, 0.86)),
-    radial-gradient(circle at 0% 0%, rgba(198, 170, 118, 0.1), transparent 40%);
+  border: 1px solid var(--user-card-border);
+  background: var(--user-card-bg);
   padding: 16px;
   transition: transform 0.26s ease, border-color 0.26s ease, box-shadow 0.26s ease;
 }
@@ -38,26 +36,26 @@ defineProps<{
 
 .interactive:hover {
   transform: translateY(-4px);
-  border-color: rgba(205, 176, 124, 0.76);
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.34);
+  border-color: var(--user-border-accent-strong);
+  box-shadow: var(--user-card-hover-shadow);
 }
 
 .head h3 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--user-text-primary);
   font-size: 17px;
 }
 
 .head p {
   margin: 8px 0 0;
-  color: #b8c7df;
+  color: var(--user-text-secondary);
   line-height: 1.6;
   font-size: 13px;
 }
 
 .body {
   margin-top: 10px;
-  color: #dce6f6;
+  color: var(--user-card-text);
 }
 
 .footer {

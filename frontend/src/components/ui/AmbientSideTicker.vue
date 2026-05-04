@@ -2,12 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+
 const TOP_OFFSET = 74
 const ROW_SPACING_MIN = 132
 const ROW_SPACING_MAX = 246
 const MESSAGE_TRACK_LENGTH_MIN = 7
 const MESSAGE_TRACK_LENGTH_MAX = 11
-const RIGHT_BOUNDARY_TRIM = 10
+const RIGHT_BOUNDARY_TRIM = 8
 const EMOTICON_INSERT_RATE = 0.12
 
 type TickerRow = {
@@ -26,7 +27,8 @@ type TickerRow = {
 
 const route = useRoute()
 
-const rows = ref<TickerRow[]>([])
+const leftRows = ref<TickerRow[]>([])
+const rightRows = ref<TickerRow[]>([])
 const sideBounds = ref({
   left: 280,
   right: 280,
@@ -318,7 +320,24 @@ const PROFILE_MESSAGES = [
   '照顾自己的部分，也算在进步里。',
 ]
 
-const EMOTICON_LINES = ['^_^', ':)', '(*^_^*)', '( ´ ▽ ` )ﾉ', '(｡･ω･｡)', '(*ˉ︶ˉ*)']
+const EMOTICON_LINES = [
+  '^_^',
+  '(*^_^*)',
+  '(^_^)',
+  '(^.^)',
+  '(^-^)',
+  '(^-^*)',
+  '(*^^*)',
+  '(o^^o)',
+  'o(^_^)o',
+  '(^o^)',
+  '(^_^)v',
+  '(^^)b',
+  '(*^.^*)',
+  '(^o^)/*',
+  '(^_~)',
+  '(*^^)v',
+]
 
 const GENERAL_MESSAGES = unique([...GENERAL_CORE_MESSAGES, ...GENERAL_VARIANT_MESSAGES])
 
@@ -355,6 +374,7 @@ const resolveThemeMessages = (path: string) => {
 }
 
 const activeMessagePool = computed(() => unique([...GENERAL_MESSAGES, ...resolveThemeMessages(route.path)]))
+const shouldRenderTicker = computed(() => true)
 
 const buildItems = (rowId: string, messages: string[]) =>
   messages.map((message, index) => ({
@@ -467,14 +487,17 @@ const findFocusElement = () => {
 
 const regenerateRows = (pageHeight: number) => {
   generationCounter += 1
-  const seed = (hashText(route.fullPath) ^ Math.floor(pageHeight) ^ (generationCounter * 2654435761)) >>> 0
-  rows.value = buildRows(pageHeight, seed, activeMessagePool.value)
+  const baseSeed = (hashText(route.fullPath) ^ Math.floor(pageHeight) ^ (generationCounter * 2654435761)) >>> 0
+  leftRows.value = buildRows(pageHeight, baseSeed ^ 0x1f123bb5, activeMessagePool.value)
+  rightRows.value = buildRows(pageHeight, baseSeed ^ 0x7f4a7c15, activeMessagePool.value)
 }
 
 const measureTickerLayout = () => {
   frameHandle = 0
 
-  if (window.innerWidth < 1180) {
+  if (window.innerWidth < 1180 || !shouldRenderTicker.value) {
+    leftRows.value = []
+    rightRows.value = []
     return
   }
 
@@ -504,7 +527,7 @@ const measureTickerLayout = () => {
     }
   }
 
-  if (Math.abs(nextHeight - layoutHeight.value) > 32 || rows.value.length === 0) {
+  if (Math.abs(nextHeight - layoutHeight.value) > 32 || leftRows.value.length === 0 || rightRows.value.length === 0) {
     layoutHeight.value = nextHeight
     regenerateRows(nextHeight)
   }
@@ -548,14 +571,22 @@ watch(
   () => route.fullPath,
   async () => {
     await nextTick()
-    rows.value = []
+    leftRows.value = []
+    rightRows.value = []
     reconnectObservers()
     scheduleMeasure()
   },
 )
 
 watch(activeMessagePool, () => {
-  rows.value = []
+  leftRows.value = []
+  rightRows.value = []
+  scheduleMeasure()
+})
+
+watch(shouldRenderTicker, () => {
+  leftRows.value = []
+  rightRows.value = []
   scheduleMeasure()
 })
 
@@ -578,10 +609,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ambient-side-ticker" aria-hidden="true" :style="tickerStyle">
+  <div v-if="shouldRenderTicker" class="ambient-side-ticker" aria-hidden="true" :style="tickerStyle">
     <div class="ambient-side-ticker__viewport ambient-side-ticker__viewport--left">
       <div
-        v-for="row in rows"
+        v-for="row in leftRows"
         :key="`${row.id}-left`"
         class="ambient-side-ticker__row ambient-side-ticker__row--left"
         :style="rowStyle(row)"
@@ -603,7 +634,7 @@ onBeforeUnmount(() => {
 
     <div class="ambient-side-ticker__viewport ambient-side-ticker__viewport--right">
       <div
-        v-for="row in rows"
+        v-for="row in rightRows"
         :key="`${row.id}-right`"
         class="ambient-side-ticker__row ambient-side-ticker__row--right"
         :style="rowStyle(row)"
@@ -669,7 +700,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: var(--ticker-top);
   width: 100vw;
-  opacity: var(--ticker-row-opacity);
+  opacity: calc(var(--ticker-row-opacity) * var(--user-ticker-row-opacity-factor, 1));
   transform: translateY(-50%) scale(var(--ticker-row-scale));
   pointer-events: none;
 }
@@ -711,13 +742,13 @@ onBeforeUnmount(() => {
   min-height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(175, 201, 237, 0.16);
-  background: linear-gradient(180deg, rgba(24, 38, 62, 0.28), rgba(11, 18, 32, 0.1));
-  color: rgba(239, 245, 255, 0.72);
+  border: 1px solid var(--user-ticker-border);
+  background: var(--user-ticker-bg);
+  color: var(--user-ticker-text);
   font-size: 12px;
   letter-spacing: 0.03em;
   white-space: nowrap;
-  box-shadow: 0 10px 22px rgba(4, 10, 22, 0.1);
+  box-shadow: var(--user-ticker-shadow);
   backdrop-filter: blur(10px);
   pointer-events: auto;
   transition:
@@ -729,8 +760,8 @@ onBeforeUnmount(() => {
 }
 
 .ambient-side-ticker__bubble:nth-child(4n) {
-  color: rgba(255, 239, 205, 0.76);
-  border-color: rgba(201, 174, 130, 0.2);
+  color: var(--user-ticker-accent-text);
+  border-color: var(--user-ticker-accent-border);
 }
 
 .ambient-side-ticker__row:has(.ambient-side-ticker__bubble:hover) .ambient-side-ticker__marquee {
@@ -739,10 +770,10 @@ onBeforeUnmount(() => {
 
 .ambient-side-ticker__bubble:hover {
   transform: translateY(-1px) scale(1.065);
-  color: rgba(255, 255, 255, 1);
-  border-color: rgba(224, 239, 255, 0.68);
-  background: linear-gradient(180deg, rgba(82, 118, 176, 0.92), rgba(34, 52, 80, 0.54));
-  box-shadow: 0 18px 36px rgba(4, 10, 22, 0.3);
+  color: var(--user-ticker-hover-text);
+  border-color: var(--user-ticker-hover-border);
+  background: var(--user-ticker-hover-bg);
+  box-shadow: var(--user-ticker-hover-shadow);
 }
 
 @keyframes ticker-slide-left {

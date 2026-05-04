@@ -144,19 +144,19 @@ void loadReports()
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #c4d6f3;
+  color: var(--content-text-secondary);
   margin-bottom: 6px;
 }
 
 .created-at {
   margin: 0;
-  color: #a9bedf;
+  color: var(--content-text-tertiary);
   font-size: 13px;
 }
 
 .id-hint {
   margin: 4px 0 0;
-  color: #8aa2c8;
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 

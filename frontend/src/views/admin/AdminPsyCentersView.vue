@@ -346,34 +346,37 @@ onMounted(async () => {
       action-text="重新加载"
       @action="loadRows"
     />
-    <el-table v-else :data="filteredRows" border>
+    <div v-else class="table-shell">
+      <el-table :data="filteredRows" border table-layout="auto">
       <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="名称" min-width="180" />
+      <el-table-column prop="name" label="名称" min-width="260" show-overflow-tooltip />
       <el-table-column prop="cityName" label="城市" width="100" />
       <el-table-column prop="district" label="区域" width="120" />
-      <el-table-column prop="address" label="地址" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="phone" label="电话" width="140" />
-      <el-table-column label="来源等级" width="110">
+      <el-table-column prop="address" label="地址" min-width="280" show-overflow-tooltip />
+      <el-table-column prop="phone" label="电话" min-width="160" show-overflow-tooltip />
+      <el-table-column label="来源信息" min-width="180">
         <template #default="scope">
-          <el-tag type="info">{{ SOURCE_LEVEL_LABELS[scope.row.sourceLevel || ''] || '待补充' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="数据来源" width="110">
-        <template #default="scope">
-          <el-tag :type="scope.row.dataSource === 'seed' ? 'success' : 'info'">
-            {{ DATA_SOURCE_LABELS[scope.row.dataSource || 'manual'] || '人工维护' }}
-          </el-tag>
+          <div class="tag-stack">
+            <el-tag size="small" type="info">
+              {{ SOURCE_LEVEL_LABELS[scope.row.sourceLevel || ''] || '待补充' }}
+            </el-tag>
+            <el-tag size="small" :type="scope.row.dataSource === 'seed' ? 'success' : 'info'">
+              {{ DATA_SOURCE_LABELS[scope.row.dataSource || 'manual'] || '人工维护' }}
+            </el-tag>
+          </div>
         </template>
       </el-table-column>
       <el-table-column prop="seedKey" label="seedKey" min-width="180" show-overflow-tooltip />
-      <el-table-column label="活跃" width="90">
+      <el-table-column label="状态" min-width="140">
         <template #default="scope">
-          <el-tag :type="scope.row.isActive ? 'success' : 'danger'">{{ scope.row.isActive ? '活跃' : '停用' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="展示" width="90">
-        <template #default="scope">
-          <el-tag :type="scope.row.enabled ? 'success' : 'warning'">{{ scope.row.enabled ? '启用' : '关闭' }}</el-tag>
+          <div class="tag-stack">
+            <el-tag size="small" :type="scope.row.isActive ? 'success' : 'danger'">
+              {{ scope.row.isActive ? '活跃' : '停用' }}
+            </el-tag>
+            <el-tag size="small" :type="scope.row.enabled ? 'success' : 'warning'">
+              {{ scope.row.enabled ? '启用' : '关闭' }}
+            </el-tag>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="170" fixed="right">
@@ -382,7 +385,8 @@ onMounted(async () => {
           <el-button type="danger" link @click="removeCenter(scope.row)">停用</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
   </el-card>
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px">
@@ -514,5 +518,16 @@ onMounted(async () => {
 
 .seed-alert {
   margin-bottom: 16px;
+}
+
+.table-shell {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tag-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 </style>

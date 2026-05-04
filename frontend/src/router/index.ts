@@ -165,6 +165,15 @@ const router = createRouter({
           },
         },
         {
+          path: 'archive',
+          redirect: {
+            path: '/app/profile',
+            query: {
+              section: 'archive',
+            },
+          },
+        },
+        {
           path: 'psy-centers',
           name: 'userPsyCenters',
           component: () => import('@/views/user/PsyCentersView.vue'),
@@ -209,6 +218,17 @@ const router = createRouter({
             title: '管理看板',
             description: '上传、报告、预警与质量统计',
             breadcrumb: ['管理端', '看板'],
+          },
+        },
+        {
+          path: 'users',
+          name: 'adminUsers',
+          component: () => import('@/views/admin/AdminUsersView.vue'),
+          meta: {
+            requiresAdminAuth: true,
+            title: '用户管理',
+            description: '查看用户信息、使用情况与账号状态',
+            breadcrumb: ['管理端', '用户管理'],
           },
         },
         {
@@ -381,8 +401,19 @@ router.beforeEach((to) => {
   const adminAuthStore = useAdminAuthStore(pinia)
 
   if (to.meta.publicUser) {
-    if (to.name === 'userLogin' && userAuthStore.isAuthenticated) {
-      return '/app/home'
+    if (to.name === 'userLogin') {
+      if (userAuthStore.isAuthenticated) {
+        return '/app/home'
+      }
+
+      return {
+        path: '/app/home',
+        query: {
+          auth: '1',
+          tab: to.query.tab === 'register' ? 'register' : 'login',
+          redirect: typeof to.query.redirect === 'string' ? to.query.redirect : '/app/home',
+        },
+      }
     }
     return true
   }
@@ -397,8 +428,8 @@ router.beforeEach((to) => {
   if (to.meta.requiresUserAuth && !userAuthStore.isAuthenticated) {
     ElMessage.warning('请先登录用户账号。')
     return {
-      path: '/app/login',
-      query: { redirect: to.fullPath },
+      path: '/app/home',
+      query: { auth: '1', redirect: to.fullPath, tab: 'login' },
     }
   }
 

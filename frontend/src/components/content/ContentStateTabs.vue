@@ -60,7 +60,7 @@ const activeTab = computed(
   border-radius: var(--content-radius-pill);
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-1);
-  color: #d8e7fb;
+  color: var(--content-text-secondary);
   cursor: pointer;
   transition:
     transform var(--content-motion-fast) var(--content-ease-standard),
@@ -83,7 +83,7 @@ const activeTab = computed(
 }
 
 .state-tab__label {
-  color: #f4fbff;
+  color: var(--content-text-primary);
   font-size: 16px;
   font-weight: 700;
 }
@@ -91,7 +91,7 @@ const activeTab = computed(
 .state-tabs__focus {
   margin: 0;
   min-width: 0;
-  color: #9fb4d6;
+  color: var(--content-text-muted);
   line-height: 1.7;
   font-size: 14px;
   text-align: left;
@@ -99,7 +99,7 @@ const activeTab = computed(
 
 .state-tabs__focus span {
   margin-right: 8px;
-  color: #f4fbff;
+  color: var(--content-text-primary);
   font-weight: 700;
 }
 

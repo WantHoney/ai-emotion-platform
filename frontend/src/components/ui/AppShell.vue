@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { UserFilled } from '@element-plus/icons-vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Moon, Sunny, UserFilled } from '@element-plus/icons-vue'
+
+import { useUserThemeStore } from '@/stores/userTheme'
 
 export type AppNavItem = {
   label: string
@@ -21,6 +23,11 @@ const emit = defineEmits<{
   logout: []
 }>()
 
+const userThemeStore = useUserThemeStore()
+const shellHeaderRef = ref<HTMLElement | null>(null)
+const shellHeaderHeight = ref(74)
+let shellHeaderResizeObserver: ResizeObserver | null = null
+
 const activeGroup = computed(() => {
   const found = props.navItems.find(
     (item) => props.activePath === item.path || props.activePath.startsWith(`${item.path}/`),
@@ -33,12 +40,43 @@ const roleText = computed(() => {
   if (props.role === 'USER') return '用户'
   return props.role ?? ''
 })
+
+const themeToggleLabel = computed(() => (userThemeStore.isLight ? '夜间' : '明亮'))
+const themeToggleTitle = computed(() =>
+  userThemeStore.isLight ? '切换到夜间风格' : '切换到明亮风格',
+)
+const shellStyle = computed(() => ({
+  '--shell-header-height': `${shellHeaderHeight.value}px`,
+}))
+
+const syncShellHeaderHeight = () => {
+  shellHeaderHeight.value = shellHeaderRef.value?.offsetHeight || 74
+}
+
+onMounted(async () => {
+  await nextTick()
+  syncShellHeaderHeight()
+
+  if (shellHeaderRef.value) {
+    shellHeaderResizeObserver = new ResizeObserver(() => {
+      syncShellHeaderHeight()
+    })
+    shellHeaderResizeObserver.observe(shellHeaderRef.value)
+  }
+
+  window.addEventListener('resize', syncShellHeaderHeight, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  shellHeaderResizeObserver?.disconnect()
+  window.removeEventListener('resize', syncShellHeaderHeight)
+})
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--light': userThemeStore.isLight }" :style="shellStyle">
     <div class="shell-bg"></div>
-    <header class="shell-header">
+    <header ref="shellHeaderRef" class="shell-header">
       <button class="brand" @click="emit('navigate', '/app/home')">
         <span class="brand-dot"></span>
         <span class="brand-text">情绪档案库</span>
@@ -57,6 +95,14 @@ const roleText = computed(() => {
       </nav>
 
       <div class="shell-actions">
+        <button class="theme-toggle" :title="themeToggleTitle" @click="userThemeStore.toggleMode()">
+          <el-icon>
+            <Sunny v-if="!userThemeStore.isLight" />
+            <Moon v-else />
+          </el-icon>
+          <span>{{ themeToggleLabel }}</span>
+        </button>
+
         <template v-if="authenticated">
           <el-dropdown>
             <button class="user-pill">
@@ -87,6 +133,7 @@ const roleText = computed(() => {
 .app-shell {
   position: relative;
   min-height: 100vh;
+  padding-top: var(--shell-header-height);
   color: var(--user-text-primary);
 }
 
@@ -105,23 +152,26 @@ const roleText = computed(() => {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-image: radial-gradient(var(--user-shell-noise-dot) 1px, transparent 1px);
   background-size: 3px 3px;
-  opacity: 0.2;
+  opacity: var(--user-shell-noise-opacity);
 }
 
 .shell-header {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  width: 100%;
   backdrop-filter: blur(12px);
-  background: rgba(8, 13, 24, 0.68);
+  background: var(--user-header-bg);
   border-bottom: 1px solid var(--user-border);
   display: grid;
   grid-template-columns: 220px 1fr auto;
   align-items: center;
   gap: 18px;
-  padding: 12px 24px;
+  padding: 6px 24px 8px;
 }
 
 .brand {
@@ -157,45 +207,67 @@ const roleText = computed(() => {
 }
 
 .nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 8px 14px;
+  min-height: 36px;
   background: transparent;
   color: var(--user-text-secondary);
   font-size: 13px;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .nav-link:hover {
   color: var(--user-text-primary);
-  border-color: rgba(201, 174, 130, 0.46);
+  border-color: var(--user-border-accent-soft);
+  background: var(--user-nav-hover-bg);
 }
 
 .nav-link.active {
   color: var(--user-text-primary);
-  border-color: rgba(201, 174, 130, 0.8);
-  background: rgba(201, 174, 130, 0.14);
+  border-color: var(--user-border-accent-strong);
+  background: var(--user-nav-active-bg);
 }
 
 .shell-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
+.theme-toggle,
 .auth-button,
 .user-pill {
   border-radius: 999px;
   border: 1px solid var(--user-border);
-  background: rgba(18, 28, 47, 0.72);
+  background: var(--user-pill-bg);
   color: var(--user-text-primary);
   font-size: 12px;
   padding: 8px 14px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  line-height: 1;
   gap: 6px;
   cursor: pointer;
+}
+
+.theme-toggle:hover,
+.auth-button:hover,
+.user-pill:hover {
+  border-color: var(--user-border-strong);
+}
+
+.app-shell--light .shell-header {
+  background: rgba(251, 253, 255, 0.96);
+  box-shadow: 0 8px 22px rgba(126, 149, 183, 0.08);
 }
 
 .role-tag {
@@ -220,7 +292,7 @@ const roleText = computed(() => {
   .shell-header {
     grid-template-columns: 1fr;
     gap: 10px;
-    padding: 12px 14px;
+    padding: 6px 14px 10px;
   }
 }
 </style>

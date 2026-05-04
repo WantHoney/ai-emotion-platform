@@ -44,11 +44,8 @@ const handleAdminLogin = async () => {
       <el-card class="admin-login-card">
         <template #header>
           <div class="header-row">
-            <div>
-              <p class="eyebrow">管理控制台</p>
-              <h2>管理端登录</h2>
-            </div>
-            <el-button text @click="router.push('/app/login')">前往用户端</el-button>
+            <p class="eyebrow">管理控制台</p>
+            <h2>管理员登录</h2>
           </div>
         </template>
 
@@ -62,17 +59,20 @@ const handleAdminLogin = async () => {
 
         <el-form label-position="top" @submit.prevent="handleAdminLogin">
           <el-form-item label="管理员用户名">
-            <el-input v-model="loginForm.username" placeholder="请输入管理员用户名" />
+            <el-input v-model="loginForm.username" placeholder="请输入管理员用户名" autocomplete="username" />
           </el-form-item>
+
           <el-form-item label="密码">
             <el-input
               v-model="loginForm.password"
               type="password"
               placeholder="请输入密码"
+              autocomplete="current-password"
               show-password
             />
           </el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleAdminLogin">登录管理端</el-button>
+
+          <el-button type="primary" native-type="submit" :loading="loading">登录管理端</el-button>
         </el-form>
       </el-card>
     </section>
@@ -102,13 +102,12 @@ const handleAdminLogin = async () => {
 }
 
 .header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  gap: 4px;
 }
 
 .header-row h2 {
-  margin: 4px 0 0;
+  margin: 0;
   color: #e2ebfa;
 }
 

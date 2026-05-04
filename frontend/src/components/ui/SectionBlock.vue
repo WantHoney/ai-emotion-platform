@@ -24,9 +24,9 @@ defineProps<{
 .section {
   padding: clamp(18px, 3.8vw, 32px);
   border-radius: 20px;
-  border: 1px solid rgba(152, 173, 214, 0.2);
-  background: linear-gradient(180deg, rgba(17, 25, 42, 0.84), rgba(10, 16, 30, 0.88));
-  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--user-section-border);
+  background: var(--user-section-bg);
+  box-shadow: var(--user-section-shadow);
 }
 
 .section-header {
@@ -35,7 +35,7 @@ defineProps<{
 
 .eyebrow {
   margin: 0;
-  color: #8ab8c1;
+  color: var(--user-eyebrow-color);
   letter-spacing: 0.11em;
   text-transform: uppercase;
   font-size: 12px;
@@ -43,7 +43,7 @@ defineProps<{
 
 .title {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--user-text-primary);
   font-size: clamp(24px, 4.4vw, 34px);
   line-height: 1.2;
   font-family: var(--font-display);
@@ -54,7 +54,7 @@ defineProps<{
 
 .description {
   margin: 12px 0 0;
-  color: #b8c7df;
+  color: var(--user-text-secondary);
   line-height: 1.68;
   font-size: 14px;
 }

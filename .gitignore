@@ -36,3 +36,14 @@ models/
 # Local scratch / non-product docs
 tmp/
 docs/midterm_ppt/
+docs/_过程归档_*/
+frontend/test-results/
+tmp-edge-debug/
+tmp-edge-debug-light/
+section_extract.txt
+tmp_read_thesis_mid.ps1
+unicode_font_test.png
+msyh*.png
+simhei*.png
+simsun*.png
+frontend/public/assets/books/_audit-sheet.png

@@ -58,6 +58,7 @@ import './styles.css'
 import App from './App.vue'
 import router from './router'
 import { pinia } from './stores'
+import { useUserThemeStore } from './stores/userTheme'
 
 const app = createApp(App)
 const elementComponents = [
@@ -116,6 +117,8 @@ const elementComponents = [
 app.use(pinia)
 app.use(router)
 app.use(MotionPlugin)
+
+useUserThemeStore(pinia).initialize()
 
 for (const component of elementComponents) {
   if (component.name) {

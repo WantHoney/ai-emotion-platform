@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { ContentArticle, ContentBook, ContentTheme } from '@/api/content'
 import ArchiveCalendar from '@/components/content/ArchiveCalendar.vue'
@@ -18,11 +19,13 @@ import {
   getBooks,
   getQuotes,
   getSchedules,
+  previewSchedule,
   updateSchedule,
   type CmsArticle,
   type CmsBook,
   type CmsQuote,
   type CmsSchedule,
+  type CmsSchedulePreview,
 } from '@/api/cms'
 import { ARTICLE_CATEGORY_LABELS, ARTICLE_CATEGORY_OPTIONS, CONTENT_STATE_TABS } from '@/constants/contentMeta'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
@@ -30,12 +33,14 @@ import { parseError, type ErrorStatePayload } from '@/utils/error'
 type DraftStatus = 'ACTIVE' | 'DRAFT'
 type PoolCategory = 'all' | (typeof ARTICLE_CATEGORY_OPTIONS)[number]['value']
 type ContentPoolKind = 'QUOTE' | 'ARTICLE' | 'BOOK'
+type PoolSectionKey = 'quotes' | 'articles' | 'books'
 type DropZone = 'quote' | 'featuredArticle' | 'secondaryArticle' | 'featuredBook' | 'secondaryBook'
 type PendingAction = {
   label: string
   run: () => Promise<void>
   revert?: () => void
 }
+type PreviewSyncState = 'idle' | 'checking' | 'matched' | 'mismatch' | 'failed'
 
 interface ScheduleDraft {
   scheduleDate: string
@@ -92,8 +97,18 @@ const poolCategory = ref<PoolCategory>('all')
 const activeScheduleId = ref<number | null>(null)
 const leaveDialogVisible = ref(false)
 const pendingAction = ref<PendingAction | null>(null)
+const previewSync = reactive({
+  state: 'idle' as PreviewSyncState,
+  title: '待保存校验',
+  detail: '当前工作台还是本地草稿，保存后会自动和持久化预览做一次对照。',
+})
 
 const dragPayload = ref<DragPayload | null>(null)
+const poolSections = reactive<Record<PoolSectionKey, boolean>>({
+  quotes: true,
+  articles: false,
+  books: false,
+})
 const dropState = reactive({
   zone: '' as DropZone | '',
   allowed: false,
@@ -155,6 +170,14 @@ function normalizeBlank(value?: string | null) {
 
 function uniqueIds(ids: number[]) {
   return Array.from(new Set(ids.filter((item) => Number.isFinite(item))))
+}
+
+function cloneNormalizedDraft(value: NormalizedDraft): NormalizedDraft {
+  return {
+    ...value,
+    secondaryArticleIds: [...value.secondaryArticleIds],
+    secondaryBookIds: [...value.secondaryBookIds],
+  }
 }
 
 function normalizeDraft(value: ScheduleDraft): NormalizedDraft {
@@ -232,6 +255,34 @@ const previewArchiveDates = computed(() =>
 const draftArticleCount = computed(() => (draft.featuredArticleId ? 1 : 0) + normalizedDraft.value.secondaryArticleIds.length)
 const draftBookCount = computed(() => (draft.featuredBookId ? 1 : 0) + normalizedDraft.value.secondaryBookIds.length)
 const draftModeLabel = computed(() => (activeScheduleId.value ? '编辑排期' : '新建排期'))
+const previewSyncTagType = computed(() => {
+  switch (previewSync.state) {
+    case 'matched':
+      return 'success'
+    case 'mismatch':
+      return 'warning'
+    case 'failed':
+      return 'danger'
+    default:
+      return 'info'
+  }
+})
+const previewSyncTagText = computed(() => {
+  switch (previewSync.state) {
+    case 'checking':
+      return '校验中'
+    case 'matched':
+      return '已校验'
+    case 'mismatch':
+      return '有偏差'
+    case 'failed':
+      return '校验失败'
+    default:
+      return '待校验'
+  }
+})
+
+let previewSyncRequestId = 0
 
 const formatDateLabel = (value?: string) => {
   if (!value) return '未选择日期'
@@ -306,6 +357,66 @@ function refreshActiveScheduleSnapshot() {
   savedSnapshot.value = normalizeDraft(draft)
 }
 
+function setPreviewSyncState(state: PreviewSyncState, title: string, detail: string) {
+  previewSync.state = state
+  previewSync.title = title
+  previewSync.detail = detail
+}
+
+function resetPreviewSync(detail = '当前工作台还是本地草稿，保存后会自动和持久化预览做一次对照。') {
+  previewSyncRequestId += 1
+  setPreviewSyncState('idle', '待保存校验', detail)
+}
+
+function previewToNormalizedDraft(preview: CmsSchedulePreview): NormalizedDraft {
+  const featuredArticleId = preview.featuredArticle?.id ?? null
+  const featuredBookId = preview.featuredBook?.id ?? null
+  return {
+    scheduleDate: preview.theme?.scheduleDate || '',
+    themeKey: preview.theme?.themeKey || 'stress',
+    themeTitle: preview.theme?.themeTitle?.trim() || '',
+    themeSubtitle: normalizeBlank(preview.theme?.themeSubtitle),
+    quoteId: preview.quote?.id ?? null,
+    status: String(preview.theme?.status || 'ACTIVE').toUpperCase() === 'DRAFT' ? 'DRAFT' : 'ACTIVE',
+    featuredArticleId,
+    secondaryArticleIds: uniqueIds(preview.articles.map((item) => item.id)).filter((id) => id !== featuredArticleId),
+    featuredBookId,
+    secondaryBookIds: uniqueIds(preview.books.map((item) => item.id)).filter((id) => id !== featuredBookId),
+  }
+}
+
+async function verifyPersistedPreview(scheduleDate: string, expectedDraft: NormalizedDraft) {
+  if (!scheduleDate) {
+    resetPreviewSync()
+    return
+  }
+
+  const requestId = ++previewSyncRequestId
+  setPreviewSyncState('checking', '正在校验已保存排期', '正在读取服务端预览，确认后台工作台与用户端实际组合是否一致。')
+
+  try {
+    const preview = await previewSchedule(scheduleDate)
+    if (requestId !== previewSyncRequestId) return
+
+    if (!preview.hasSchedule || !preview.theme) {
+      setPreviewSyncState('failed', '未找到已保存排期', '这个日期还没有可对照的持久化排期，请先保存后再做预览验收。')
+      return
+    }
+
+    const persistedDraft = previewToNormalizedDraft(preview)
+    if (JSON.stringify(persistedDraft) === JSON.stringify(expectedDraft)) {
+      setPreviewSyncState('matched', '已保存预览一致', '服务端返回的排期组合与当前已保存草稿一致，可以继续做页面验收。')
+      return
+    }
+
+    setPreviewSyncState('mismatch', '已保存预览存在偏差', '服务端预览和当前工作台不完全一致，建议先刷新工作台或重新保存后再验收。')
+  } catch (error) {
+    if (requestId !== previewSyncRequestId) return
+    const parsed = parseError(error, '排期预览校验失败')
+    setPreviewSyncState('failed', parsed.title, parsed.detail)
+  }
+}
+
 function scheduleToDraft(schedule: CmsSchedule): ScheduleDraft {
   return {
     scheduleDate: schedule.scheduleDate,
@@ -332,6 +443,16 @@ function applyThemePreset(themeKey: string) {
   draft.themeKey = themeKey
   draft.themeTitle = preset?.title || draft.themeTitle
   draft.themeSubtitle = preset?.subtitle || draft.themeSubtitle
+}
+
+function togglePoolSection(section: PoolSectionKey) {
+  const nextOpen = !poolSections[section]
+  ;(['quotes', 'articles', 'books'] as PoolSectionKey[]).forEach((key) => {
+    poolSections[key] = false
+  })
+  if (nextOpen) {
+    poolSections[section] = true
+  }
 }
 
 async function loadPage(date = appliedFilterDate.value) {
@@ -477,6 +598,7 @@ async function saveDraft() {
     }
 
     refreshActiveScheduleSnapshot()
+    await verifyPersistedPreview(payload.scheduleDate, cloneNormalizedDraft(savedSnapshot.value))
     ElMessage.success('排期已保存')
     return true
   } catch (error) {
@@ -504,6 +626,7 @@ async function startNewDraft(scheduleDate = appliedFilterDate.value || getShangh
   activeScheduleId.value = null
   applyDraft(createEmptyDraft(scheduleDate))
   refreshActiveScheduleSnapshot()
+  resetPreviewSync('当前工作台是一个未保存的新草稿，保存后会自动和持久化预览做比对。')
 }
 
 async function attemptNewDraft() {
@@ -519,6 +642,7 @@ async function openScheduleInWorkbench(schedule: CmsSchedule) {
   activeScheduleId.value = schedule.id
   applyDraft(scheduleToDraft(schedule))
   refreshActiveScheduleSnapshot()
+  await verifyPersistedPreview(schedule.scheduleDate, cloneNormalizedDraft(savedSnapshot.value))
 }
 
 async function attemptOpenSchedule(schedule: CmsSchedule) {
@@ -556,11 +680,14 @@ async function attemptRefreshData() {
       if (matched) {
         activeScheduleId.value = matched.id
         applyDraft(scheduleToDraft(matched))
+        refreshActiveScheduleSnapshot()
+        await verifyPersistedPreview(matched.scheduleDate, cloneNormalizedDraft(savedSnapshot.value))
       } else {
         activeScheduleId.value = null
         applyDraft(createEmptyDraft(currentDate))
+        refreshActiveScheduleSnapshot()
+        resetPreviewSync('刷新后未找到对应已保存排期，工作台已切回草稿状态。')
       }
-      refreshActiveScheduleSnapshot()
     },
   })
 }
@@ -577,6 +704,7 @@ async function removeScheduleRow(row: CmsSchedule) {
       activeScheduleId.value = null
       applyDraft(createEmptyDraft(appliedFilterDate.value || row.scheduleDate || getShanghaiToday()))
       refreshActiveScheduleSnapshot()
+      resetPreviewSync('当前日期的已保存排期已删除，工作台已切回空白草稿。')
     }
     await loadPage(appliedFilterDate.value)
     ElMessage.success('排期已删除')
@@ -846,11 +974,20 @@ onBeforeUnmount(() => {
       />
 
       <section class="schedule-dirty content-stage" :class="{ active: isDirty }">
-        <div>
-          <strong>{{ isDirty ? '未保存变更' : '当前草稿已同步' }}</strong>
-          <p>{{ isDirty ? '切换日期、载入其他排期或离开页面前，请先保存或放弃当前草稿。' : '草稿与最后一次加载或保存的排期一致。' }}</p>
+        <div class="schedule-dirty__summary">
+          <div class="schedule-status-block">
+            <strong>{{ isDirty ? '未保存变更' : '当前草稿已同步' }}</strong>
+            <p>{{ isDirty ? '切换日期、载入其他排期或离开页面前，请先保存或放弃当前草稿。' : '草稿与最后一次加载或保存的排期一致。' }}</p>
+          </div>
+          <div class="schedule-status-block">
+            <strong>{{ previewSync.title }}</strong>
+            <p>{{ previewSync.detail }}</p>
+          </div>
         </div>
-        <el-tag :type="isDirty ? 'warning' : 'success'">{{ isDirty ? 'Dirty' : 'Clean' }}</el-tag>
+        <div class="schedule-dirty__tags">
+          <el-tag :type="isDirty ? 'warning' : 'success'">{{ isDirty ? 'Dirty' : 'Clean' }}</el-tag>
+          <el-tag :type="previewSyncTagType">{{ previewSyncTagText }}</el-tag>
+        </div>
       </section>
 
       <section class="schedule-workbench">
@@ -871,101 +1008,118 @@ onBeforeUnmount(() => {
             </el-select>
           </div>
 
-          <section class="pool-group">
-            <div class="pool-group__head">
-              <h3>语录</h3>
-              <span>{{ visibleQuotes.length }}</span>
-            </div>
-            <EmptyState v-if="visibleQuotes.length === 0" title="没有匹配的语录" description="试试清空搜索条件，或者先去内容管理页补充素材。" action-text="清空搜索" @action="poolSearch = ''" />
-            <div v-else class="pool-list">
-              <article
-                v-for="item in visibleQuotes"
-                :key="`quote-${item.id}`"
-                class="pool-card"
-                :class="{ 'is-assigned': draft.quoteId === item.id }"
-                draggable="true"
-                @dragstart="startDrag('QUOTE', item.id, 'pool')"
-                @dragend="clearDragState"
-              >
-                <div class="pool-card__body">
-                  <strong>{{ item.content }}</strong>
-                  <p>{{ item.author || '内容专栏编辑部' }}</p>
+          <div class="pool-scroll">
+            <section class="pool-group">
+              <button type="button" class="pool-group__head" :class="{ 'is-open': poolSections.quotes }" @click="togglePoolSection('quotes')">
+                <span class="pool-group__title">
+                  <strong>语录</strong>
+                  <small>{{ visibleQuotes.length }} 条</small>
+                </span>
+                <el-icon class="pool-group__caret"><ArrowDown /></el-icon>
+              </button>
+              <div v-if="poolSections.quotes" class="pool-group__body">
+                <EmptyState v-if="visibleQuotes.length === 0" title="没有匹配的语录" description="试试清空搜索条件，或者先去内容管理页补充素材。" action-text="清空搜索" @action="poolSearch = ''" />
+                <div v-else class="pool-list">
+                  <article
+                    v-for="item in visibleQuotes"
+                    :key="`quote-${item.id}`"
+                    class="pool-card"
+                    :class="{ 'is-assigned': draft.quoteId === item.id }"
+                    draggable="true"
+                    @dragstart="startDrag('QUOTE', item.id, 'pool')"
+                    @dragend="clearDragState"
+                  >
+                    <div class="pool-card__body">
+                      <strong>{{ item.content }}</strong>
+                      <p>{{ item.author || '内容专栏编辑部' }}</p>
+                    </div>
+                    <div class="pool-card__actions">
+                      <el-tag v-if="draft.quoteId === item.id" type="success">当前语录</el-tag>
+                      <el-button size="small" @click="assignQuote(item.id)">{{ draft.quoteId === item.id ? '已放入' : '放入语录' }}</el-button>
+                    </div>
+                  </article>
                 </div>
-                <div class="pool-card__actions">
-                  <el-tag v-if="draft.quoteId === item.id" type="success">当前语录</el-tag>
-                  <el-button size="small" @click="assignQuote(item.id)">{{ draft.quoteId === item.id ? '已放入' : '放入语录' }}</el-button>
-                </div>
-              </article>
-            </div>
-          </section>
+              </div>
+            </section>
 
-          <section class="pool-group">
-            <div class="pool-group__head">
-              <h3>文章</h3>
-              <span>{{ visibleArticles.length }}</span>
-            </div>
-            <EmptyState v-if="visibleArticles.length === 0" title="没有匹配的文章" description="可以切换主题筛选，或先在内容管理里补充文章。" action-text="清空筛选" @action="poolSearch = ''; poolCategory = 'all'" />
-            <div v-else class="pool-list">
-              <article
-                v-for="item in visibleArticles"
-                :key="`article-${item.id}`"
-                class="pool-card"
-                :class="{ 'is-assigned': isAssigned('ARTICLE', item.id) }"
-                draggable="true"
-                @dragstart="startDrag('ARTICLE', item.id, 'pool')"
-                @dragend="clearDragState"
-              >
-                <div class="pool-card__body">
-                  <div class="pool-card__meta">
-                    <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '文章' }}</span>
-                    <span>{{ item.sourceName || '内容来源' }}</span>
-                  </div>
-                  <strong>{{ item.title }}</strong>
-                  <p>{{ item.summary || '暂无摘要' }}</p>
+            <section class="pool-group">
+              <button type="button" class="pool-group__head" :class="{ 'is-open': poolSections.articles }" @click="togglePoolSection('articles')">
+                <span class="pool-group__title">
+                  <strong>文章</strong>
+                  <small>{{ visibleArticles.length }} 条</small>
+                </span>
+                <el-icon class="pool-group__caret"><ArrowDown /></el-icon>
+              </button>
+              <div v-if="poolSections.articles" class="pool-group__body">
+                <EmptyState v-if="visibleArticles.length === 0" title="没有匹配的文章" description="可以切换主题筛选，或先在内容管理里补充文章。" action-text="清空筛选" @action="poolSearch = ''; poolCategory = 'all'" />
+                <div v-else class="pool-list">
+                  <article
+                    v-for="item in visibleArticles"
+                    :key="`article-${item.id}`"
+                    class="pool-card"
+                    :class="{ 'is-assigned': isAssigned('ARTICLE', item.id) }"
+                    draggable="true"
+                    @dragstart="startDrag('ARTICLE', item.id, 'pool')"
+                    @dragend="clearDragState"
+                  >
+                    <div class="pool-card__body">
+                      <div class="pool-card__meta">
+                        <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '文章' }}</span>
+                        <span>{{ item.sourceName || '内容来源' }}</span>
+                      </div>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.summary || '暂无摘要' }}</p>
+                    </div>
+                    <div class="pool-card__actions">
+                      <el-tag v-if="isFeatured('ARTICLE', item.id)" type="warning">主推中</el-tag>
+                      <el-tag v-else-if="draft.secondaryArticleIds.includes(item.id)" type="success">补充中</el-tag>
+                      <el-button size="small" @click="setFeaturedArticle(item.id)">设为主推</el-button>
+                      <el-button size="small" plain @click="insertIntoSecondary('ARTICLE', item.id, draft.secondaryArticleIds.length)">加入补充</el-button>
+                    </div>
+                  </article>
                 </div>
-                <div class="pool-card__actions">
-                  <el-tag v-if="isFeatured('ARTICLE', item.id)" type="warning">主推中</el-tag>
-                  <el-tag v-else-if="draft.secondaryArticleIds.includes(item.id)" type="success">补充中</el-tag>
-                  <el-button size="small" @click="setFeaturedArticle(item.id)">设为主推</el-button>
-                  <el-button size="small" plain @click="insertIntoSecondary('ARTICLE', item.id, draft.secondaryArticleIds.length)">加入补充</el-button>
-                </div>
-              </article>
-            </div>
-          </section>
+              </div>
+            </section>
 
-          <section class="pool-group">
-            <div class="pool-group__head">
-              <h3>书籍</h3>
-              <span>{{ visibleBooks.length }}</span>
-            </div>
-            <EmptyState v-if="visibleBooks.length === 0" title="没有匹配的书籍" description="可以切换主题筛选，或先在内容管理里补充书籍。" action-text="清空筛选" @action="poolSearch = ''; poolCategory = 'all'" />
-            <div v-else class="pool-list">
-              <article
-                v-for="item in visibleBooks"
-                :key="`book-${item.id}`"
-                class="pool-card"
-                :class="{ 'is-assigned': isAssigned('BOOK', item.id) }"
-                draggable="true"
-                @dragstart="startDrag('BOOK', item.id, 'pool')"
-                @dragend="clearDragState"
-              >
-                <div class="pool-card__body">
-                  <div class="pool-card__meta">
-                    <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '书籍' }}</span>
-                    <span>{{ item.author || '推荐阅读' }}</span>
-                  </div>
-                  <strong>{{ item.title }}</strong>
-                  <p>{{ item.description || '暂无推荐文案' }}</p>
+            <section class="pool-group">
+              <button type="button" class="pool-group__head" :class="{ 'is-open': poolSections.books }" @click="togglePoolSection('books')">
+                <span class="pool-group__title">
+                  <strong>书籍</strong>
+                  <small>{{ visibleBooks.length }} 条</small>
+                </span>
+                <el-icon class="pool-group__caret"><ArrowDown /></el-icon>
+              </button>
+              <div v-if="poolSections.books" class="pool-group__body">
+                <EmptyState v-if="visibleBooks.length === 0" title="没有匹配的书籍" description="可以切换主题筛选，或先在内容管理里补充书籍。" action-text="清空筛选" @action="poolSearch = ''; poolCategory = 'all'" />
+                <div v-else class="pool-list">
+                  <article
+                    v-for="item in visibleBooks"
+                    :key="`book-${item.id}`"
+                    class="pool-card"
+                    :class="{ 'is-assigned': isAssigned('BOOK', item.id) }"
+                    draggable="true"
+                    @dragstart="startDrag('BOOK', item.id, 'pool')"
+                    @dragend="clearDragState"
+                  >
+                    <div class="pool-card__body">
+                      <div class="pool-card__meta">
+                        <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '书籍' }}</span>
+                        <span>{{ item.author || '推荐阅读' }}</span>
+                      </div>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.description || '暂无推荐文案' }}</p>
+                    </div>
+                    <div class="pool-card__actions">
+                      <el-tag v-if="isFeatured('BOOK', item.id)" type="warning">主推中</el-tag>
+                      <el-tag v-else-if="draft.secondaryBookIds.includes(item.id)" type="success">补充中</el-tag>
+                      <el-button size="small" @click="setFeaturedBook(item.id)">设为主推</el-button>
+                      <el-button size="small" plain @click="insertIntoSecondary('BOOK', item.id, draft.secondaryBookIds.length)">加入补充</el-button>
+                    </div>
+                  </article>
                 </div>
-                <div class="pool-card__actions">
-                  <el-tag v-if="isFeatured('BOOK', item.id)" type="warning">主推中</el-tag>
-                  <el-tag v-else-if="draft.secondaryBookIds.includes(item.id)" type="success">补充中</el-tag>
-                  <el-button size="small" @click="setFeaturedBook(item.id)">设为主推</el-button>
-                  <el-button size="small" plain @click="insertIntoSecondary('BOOK', item.id, draft.secondaryBookIds.length)">加入补充</el-button>
-                </div>
-              </article>
-            </div>
-          </section>
+              </div>
+            </section>
+          </div>
         </aside>
 
         <section class="workbench-panel content-stage canvas-panel">
@@ -1004,164 +1158,165 @@ onBeforeUnmount(() => {
             </el-form>
           </div>
 
-          <section class="composer-group">
-            <div class="composer-group__head">
-              <h3>今日语录槽</h3>
-              <span>{{ activeQuote ? '1 / 1' : '0 / 1' }}</span>
-            </div>
-            <div class="drop-slot" :class="zoneClasses('quote')" @dragover.prevent="handleDragOver($event, 'quote')" @drop.prevent="handleDrop($event, 'quote')">
-              <div v-if="activeQuote" class="slot-entity" draggable="true" @dragstart="startDrag('QUOTE', activeQuote.id, 'quote')" @dragend="clearDragState">
-                <div class="slot-entity__content">
-                  <strong>{{ activeQuote.content }}</strong>
-                  <p>{{ activeQuote.author || '内容专栏编辑部' }}</p>
-                </div>
-                <div class="slot-entity__actions">
-                  <el-button size="small" plain @click="clearQuote">移除</el-button>
-                </div>
+          <div class="canvas-scroll">
+            <section class="composer-group">
+              <div class="composer-group__head">
+                <h3>今日语录槽</h3>
+                <span>{{ activeQuote ? '1 / 1' : '0 / 1' }}</span>
               </div>
-              <div v-else class="slot-placeholder">
-                <strong>将语录拖到这里</strong>
-                <p>空槽会显示虚线占位，也可以在左侧点击“放入语录”。</p>
-              </div>
-              <small v-if="dropState.zone === 'quote'" class="drop-message">{{ dropState.message }}</small>
-            </div>
-          </section>
-
-          <section class="composer-group">
-            <div class="composer-group__head">
-              <h3>主推文章</h3>
-              <span>{{ draftArticleCount }} 篇文章</span>
-            </div>
-            <div class="drop-slot" :class="zoneClasses('featuredArticle')" @dragover.prevent="handleDragOver($event, 'featuredArticle')" @drop.prevent="handleDrop($event, 'featuredArticle')">
-              <div v-if="featuredArticle" class="slot-entity slot-entity--visual" draggable="true" @dragstart="startDrag('ARTICLE', featuredArticle.id, 'featuredArticle')" @dragend="clearDragState">
-                <div class="slot-entity__content">
-                  <div class="slot-entity__meta">
-                    <span>主推文章</span>
-                    <span>{{ ARTICLE_CATEGORY_LABELS[featuredArticle.category || ''] || '文章' }}</span>
+              <div class="drop-slot" :class="zoneClasses('quote')" @dragover.prevent="handleDragOver($event, 'quote')" @drop.prevent="handleDrop($event, 'quote')">
+                <div v-if="activeQuote" class="slot-entity" draggable="true" @dragstart="startDrag('QUOTE', activeQuote.id, 'quote')" @dragend="clearDragState">
+                  <div class="slot-entity__content">
+                    <strong>{{ activeQuote.content }}</strong>
+                    <p>{{ activeQuote.author || '内容专栏编辑部' }}</p>
                   </div>
-                  <strong>{{ featuredArticle.title }}</strong>
-                  <p>{{ featuredArticle.summary || featuredArticle.sourceName || '拖入新文章时，当前主推会自动降级到补充区第一位。' }}</p>
+                  <div class="slot-entity__actions">
+                    <el-button size="small" plain @click="clearQuote">移除</el-button>
+                  </div>
                 </div>
-                <div class="slot-entity__actions">
-                  <el-button size="small" plain @click="insertIntoSecondary('ARTICLE', featuredArticle.id, 0)">降到补充</el-button>
-                  <el-button size="small" plain @click="clearFeaturedArticle">移除</el-button>
+                <div v-else class="slot-placeholder">
+                  <strong>将语录拖到这里</strong>
+                  <p>空槽会显示虚线占位，也可以在左侧点击“放入语录”。</p>
                 </div>
+                <small v-if="dropState.zone === 'quote'" class="drop-message">{{ dropState.message }}</small>
               </div>
-              <div v-else class="slot-placeholder">
-                <strong>将文章拖到这里设为主推</strong>
-                <p>只能有一篇主推文章，替换时旧主推会自动降级到补充区第一位。</p>
-              </div>
-              <small v-if="dropState.zone === 'featuredArticle'" class="drop-message">{{ dropState.message }}</small>
-            </div>
+            </section>
 
-            <div class="sortable-zone" :class="zoneClasses('secondaryArticle')" @dragover.prevent="handleDragOver($event, 'secondaryArticle', draft.secondaryArticleIds.length)" @drop.prevent="handleDrop($event, 'secondaryArticle', draft.secondaryArticleIds.length)">
-              <div class="sortable-zone__head">
-                <h4>补充文章</h4>
-                <p>支持拖拽排序，排序过程会显示插入指示线。</p>
+            <section class="composer-group">
+              <div class="composer-group__head">
+                <h3>主推文章</h3>
+                <span>{{ draftArticleCount }} 篇文章</span>
               </div>
-              <div v-if="showInsertLine('secondaryArticle', 0)" class="insert-line" />
-              <template v-if="secondaryArticles.length">
-                <div
-                  v-for="(item, index) in secondaryArticles"
-                  :key="`secondary-article-${item.id}`"
-                  class="sortable-card"
-                  draggable="true"
-                  @dragstart="startDrag('ARTICLE', item.id, 'secondaryArticle', index)"
-                  @dragend="clearDragState"
-                  @dragover.prevent="handleDragOver($event, 'secondaryArticle', getInsertIndexFromEvent($event, index))"
-                  @drop.prevent="handleDrop($event, 'secondaryArticle', getInsertIndexFromEvent($event, index))"
-                >
-                  <div class="sortable-card__body">
+              <div class="drop-slot" :class="zoneClasses('featuredArticle')" @dragover.prevent="handleDragOver($event, 'featuredArticle')" @drop.prevent="handleDrop($event, 'featuredArticle')">
+                <div v-if="featuredArticle" class="slot-entity slot-entity--visual" draggable="true" @dragstart="startDrag('ARTICLE', featuredArticle.id, 'featuredArticle')" @dragend="clearDragState">
+                  <div class="slot-entity__content">
                     <div class="slot-entity__meta">
-                      <span>补充文章 {{ index + 1 }}</span>
-                      <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '文章' }}</span>
+                      <span>主推文章</span>
+                      <span>{{ ARTICLE_CATEGORY_LABELS[featuredArticle.category || ''] || '文章' }}</span>
                     </div>
-                    <strong>{{ item.title }}</strong>
-                    <p>{{ item.summary || item.sourceName || '暂无摘要' }}</p>
+                    <strong>{{ featuredArticle.title }}</strong>
+                    <p>{{ featuredArticle.summary || featuredArticle.sourceName || '拖入新文章时，当前主推会自动降级到补充区第一位。' }}</p>
                   </div>
-                  <div class="sortable-card__actions">
-                    <el-button size="small" @click="setFeaturedArticle(item.id)">设为主推</el-button>
-                    <el-button size="small" plain @click="removeSecondary('ARTICLE', item.id)">移除</el-button>
+                  <div class="slot-entity__actions">
+                    <el-button size="small" plain @click="insertIntoSecondary('ARTICLE', featuredArticle.id, 0)">降到补充</el-button>
+                    <el-button size="small" plain @click="clearFeaturedArticle">移除</el-button>
                   </div>
                 </div>
-                <div v-for="index in secondaryArticles.length" :key="`article-insert-${index}`" v-show="showInsertLine('secondaryArticle', index)" class="insert-line" />
-              </template>
-              <div v-else class="sortable-empty">
-                <strong>补充文章区为空</strong>
-                <p>可以从左侧点击“加入补充”，也可以把文章拖到这里。</p>
+                <div v-else class="slot-placeholder">
+                  <strong>将文章拖到这里设为主推</strong>
+                  <p>只能有一篇主推文章，替换时旧主推会自动降级到补充区第一位。</p>
+                </div>
+                <small v-if="dropState.zone === 'featuredArticle'" class="drop-message">{{ dropState.message }}</small>
               </div>
-              <div v-if="showInsertLine('secondaryArticle', secondaryArticles.length)" class="insert-line" />
-              <small v-if="dropState.zone === 'secondaryArticle'" class="drop-message">{{ dropState.message }}</small>
-            </div>
-          </section>
+              <div class="sortable-zone" :class="zoneClasses('secondaryArticle')" @dragover.prevent="handleDragOver($event, 'secondaryArticle', draft.secondaryArticleIds.length)" @drop.prevent="handleDrop($event, 'secondaryArticle', draft.secondaryArticleIds.length)">
+                <div class="sortable-zone__head">
+                  <h4>补充文章</h4>
+                  <p>支持拖拽排序，排序过程会显示插入指示线。</p>
+                </div>
+                <div v-if="showInsertLine('secondaryArticle', 0)" class="insert-line" />
+                <template v-if="secondaryArticles.length">
+                  <div
+                    v-for="(item, index) in secondaryArticles"
+                    :key="`secondary-article-${item.id}`"
+                    class="sortable-card"
+                    draggable="true"
+                    @dragstart="startDrag('ARTICLE', item.id, 'secondaryArticle', index)"
+                    @dragend="clearDragState"
+                    @dragover.prevent="handleDragOver($event, 'secondaryArticle', getInsertIndexFromEvent($event, index))"
+                    @drop.prevent="handleDrop($event, 'secondaryArticle', getInsertIndexFromEvent($event, index))"
+                  >
+                    <div class="sortable-card__body">
+                      <div class="slot-entity__meta">
+                        <span>补充文章 {{ index + 1 }}</span>
+                        <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '文章' }}</span>
+                      </div>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.summary || item.sourceName || '暂无摘要' }}</p>
+                    </div>
+                    <div class="sortable-card__actions">
+                      <el-button size="small" @click="setFeaturedArticle(item.id)">设为主推</el-button>
+                      <el-button size="small" plain @click="removeSecondary('ARTICLE', item.id)">移除</el-button>
+                    </div>
+                  </div>
+                  <div v-for="index in secondaryArticles.length" :key="`article-insert-${index}`" v-show="showInsertLine('secondaryArticle', index)" class="insert-line" />
+                </template>
+                <div v-else class="sortable-empty">
+                  <strong>补充文章区为空</strong>
+                  <p>可以从左侧点击“加入补充”，也可以把文章拖到这里。</p>
+                </div>
+                <div v-if="showInsertLine('secondaryArticle', secondaryArticles.length)" class="insert-line" />
+                <small v-if="dropState.zone === 'secondaryArticle'" class="drop-message">{{ dropState.message }}</small>
+              </div>
+            </section>
 
-          <section class="composer-group">
-            <div class="composer-group__head">
-              <h3>主推书籍</h3>
-              <span>{{ draftBookCount }} 本书</span>
-            </div>
-            <div class="drop-slot" :class="zoneClasses('featuredBook')" @dragover.prevent="handleDragOver($event, 'featuredBook')" @drop.prevent="handleDrop($event, 'featuredBook')">
-              <div v-if="featuredBook" class="slot-entity slot-entity--visual" draggable="true" @dragstart="startDrag('BOOK', featuredBook.id, 'featuredBook')" @dragend="clearDragState">
-                <div class="slot-entity__content">
-                  <div class="slot-entity__meta">
-                    <span>主推书籍</span>
-                    <span>{{ ARTICLE_CATEGORY_LABELS[featuredBook.category || ''] || '书籍' }}</span>
-                  </div>
-                  <strong>{{ featuredBook.title }}</strong>
-                  <p>{{ featuredBook.description || featuredBook.author || '拖入新书籍时，当前主推会自动降级到补充区第一位。' }}</p>
-                </div>
-                <div class="slot-entity__actions">
-                  <el-button size="small" plain @click="insertIntoSecondary('BOOK', featuredBook.id, 0)">降到补充</el-button>
-                  <el-button size="small" plain @click="clearFeaturedBook">移除</el-button>
-                </div>
+            <section class="composer-group">
+              <div class="composer-group__head">
+                <h3>主推书籍</h3>
+                <span>{{ draftBookCount }} 本书</span>
               </div>
-              <div v-else class="slot-placeholder">
-                <strong>将书籍拖到这里设为主推</strong>
-                <p>只能有一本主推书籍，替换时旧主推会自动降级到补充区第一位。</p>
-              </div>
-              <small v-if="dropState.zone === 'featuredBook'" class="drop-message">{{ dropState.message }}</small>
-            </div>
-
-            <div class="sortable-zone" :class="zoneClasses('secondaryBook')" @dragover.prevent="handleDragOver($event, 'secondaryBook', draft.secondaryBookIds.length)" @drop.prevent="handleDrop($event, 'secondaryBook', draft.secondaryBookIds.length)">
-              <div class="sortable-zone__head">
-                <h4>补充书籍</h4>
-                <p>支持拖拽排序，排序过程会显示插入指示线。</p>
-              </div>
-              <div v-if="showInsertLine('secondaryBook', 0)" class="insert-line" />
-              <template v-if="secondaryBooks.length">
-                <div
-                  v-for="(item, index) in secondaryBooks"
-                  :key="`secondary-book-${item.id}`"
-                  class="sortable-card"
-                  draggable="true"
-                  @dragstart="startDrag('BOOK', item.id, 'secondaryBook', index)"
-                  @dragend="clearDragState"
-                  @dragover.prevent="handleDragOver($event, 'secondaryBook', getInsertIndexFromEvent($event, index))"
-                  @drop.prevent="handleDrop($event, 'secondaryBook', getInsertIndexFromEvent($event, index))"
-                >
-                  <div class="sortable-card__body">
+              <div class="drop-slot" :class="zoneClasses('featuredBook')" @dragover.prevent="handleDragOver($event, 'featuredBook')" @drop.prevent="handleDrop($event, 'featuredBook')">
+                <div v-if="featuredBook" class="slot-entity slot-entity--visual" draggable="true" @dragstart="startDrag('BOOK', featuredBook.id, 'featuredBook')" @dragend="clearDragState">
+                  <div class="slot-entity__content">
                     <div class="slot-entity__meta">
-                      <span>补充书籍 {{ index + 1 }}</span>
-                      <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '书籍' }}</span>
+                      <span>主推书籍</span>
+                      <span>{{ ARTICLE_CATEGORY_LABELS[featuredBook.category || ''] || '书籍' }}</span>
                     </div>
-                    <strong>{{ item.title }}</strong>
-                    <p>{{ item.description || item.author || '暂无简介' }}</p>
+                    <strong>{{ featuredBook.title }}</strong>
+                    <p>{{ featuredBook.description || featuredBook.author || '拖入新书籍时，当前主推会自动降级到补充区第一位。' }}</p>
                   </div>
-                  <div class="sortable-card__actions">
-                    <el-button size="small" @click="setFeaturedBook(item.id)">设为主推</el-button>
-                    <el-button size="small" plain @click="removeSecondary('BOOK', item.id)">移除</el-button>
+                  <div class="slot-entity__actions">
+                    <el-button size="small" plain @click="insertIntoSecondary('BOOK', featuredBook.id, 0)">降到补充</el-button>
+                    <el-button size="small" plain @click="clearFeaturedBook">移除</el-button>
                   </div>
                 </div>
-                <div v-for="index in secondaryBooks.length" :key="`book-insert-${index}`" v-show="showInsertLine('secondaryBook', index)" class="insert-line" />
-              </template>
-              <div v-else class="sortable-empty">
-                <strong>补充书籍区为空</strong>
-                <p>可以从左侧点击“加入补充”，也可以把书籍拖到这里。</p>
+                <div v-else class="slot-placeholder">
+                  <strong>将书籍拖到这里设为主推</strong>
+                  <p>只能有一本主推书籍，替换时旧主推会自动降级到补充区第一位。</p>
+                </div>
+                <small v-if="dropState.zone === 'featuredBook'" class="drop-message">{{ dropState.message }}</small>
               </div>
-              <div v-if="showInsertLine('secondaryBook', secondaryBooks.length)" class="insert-line" />
-              <small v-if="dropState.zone === 'secondaryBook'" class="drop-message">{{ dropState.message }}</small>
-            </div>
-          </section>
+
+              <div class="sortable-zone" :class="zoneClasses('secondaryBook')" @dragover.prevent="handleDragOver($event, 'secondaryBook', draft.secondaryBookIds.length)" @drop.prevent="handleDrop($event, 'secondaryBook', draft.secondaryBookIds.length)">
+                <div class="sortable-zone__head">
+                  <h4>补充书籍</h4>
+                  <p>支持拖拽排序，排序过程会显示插入指示线。</p>
+                </div>
+                <div v-if="showInsertLine('secondaryBook', 0)" class="insert-line" />
+                <template v-if="secondaryBooks.length">
+                  <div
+                    v-for="(item, index) in secondaryBooks"
+                    :key="`secondary-book-${item.id}`"
+                    class="sortable-card"
+                    draggable="true"
+                    @dragstart="startDrag('BOOK', item.id, 'secondaryBook', index)"
+                    @dragend="clearDragState"
+                    @dragover.prevent="handleDragOver($event, 'secondaryBook', getInsertIndexFromEvent($event, index))"
+                    @drop.prevent="handleDrop($event, 'secondaryBook', getInsertIndexFromEvent($event, index))"
+                  >
+                    <div class="sortable-card__body">
+                      <div class="slot-entity__meta">
+                        <span>补充书籍 {{ index + 1 }}</span>
+                        <span>{{ ARTICLE_CATEGORY_LABELS[item.category || ''] || '书籍' }}</span>
+                      </div>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.description || item.author || '暂无简介' }}</p>
+                    </div>
+                    <div class="sortable-card__actions">
+                      <el-button size="small" @click="setFeaturedBook(item.id)">设为主推</el-button>
+                      <el-button size="small" plain @click="removeSecondary('BOOK', item.id)">移除</el-button>
+                    </div>
+                  </div>
+                  <div v-for="index in secondaryBooks.length" :key="`book-insert-${index}`" v-show="showInsertLine('secondaryBook', index)" class="insert-line" />
+                </template>
+                <div v-else class="sortable-empty">
+                  <strong>补充书籍区为空</strong>
+                  <p>可以从左侧点击“加入补充”，也可以把书籍拖到这里。</p>
+                </div>
+                <div v-if="showInsertLine('secondaryBook', secondaryBooks.length)" class="insert-line" />
+                <small v-if="dropState.zone === 'secondaryBook'" class="drop-message">{{ dropState.message }}</small>
+              </div>
+            </section>
+          </div>
         </section>
 
         <aside class="workbench-panel content-stage preview-panel">
@@ -1170,10 +1325,10 @@ onBeforeUnmount(() => {
               <p class="panel-head__eyebrow">高保真缩略预览</p>
               <h2>右侧预览</h2>
             </div>
-            <span>固定桌面宽度</span>
+            <el-tag :type="previewSyncTagType">{{ previewSyncTagText }}</el-tag>
           </div>
           <div class="preview-note">
-            <p>这里还原层级、排序和主推关系，不追求逐像素一致，也不会复刻全部 hover 或动画。</p>
+            <p>这里用后台专用缩略样式还原层级、排序和主推关系，不追求逐像素一致，也不会复刻全部 hover 或动画。</p>
           </div>
           <div class="preview-frame">
             <div class="preview-shell">
@@ -1218,41 +1373,53 @@ onBeforeUnmount(() => {
       </section>
 
       <section class="schedule-table content-stage">
-        <div class="panel-head">
-          <div>
-            <p class="panel-head__eyebrow">历史排期列表</p>
-            <h2>下方管理</h2>
+        <div class="schedule-table__toolbar">
+          <div class="panel-head">
+            <div>
+              <p class="panel-head__eyebrow">历史排期列表</p>
+              <h2>下方管理</h2>
+            </div>
+            <span>{{ scheduleRows.length }} 条排期</span>
           </div>
-          <span>{{ scheduleRows.length }} 条排期</span>
+          <div class="schedule-table__actions">
+            <el-tag :type="appliedFilterDate ? 'warning' : 'info'">
+              {{ appliedFilterDate ? `当前筛选：${appliedFilterDate}` : '当前筛选：全部日期' }}
+            </el-tag>
+            <el-button size="small" @click="attemptRefreshData">刷新列表</el-button>
+            <el-button v-if="appliedFilterDate" size="small" @click="attemptFilterDateChange('')">清除此日筛选</el-button>
+            <el-button size="small" type="primary" plain @click="attemptNewDraft">新建空白排期</el-button>
+          </div>
         </div>
-        <EmptyState v-if="scheduleRows.length === 0" title="当前筛选下没有排期" description="可以直接在上面的工作台新建一条，也可以清除日期筛选查看全部。" action-text="新建空白排期" @action="attemptNewDraft" />
-        <el-table v-else :data="scheduleRows" border :row-class-name="scheduleRowClassName">
-          <el-table-column prop="scheduleDate" label="日期" width="140" />
-          <el-table-column prop="themeTitle" label="主题标题" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="themeKey" label="主题分类" width="120">
-            <template #default="scope">{{ ARTICLE_CATEGORY_LABELS[scope.row.themeKey] || scope.row.themeKey }}</template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态" width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'">{{ scope.row.status === 'ACTIVE' ? '启用' : '草稿' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="语录" min-width="200" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.quoteContent || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="文章 / 书籍" width="130">
-            <template #default="scope">
-              {{ `${countScheduleItems(scope.row, 'ARTICLE')} / ${countScheduleItems(scope.row, 'BOOK')}` }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right">
-            <template #default="scope">
-              <el-button link type="primary" @click="attemptOpenSchedule(scope.row)">载入工作台</el-button>
-              <el-button link @click="attemptFilterDateChange(scope.row.scheduleDate)">筛选此日</el-button>
-              <el-button link type="danger" @click="removeScheduleRow(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="schedule-table__body">
+          <EmptyState v-if="scheduleRows.length === 0" title="当前筛选下没有排期" description="可以直接在上面的工作台新建一条，也可以清除日期筛选查看全部。" action-text="新建空白排期" @action="attemptNewDraft" />
+          <el-table v-else :data="scheduleRows" border size="small" class="schedule-history-table" :row-class-name="scheduleRowClassName">
+            <el-table-column prop="scheduleDate" label="日期" width="132" />
+            <el-table-column prop="themeTitle" label="主题标题" min-width="210" show-overflow-tooltip />
+            <el-table-column prop="themeKey" label="主题分类" width="110">
+              <template #default="scope">{{ ARTICLE_CATEGORY_LABELS[scope.row.themeKey] || scope.row.themeKey }}</template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="88">
+              <template #default="scope">
+                <el-tag size="small" :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'">{{ scope.row.status === 'ACTIVE' ? '启用' : '草稿' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="语录" min-width="180" show-overflow-tooltip>
+              <template #default="scope">{{ scope.row.quoteContent || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="文章 / 书籍" width="112">
+              <template #default="scope">
+                {{ `${countScheduleItems(scope.row, 'ARTICLE')} / ${countScheduleItems(scope.row, 'BOOK')}` }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="196" fixed="right">
+              <template #default="scope">
+                <el-button size="small" link type="primary" @click="attemptOpenSchedule(scope.row)">载入</el-button>
+                <el-button size="small" link @click="attemptFilterDateChange(scope.row.scheduleDate)">筛选</el-button>
+                <el-button size="small" link type="danger" @click="removeScheduleRow(scope.row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </section>
     </template>
 
@@ -1364,7 +1531,29 @@ onBeforeUnmount(() => {
 }
 
 .schedule-dirty {
-  align-items: center;
+  align-items: flex-start;
+}
+
+.schedule-dirty__summary {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.schedule-status-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.schedule-dirty__tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 
 .schedule-dirty p {
@@ -1382,15 +1571,30 @@ onBeforeUnmount(() => {
 
 .schedule-workbench {
   display: grid;
-  grid-template-columns: minmax(300px, 0.95fr) minmax(460px, 1.25fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(280px, 0.92fr) minmax(440px, 1.2fr) minmax(320px, 0.88fr);
   gap: var(--content-gap-3);
-  align-items: start;
+  align-items: stretch;
 }
 
 .workbench-panel {
   display: grid;
   gap: var(--content-gap-3);
   min-width: 0;
+  align-self: stretch;
+}
+
+.pool-panel,
+.canvas-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.pool-scroll,
+.canvas-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  display: grid;
+  gap: var(--content-gap-3);
 }
 
 .panel-head h2 {
@@ -1411,12 +1615,6 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 
-.pool-panel,
-.canvas-panel {
-  max-height: calc(100vh - 180px);
-  overflow: auto;
-}
-
 .pool-group,
 .composer-group,
 .preview-block {
@@ -1431,6 +1629,59 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--content-gap-2);
   align-items: baseline;
+}
+
+.pool-group__head {
+  width: 100%;
+  border: 1px solid rgba(123, 148, 190, 0.18);
+  background: rgba(12, 20, 35, 0.56);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.pool-group__head:hover {
+  border-color: rgba(123, 148, 190, 0.34);
+  background: rgba(15, 25, 43, 0.72);
+}
+
+.pool-group__head.is-open {
+  border-color: rgba(117, 193, 170, 0.28);
+  background: rgba(16, 28, 48, 0.86);
+}
+
+.pool-group__title {
+  display: grid;
+  gap: 4px;
+}
+
+.pool-group__title strong {
+  color: #f5fbff;
+  font-size: 16px;
+}
+
+.pool-group__title small {
+  color: #8ea9cf;
+  font-size: 12px;
+}
+
+.pool-group__caret {
+  color: #a8c1e5;
+  transition: transform 0.2s ease;
+}
+
+.pool-group__head.is-open .pool-group__caret {
+  transform: rotate(180deg);
+}
+
+.pool-group__body {
+  display: grid;
+  gap: var(--content-gap-2);
 }
 
 .pool-group__head h3,
@@ -1603,20 +1854,24 @@ onBeforeUnmount(() => {
 }
 
 .preview-panel {
-  overflow: hidden;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
 }
 
 .preview-frame {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
 }
 
 .preview-shell {
-  width: 430px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 400px;
   display: grid;
-  gap: var(--content-gap-3);
-  padding: 10px;
+  gap: 14px;
+  padding: 12px;
   border-radius: calc(var(--content-radius-2) + 2px);
   border: 1px solid var(--content-border-1);
   background:
@@ -1638,13 +1893,51 @@ onBeforeUnmount(() => {
   margin-top: 14px;
 }
 
-.preview-stage {
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-}
-
 .schedule-table {
   display: grid;
-  gap: var(--content-gap-3);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.schedule-table__toolbar {
+  position: sticky;
+  top: 18px;
+  z-index: 4;
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(96, 119, 158, 0.18);
+  background:
+    linear-gradient(180deg, rgba(19, 31, 49, 0.98), rgba(14, 24, 40, 0.95)),
+    #111b30;
+}
+
+.schedule-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.schedule-table__body {
+  padding: 0 22px 22px;
+  max-height: min(960px, calc(100vh - 180px));
+  overflow: auto;
+}
+
+.schedule-history-table {
+  margin-top: 16px;
+}
+
+.schedule-history-table :deep(.el-table__cell) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.schedule-history-table :deep(.el-button + .el-button) {
+  margin-left: 10px;
 }
 
 .leave-dialog__lead,
@@ -1661,6 +1954,106 @@ onBeforeUnmount(() => {
   background: rgba(194, 164, 108, 0.08) !important;
 }
 
+:deep(.preview-shell .quote-hero),
+:deep(.preview-shell .article-card),
+:deep(.preview-shell .book-card),
+:deep(.preview-shell .archive-calendar__month) {
+  box-shadow: none;
+}
+
+:deep(.preview-shell .quote-hero) {
+  padding: 18px;
+  gap: 14px;
+  border-radius: 24px;
+}
+
+:deep(.preview-shell .quote-hero__body) {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+:deep(.preview-shell .quote-hero__theme h2),
+:deep(.preview-shell .quote-hero__quote blockquote),
+:deep(.preview-shell .article-card__head h3),
+:deep(.preview-shell .book-card__head h3) {
+  overflow-wrap: anywhere;
+}
+
+:deep(.preview-shell .quote-hero__theme h2) {
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.16;
+}
+
+:deep(.preview-shell .quote-hero__quote) {
+  padding: 16px;
+  gap: 10px;
+}
+
+:deep(.preview-shell .quote-hero__quote blockquote) {
+  font-size: clamp(16px, 1.8vw, 22px);
+  line-height: 1.45;
+}
+
+:deep(.preview-shell .article-card),
+:deep(.preview-shell .book-card),
+:deep(.preview-shell .article-card.dense),
+:deep(.preview-shell .book-card.dense) {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 14px;
+}
+
+:deep(.preview-shell .article-card__cover) {
+  min-height: 132px;
+}
+
+:deep(.preview-shell .book-card__frame) {
+  padding: 10px;
+}
+
+:deep(.preview-shell .book-card__cover) {
+  min-height: 148px;
+}
+
+:deep(.preview-shell .article-card__head h3) {
+  font-size: 20px;
+}
+
+:deep(.preview-shell .book-card__head h3) {
+  font-size: 18px;
+}
+
+:deep(.preview-shell .article-card__details),
+:deep(.preview-shell .book-card__notes) {
+  grid-template-columns: 1fr;
+}
+
+:deep(.preview-shell .state-tabs__rail) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+:deep(.preview-shell .state-tab) {
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+:deep(.preview-shell .state-tab__label) {
+  font-size: 14px;
+}
+
+:deep(.preview-shell .archive-calendar__month) {
+  padding: 14px;
+}
+
+:deep(.preview-shell .archive-calendar__grid) {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+:deep(.preview-shell .archive-calendar__day) {
+  min-height: 62px;
+}
+
 @media (max-width: 1580px) {
   .schedule-workbench {
     grid-template-columns: minmax(280px, 0.95fr) minmax(440px, 1.2fr);
@@ -1668,6 +2061,16 @@ onBeforeUnmount(() => {
 
   .preview-panel {
     grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (min-width: 1181px) {
+  .pool-panel,
+  .canvas-panel,
+  .preview-panel {
+    height: min(920px, calc(100vh - 210px));
   }
 }
 
@@ -1678,8 +2081,28 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .schedule-dirty__summary {
+    grid-template-columns: 1fr;
+  }
+
   .pool-panel,
-  .canvas-panel {
+  .canvas-panel,
+  .preview-panel {
+    height: auto;
+  }
+
+  .pool-scroll,
+  .canvas-scroll {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .schedule-table__toolbar {
+    position: static;
+    top: auto;
+  }
+
+  .schedule-table__body {
     max-height: none;
   }
 }
@@ -1689,6 +2112,7 @@ onBeforeUnmount(() => {
   .schedule-dirty,
   .panel-head,
   .slot-entity,
+  .schedule-dirty__tags,
   .pool-card__actions,
   .sortable-card__actions {
     flex-direction: column;
@@ -1699,8 +2123,17 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
+  .schedule-table__actions {
+    justify-content: stretch;
+  }
+
   .schedule-toolbar__actions :deep(.el-date-editor) {
     width: 100%;
+  }
+
+  .preview-panel {
+    position: static;
+    max-height: none;
   }
 }
 </style>

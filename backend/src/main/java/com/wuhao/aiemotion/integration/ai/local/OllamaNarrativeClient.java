@@ -24,13 +24,22 @@ public class OllamaNarrativeClient {
     }
 
     public String chat(String systemPrompt, String userPrompt) {
-        return chat(systemPrompt, userPrompt, null);
+        return chat(systemPrompt, userPrompt, null, null);
     }
 
     public String chat(String systemPrompt, String userPrompt, Double temperatureOverride) {
+        return chat(systemPrompt, userPrompt, temperatureOverride, null);
+    }
+
+    public String chat(String systemPrompt,
+                       String userPrompt,
+                       Double temperatureOverride,
+                       Long readTimeoutOverrideMs) {
         RestTemplate restTemplate = restTemplateBuilder
                 .setConnectTimeout(Duration.ofMillis(properties.getOllama().getConnectTimeoutMs()))
-                .setReadTimeout(Duration.ofMillis(properties.getOllama().getReadTimeoutMs()))
+                .setReadTimeout(Duration.ofMillis(
+                        readTimeoutOverrideMs == null ? properties.getOllama().getReadTimeoutMs() : readTimeoutOverrideMs
+                ))
                 .build();
 
         Map<String, Object> options = new LinkedHashMap<>();

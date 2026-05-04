@@ -86,6 +86,12 @@ const runtimeRows = computed(() =>
     (item): item is RuntimeModelInfo => Boolean(item),
   ),
 )
+const registryEmptyTitle = computed(() => (runtimeRows.value.length ? '注册表暂无模型数据' : '暂无模型数据'))
+const registryEmptyDescription = computed(() =>
+  runtimeRows.value.length
+    ? '系统运行态已经返回模型摘要，但当前筛选条件下没有模型注册记录。请先清空筛选，或补齐模型注册表后再继续切换治理。'
+    : '当前筛选条件下没有模型注册记录。',
+)
 
 const runtimeMismatchRows = computed(() =>
   rows.value.filter((row) => {
@@ -287,7 +293,12 @@ onMounted(() => {
     />
 
     <el-card shadow="never" class="runtime-card">
-      <template #header>当前实际运行模型</template>
+      <template #header>
+        <div class="runtime-card__header">
+          <span>当前实际运行模型</span>
+          <span>当前注册环境：{{ formatEnv(runtimeEnvHint) }}</span>
+        </div>
+      </template>
       <EmptyState
         v-if="runtimeRows.length === 0"
         title="暂无运行态摘要"
@@ -338,19 +349,19 @@ onMounted(() => {
     />
     <EmptyState
       v-else-if="rows.length === 0"
-      title="暂无模型数据"
-      description="当前筛选条件下没有模型注册记录。"
+      :title="registryEmptyTitle"
+      :description="registryEmptyDescription"
       action-text="重新加载"
       @action="loadModels"
     />
     <el-table v-else :data="rows" border>
       <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="model_name" label="模型名称" min-width="170" />
-      <el-table-column prop="model_code" label="模型编码" min-width="130" />
+      <el-table-column prop="model_name" label="模型名称" min-width="170" show-overflow-tooltip />
+      <el-table-column prop="model_code" label="模型编码" min-width="130" show-overflow-tooltip />
       <el-table-column label="类型" width="140">
         <template #default="scope">{{ formatModelType(scope.row.model_type) }}</template>
       </el-table-column>
-      <el-table-column prop="version" label="登记版本" min-width="150" />
+      <el-table-column prop="version" label="登记版本" min-width="150" show-overflow-tooltip />
       <el-table-column label="环境" width="100">
         <template #default="scope">{{ formatEnv(scope.row.env) }}</template>
       </el-table-column>
@@ -492,6 +503,19 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.runtime-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.runtime-card__header span:last-child {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
 .runtime-item {
   height: 100%;
   padding: 14px 16px;
@@ -500,30 +524,42 @@ onMounted(() => {
   background: rgba(12, 21, 38, 0.76);
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .runtime-item__meta,
 .runtime-check-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
 }
 
 .runtime-item__meta span {
   color: var(--admin-text-secondary);
   font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.runtime-item__meta :deep(.el-tag) {
+  flex-shrink: 0;
 }
 
 .runtime-item strong,
 .runtime-check-row strong {
   color: var(--admin-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .runtime-item p {
   margin: 0;
   color: var(--admin-text-secondary);
   line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .runtime-check-row {
@@ -533,5 +569,12 @@ onMounted(() => {
 
 .runtime-check-row:last-child {
   border-bottom: none;
+}
+
+@media (max-width: 860px) {
+  .runtime-item__meta,
+  .runtime-check-row {
+    flex-direction: column;
+  }
 }
 </style>

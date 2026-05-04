@@ -154,7 +154,7 @@ const visibleHighlights = computed(() =>
 
 .book-card__head h3 {
   margin: 0;
-  color: #f7fbff;
+  color: var(--content-text-primary);
   font-size: 26px;
   line-height: 1.2;
 }
@@ -177,12 +177,12 @@ const visibleHighlights = computed(() =>
 .book-card__note p,
 .book-card__hint {
   margin: 0;
-  color: #b4c6e3;
+  color: var(--content-text-tertiary);
   line-height: 1.65;
 }
 
 .book-card__description {
-  color: #dbe7f9;
+  color: var(--content-text-secondary);
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -213,7 +213,7 @@ const visibleHighlights = computed(() =>
 .book-card__note span {
   display: inline-block;
   margin-bottom: 6px;
-  color: #e4c28f;
+  color: var(--content-text-gold);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -222,7 +222,7 @@ const visibleHighlights = computed(() =>
 .book-card__highlights {
   margin: 0;
   padding-left: 18px;
-  color: #eff6ff;
+  color: var(--content-text-secondary);
   display: grid;
   gap: 6px;
 }
@@ -250,12 +250,12 @@ const visibleHighlights = computed(() =>
 }
 
 .pill-muted {
-  color: #dceafb;
+  color: var(--content-text-secondary);
   background: var(--content-chip-muted-surface);
 }
 
 .pill-book {
-  color: #fff5df;
+  color: var(--content-text-gold);
   background: var(--content-chip-gold-surface);
 }
 

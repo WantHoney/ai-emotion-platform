@@ -23,9 +23,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .state-card {
-  border: 1px dashed rgba(145, 169, 212, 0.48);
+  border: 1px dashed var(--user-border-strong);
   border-radius: var(--radius-lg);
-  background: rgba(15, 26, 44, 0.62);
+  background: var(--user-section-bg);
   padding: 24px;
 }
 
@@ -38,17 +38,17 @@ const emit = defineEmits<{
 }
 
 .state-icon {
-  color: #8ab8c1;
+  color: var(--user-eyebrow-color);
 }
 
 h3 {
   margin: 0;
   font-size: 18px;
-  color: #eff5ff;
+  color: var(--user-text-primary);
 }
 
 p {
   margin: 0;
-  color: #b4c9ec;
+  color: var(--user-text-secondary);
 }
 </style>

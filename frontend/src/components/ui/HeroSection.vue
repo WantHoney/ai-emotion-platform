@@ -47,20 +47,16 @@ const emit = defineEmits<{
   position: relative;
   overflow: hidden;
   border-radius: 24px;
-  border: 1px solid rgba(165, 179, 217, 0.18);
-  background:
-    linear-gradient(135deg, rgba(9, 14, 24, 0.88), rgba(11, 24, 42, 0.54)),
-    radial-gradient(circle at 80% 26%, rgba(101, 191, 210, 0.26), transparent 42%),
-    radial-gradient(circle at 20% 14%, rgba(206, 176, 125, 0.26), transparent 44%),
-    linear-gradient(180deg, #0a111f, #090f1b 64%, #08101f);
-  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.5);
+  border: 1px solid var(--content-border-2);
+  background: var(--content-hero-bg);
+  box-shadow: var(--content-shadow-3);
 }
 
 .hero-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(transparent 96%, rgba(255, 255, 255, 0.03) 97%);
+  background-image: linear-gradient(transparent 96%, var(--content-gridline) 97%);
   background-size: 100% 22px;
   opacity: 0.2;
 }
@@ -79,7 +75,7 @@ const emit = defineEmits<{
 
 .eyebrow {
   margin: 0;
-  color: #9bb7de;
+  color: var(--content-text-muted);
   letter-spacing: 0.13em;
   text-transform: uppercase;
   font-size: 12px;
@@ -89,14 +85,14 @@ const emit = defineEmits<{
   margin: 14px 0 0;
   font-size: clamp(32px, 5.8vw, 62px);
   line-height: 1.06;
-  color: #f8fafc;
+  color: var(--content-text-primary);
   letter-spacing: 0.01em;
   font-family: var(--font-display);
 }
 
 .subtitle {
   margin: 18px 0 0;
-  color: #d3deef;
+  color: var(--content-text-secondary);
   line-height: 1.72;
   font-size: clamp(14px, 2.1vw, 18px);
   max-width: 600px;
@@ -116,7 +112,7 @@ const emit = defineEmits<{
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  box-shadow: 0 16px 28px rgba(2, 8, 20, 0.26);
+  box-shadow: var(--content-shadow-1);
   transition:
     transform var(--content-motion-fast) var(--content-ease-standard),
     box-shadow var(--content-motion-fast) var(--content-ease-standard),
@@ -125,30 +121,30 @@ const emit = defineEmits<{
 
 .hero-actions :deep(.hero-cta:hover) {
   transform: translateY(-1px);
-  box-shadow: 0 20px 34px rgba(2, 8, 20, 0.34);
+  box-shadow: var(--content-shadow-2);
 }
 
 .hero-actions :deep(.hero-cta--secondary) {
-  --el-button-text-color: #0f172a;
-  --el-button-hover-text-color: #0f172a;
-  --el-button-active-text-color: #0f172a;
-  color: #0f172a;
-  border-color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.92);
+  --el-button-text-color: var(--content-button-secondary-text);
+  --el-button-hover-text-color: var(--content-button-secondary-text);
+  --el-button-active-text-color: var(--content-button-secondary-text);
+  color: var(--content-button-secondary-text);
+  border-color: var(--content-button-secondary-border);
+  background: var(--content-button-secondary-bg);
 }
 
 .hero-actions :deep(.hero-cta--secondary:hover) {
-  color: #0f172a;
-  border-color: rgba(255, 255, 255, 0.86);
-  background: #ffffff;
+  color: var(--content-button-secondary-text);
+  border-color: var(--content-button-secondary-hover-border);
+  background: var(--content-button-secondary-hover-bg);
 }
 
 .hero-divider {
   width: 100%;
   height: 1px;
   margin-top: clamp(28px, 4vw, 40px);
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.08);
+  background: var(--content-border-3);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--content-border-3) 22%, transparent);
 }
 
 .hero-bottom {
@@ -156,15 +152,15 @@ const emit = defineEmits<{
 }
 
 :deep(.el-button--primary) {
-  --el-button-bg-color: #c3a26e;
-  --el-button-border-color: #c3a26e;
-  --el-button-hover-bg-color: #d3b786;
-  --el-button-hover-border-color: #d3b786;
-  --el-button-active-bg-color: #b8935d;
-  --el-button-active-border-color: #b8935d;
-  --el-button-text-color: #0f172a;
+  --el-button-bg-color: var(--content-button-primary-bg);
+  --el-button-border-color: var(--content-button-primary-border);
+  --el-button-hover-bg-color: var(--content-button-primary-hover-bg);
+  --el-button-hover-border-color: var(--content-button-primary-hover-border);
+  --el-button-active-bg-color: var(--content-button-primary-active-bg);
+  --el-button-active-border-color: var(--content-button-primary-active-border);
+  --el-button-text-color: var(--content-button-primary-text);
   font-weight: 700;
-  box-shadow: 0 18px 34px rgba(195, 162, 110, 0.28);
+  box-shadow: var(--content-button-primary-shadow);
 }
 
 @media (max-width: 768px) {

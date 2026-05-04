@@ -36,8 +36,10 @@ import {
 } from '@/constants/contentMeta'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 import { resolveImageUrl } from '@/utils/contentMedia'
+import { formatSortOrder } from '@/utils/uiText'
 
 type CmsRow = CmsBanner | CmsQuote | CmsArticle | CmsBook
+type BooleanFilter = 'all' | 'yes' | 'no'
 
 const props = withDefaults(
   defineProps<{
@@ -64,6 +66,14 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const editingId = ref<number | null>(null)
 const editingRow = ref<CmsRow | null>(null)
+const keyword = ref('')
+const idSort = ref<'asc' | 'desc'>('desc')
+const filters = reactive({
+  recommended: 'all' as BooleanFilter,
+  enabled: 'all' as BooleanFilter,
+  active: 'all' as BooleanFilter,
+  dataSource: 'all',
+})
 
 const form = reactive({
   title: '',
@@ -109,6 +119,98 @@ const currentRows = computed<CmsRow[]>(() => {
   }
 })
 
+const sortOptions = [
+  { label: `ID ${formatSortOrder('desc')}`, value: 'desc' as const },
+  { label: `ID ${formatSortOrder('asc')}`, value: 'asc' as const },
+]
+
+const hasLifecycleFilters = computed(() => activeTab.value !== 'banner')
+
+const dataSourceOptions = computed(() =>
+  Object.entries(DATA_SOURCE_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  })),
+)
+
+const hasActiveFilters = computed(() => {
+  return (
+    keyword.value.trim().length > 0 ||
+    idSort.value !== 'desc' ||
+    filters.recommended !== 'all' ||
+    filters.enabled !== 'all' ||
+    filters.active !== 'all' ||
+    filters.dataSource !== 'all'
+  )
+})
+
+const matchesBooleanFilter = (filterValue: BooleanFilter, actualValue?: boolean) => {
+  if (filterValue === 'all') return true
+  return filterValue === 'yes' ? Boolean(actualValue) : !actualValue
+}
+
+const resolveSearchText = (row: CmsRow) => {
+  const commonBits = [row.id, row.sortOrder]
+
+  switch (activeTab.value) {
+    case 'quote': {
+      const quote = row as CmsQuote
+      return [...commonBits, quote.content, quote.author, quote.seedKey, quote.dataSource].join(' ')
+    }
+    case 'article': {
+      const article = row as CmsArticle
+      return [...commonBits, article.title, article.summary, article.sourceName, article.sourceUrl, article.seedKey, article.dataSource].join(' ')
+    }
+    case 'book': {
+      const book = row as CmsBook
+      return [...commonBits, book.title, book.author, book.description, book.purchaseUrl, book.seedKey, book.dataSource].join(' ')
+    }
+    default: {
+      const banner = row as CmsBanner
+      return [...commonBits, banner.title, banner.imageUrl, banner.linkUrl].join(' ')
+    }
+  }
+}
+
+const filteredRows = computed<CmsRow[]>(() => {
+  const keywordValue = keyword.value.trim().toLowerCase()
+  return [...currentRows.value]
+    .filter((row) => {
+      if (keywordValue && !resolveSearchText(row).toLowerCase().includes(keywordValue)) {
+        return false
+      }
+
+      if (!matchesBooleanFilter(filters.recommended, row.recommended)) {
+        return false
+      }
+
+      if (!matchesBooleanFilter(filters.enabled, row.enabled)) {
+        return false
+      }
+
+      if ('isActive' in row && !matchesBooleanFilter(filters.active, row.isActive)) {
+        return false
+      }
+
+      if ('dataSource' in row && filters.dataSource !== 'all' && (row.dataSource || 'manual') !== filters.dataSource) {
+        return false
+      }
+
+      return true
+    })
+    .sort((left, right) => (idSort.value === 'asc' ? left.id - right.id : right.id - left.id))
+})
+
+const filteredSummary = computed(() =>
+  filteredRows.value.length === currentRows.value.length
+    ? `共 ${currentRows.value.length} 条记录`
+    : `显示 ${filteredRows.value.length} / ${currentRows.value.length} 条记录`,
+)
+
+const emptyStateDescription = computed(() =>
+  hasActiveFilters.value ? '当前筛选条件下没有匹配内容，可以调整条件或一键清空后重试。' : '当前分类下没有数据，点击“新增内容”即可开始维护。',
+)
+
 const dialogTitle = computed(() => {
   const action = dialogMode.value === 'create' ? '新增' : '编辑'
   const nameMap: Record<CmsContentType, string> = {
@@ -126,6 +228,15 @@ const previewImageUrl = computed(() => {
   if (activeTab.value === 'article') return resolveImageUrl(form.imageUrl, 'article')
   return form.imageUrl
 })
+
+const resetFilters = () => {
+  keyword.value = ''
+  idSort.value = 'desc'
+  filters.recommended = 'all'
+  filters.enabled = 'all'
+  filters.active = 'all'
+  filters.dataSource = 'all'
+}
 
 const resetForm = () => {
   form.title = ''
@@ -436,35 +547,71 @@ onMounted(async () => {
         <el-tab-pane label="书籍" name="book" />
       </el-tabs>
 
+      <section class="content-toolbar">
+        <div class="content-toolbar__main">
+          <el-input v-model="keyword" clearable placeholder="搜索 ID、标题、内容、作者、来源或链接" class="content-toolbar__search" />
+          <el-select v-model="idSort" class="content-toolbar__select">
+            <el-option v-for="item in sortOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-model="filters.recommended" class="content-toolbar__select">
+            <el-option label="全部推荐状态" value="all" />
+            <el-option label="仅看推荐" value="yes" />
+            <el-option label="仅看未推荐" value="no" />
+          </el-select>
+          <el-select v-model="filters.enabled" class="content-toolbar__select">
+            <el-option label="全部展示状态" value="all" />
+            <el-option label="仅看启用" value="yes" />
+            <el-option label="仅看关闭" value="no" />
+          </el-select>
+          <el-select v-if="hasLifecycleFilters" v-model="filters.active" class="content-toolbar__select">
+            <el-option label="全部活跃状态" value="all" />
+            <el-option label="仅看活跃" value="yes" />
+            <el-option label="仅看停用" value="no" />
+          </el-select>
+          <el-select v-if="hasLifecycleFilters" v-model="filters.dataSource" class="content-toolbar__select">
+            <el-option label="全部数据来源" value="all" />
+            <el-option v-for="item in dataSourceOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="content-toolbar__foot">
+          <span>{{ filteredSummary }}</span>
+          <el-button link type="primary" :disabled="!hasActiveFilters" @click="resetFilters">清空筛选</el-button>
+        </div>
+      </section>
+
       <EmptyState
-        v-if="currentRows.length === 0"
-        title="暂无内容"
-        description="当前分类下没有数据，点击“新增内容”即可开始维护。"
-        action-text="新增"
-        @action="openCreate"
+        v-if="filteredRows.length === 0"
+        :title="hasActiveFilters ? '没有匹配内容' : '暂无内容'"
+        :description="emptyStateDescription"
+        :action-text="hasActiveFilters ? '清空筛选' : '新增'"
+        @action="hasActiveFilters ? resetFilters() : openCreate()"
       />
 
-      <el-table v-else :data="currentRows" border>
+      <el-table v-else :data="filteredRows" border table-layout="fixed">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column
           v-if="activeTab === 'quote'"
           prop="content"
           label="内容"
-          min-width="320"
+          min-width="360"
           show-overflow-tooltip
         />
-        <el-table-column v-else prop="title" label="标题" min-width="220" show-overflow-tooltip />
+        <el-table-column v-if="activeTab !== 'quote'" prop="title" label="标题" min-width="220" show-overflow-tooltip />
+        <el-table-column v-if="activeTab === 'banner'" prop="linkUrl" label="跳转链接" min-width="200" show-overflow-tooltip />
+        <el-table-column v-if="activeTab === 'quote'" prop="author" label="作者" width="140" show-overflow-tooltip />
+        <el-table-column v-if="activeTab === 'article'" prop="summary" label="摘要" min-width="220" show-overflow-tooltip />
+        <el-table-column v-if="activeTab === 'book'" prop="description" label="简介" min-width="220" show-overflow-tooltip />
         <el-table-column v-if="activeTab === 'article' || activeTab === 'book'" prop="category" label="主题" width="120">
           <template #default="scope">
             {{ ARTICLE_CATEGORY_OPTIONS.find((item) => item.value === scope.row.category)?.label || '-' }}
           </template>
         </el-table-column>
-        <el-table-column v-if="activeTab === 'article'" prop="sourceName" label="来源" min-width="140" />
+        <el-table-column v-if="activeTab === 'article'" prop="sourceName" label="来源" min-width="140" show-overflow-tooltip />
         <el-table-column v-if="activeTab === 'article'" prop="readingMinutes" label="时长" width="90">
           <template #default="scope">{{ scope.row.readingMinutes ? `${scope.row.readingMinutes} 分钟` : '-' }}</template>
         </el-table-column>
-        <el-table-column v-if="activeTab === 'book'" prop="author" label="作者" min-width="140" />
-        <el-table-column prop="sortOrder" label="排序" width="90" />
+        <el-table-column v-if="activeTab === 'book'" prop="author" label="作者" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="sortOrder" label="排序" width="90" align="center" />
         <el-table-column label="推荐" width="90">
           <template #default="scope">
             <el-tag :type="scope.row.recommended ? 'success' : 'info'">{{ scope.row.recommended ? '是' : '否' }}</el-tag>
@@ -487,7 +634,7 @@ onMounted(async () => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="scope">
             <el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button>
             <el-button link type="danger" @click="removeContent(scope.row)">
@@ -708,6 +855,34 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
+.content-toolbar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.content-toolbar__main,
+.content-toolbar__foot {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.content-toolbar__foot {
+  justify-content: space-between;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+}
+
+.content-toolbar__search {
+  width: min(100%, 360px);
+}
+
+.content-toolbar__select {
+  width: 150px;
+}
+
 .seed-alert {
   margin-bottom: 16px;
 }
@@ -735,5 +910,21 @@ onMounted(async () => {
 
 .book-preview-wrap {
   aspect-ratio: 3 / 4;
+}
+
+@media (max-width: 860px) {
+  .content-toolbar__main > * {
+    width: 100%;
+  }
+
+  .content-toolbar__search,
+  .content-toolbar__select {
+    width: 100%;
+  }
+
+  .content-toolbar__foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

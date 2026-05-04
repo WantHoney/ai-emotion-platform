@@ -77,7 +77,7 @@ defineProps<{
 .quote-hero__eyebrow,
 .quote-hero__label {
   margin: 0;
-  color: #8dc5c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -89,7 +89,7 @@ defineProps<{
   min-height: 30px;
   padding: 0 12px;
   border-radius: var(--content-radius-pill);
-  color: #f4f9ff;
+  color: var(--content-text-gold);
   background: var(--content-chip-gold-surface);
   border: 1px solid var(--content-border-3);
   font-size: 12px;
@@ -98,7 +98,7 @@ defineProps<{
 .quote-hero__chip-muted {
   background: var(--content-chip-muted-surface);
   border-color: var(--content-border-1);
-  color: #cfe1f9;
+  color: var(--content-text-secondary);
 }
 
 .quote-hero__body {
@@ -115,7 +115,7 @@ defineProps<{
 .quote-hero__theme h2,
 .quote-hero__quote blockquote {
   margin: 12px 0 0;
-  color: #f6fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
 }
 
@@ -126,7 +126,7 @@ defineProps<{
 
 .quote-hero__theme p:last-child {
   margin: 14px 0 0;
-  color: #a9c0e3;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
   font-size: 15px;
 }
@@ -152,7 +152,7 @@ defineProps<{
 
 .quote-hero__author {
   margin: 4px 0 0;
-  color: #b8cae7;
+  color: var(--content-text-tertiary);
 }
 
 @media (max-width: 900px) {

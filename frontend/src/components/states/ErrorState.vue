@@ -43,7 +43,7 @@ const copyTraceId = async (traceId: string) => {
 .state-card {
   border: 1px solid rgba(248, 113, 113, 0.55);
   border-radius: var(--radius-lg);
-  background: rgba(79, 23, 32, 0.34);
+  background: color-mix(in srgb, #f87171 10%, var(--user-surface));
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -63,7 +63,7 @@ h3 {
 
 .trace {
   font-size: 13px;
-  color: #fecaca;
+  color: color-mix(in srgb, #f87171 62%, var(--user-text-primary));
   display: flex;
   align-items: center;
   gap: 8px;

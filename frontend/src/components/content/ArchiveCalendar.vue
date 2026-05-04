@@ -78,12 +78,12 @@ const formatMonth = (value: string) => value.replace('-', ' 年 ') + ' 月'
 }
 
 .archive-calendar__month-head h3 {
-  color: #f4f9ff;
+  color: var(--content-text-primary);
   font-size: 18px;
 }
 
 .archive-calendar__month-head p {
-  color: #9fb4d6;
+  color: var(--content-text-muted);
 }
 
 .archive-calendar__grid {
@@ -103,7 +103,7 @@ const formatMonth = (value: string) => value.replace('-', ' 年 ') + ' 月'
   border-radius: var(--content-radius-1);
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-inset);
-  color: #e2edfd;
+  color: var(--content-text-secondary);
   cursor: pointer;
   transition:
     border-color var(--content-motion-fast) var(--content-ease-standard),
@@ -122,18 +122,18 @@ const formatMonth = (value: string) => value.replace('-', ' 年 ') + ' 月'
 }
 
 .archive-calendar__day small {
-  color: #9db2d5;
+  color: var(--content-text-muted);
 }
 
 .archive-calendar__day.active {
   border-color: var(--content-border-3);
   background:
-    linear-gradient(180deg, rgba(194, 164, 108, 0.16), rgba(13, 20, 35, 0.74)),
-    rgba(194, 164, 108, 0.18);
+    linear-gradient(180deg, color-mix(in srgb, var(--user-accent-gold) 18%, transparent), color-mix(in srgb, var(--content-surface-1) 84%, transparent)),
+    color-mix(in srgb, var(--user-accent-gold) 18%, transparent);
 }
 
 .archive-calendar__day.today {
-  box-shadow: 0 0 0 1px rgba(98, 177, 137, 0.52) inset;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #62b189 52%, transparent) inset;
 }
 
 @media (max-width: 980px) {

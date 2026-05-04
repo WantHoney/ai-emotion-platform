@@ -27,26 +27,26 @@ const props = withDefaults(
 }
 
 .tone-low {
-  color: #86efac;
-  border-color: rgba(22, 163, 74, 0.52);
-  background: rgba(22, 163, 74, 0.12);
+  color: #2d8a4f;
+  border-color: rgba(22, 163, 74, 0.42);
+  background: rgba(22, 163, 74, 0.1);
 }
 
 .tone-medium {
-  color: #fde68a;
-  border-color: rgba(245, 158, 11, 0.55);
-  background: rgba(245, 158, 11, 0.16);
+  color: #a96a18;
+  border-color: rgba(245, 158, 11, 0.44);
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .tone-high {
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.62);
-  background: rgba(239, 68, 68, 0.16);
+  color: #c44848;
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.14);
 }
 
 .tone-neutral {
-  color: #c3d3ee;
-  border-color: rgba(148, 163, 184, 0.48);
-  background: rgba(100, 116, 139, 0.15);
+  color: var(--content-text-muted);
+  border-color: rgba(148, 163, 184, 0.42);
+  background: rgba(100, 116, 139, 0.12);
 }
 </style>

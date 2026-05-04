@@ -32,8 +32,8 @@ const isLongValue = (value: string | number) => toText(value).length >= 10
 
 .kpi-card {
   border-radius: 14px;
-  border: 1px solid rgba(170, 185, 216, 0.28);
-  background: linear-gradient(180deg, rgba(20, 31, 52, 0.84), rgba(13, 21, 36, 0.9));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-plain);
   padding: 14px;
   min-width: 0;
   overflow: hidden;
@@ -41,7 +41,7 @@ const isLongValue = (value: string | number) => toText(value).length >= 10
 
 .label {
   margin: 0;
-  color: #9eb3d7;
+  color: var(--content-text-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -49,7 +49,7 @@ const isLongValue = (value: string | number) => toText(value).length >= 10
 
 .value {
   margin: 8px 0 0;
-  color: #f8fafc;
+  color: var(--content-text-primary);
   font-size: clamp(24px, 2.1vw, 36px);
   line-height: 1.15;
   font-family: var(--font-display);
@@ -69,7 +69,7 @@ const isLongValue = (value: string | number) => toText(value).length >= 10
 
 .helper {
   margin: 10px 0 0;
-  color: #bfd1ee;
+  color: var(--content-text-tertiary);
   font-size: 12px;
   overflow-wrap: break-word;
   word-break: break-word;

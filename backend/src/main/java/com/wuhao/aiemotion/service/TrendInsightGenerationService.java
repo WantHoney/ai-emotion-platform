@@ -61,7 +61,12 @@ public class TrendInsightGenerationService {
 
         try {
             String promptPayload = buildPromptPayload(userId, snapshot);
-            String responseJson = ollamaNarrativeClient.chat(buildSystemPrompt(), buildUserPrompt(promptPayload));
+            String responseJson = ollamaNarrativeClient.chat(
+                    buildSystemPrompt(),
+                    buildUserPrompt(promptPayload),
+                    null,
+                    properties.getTrend().getTimeoutMs()
+            );
             LlmTrendInsightResponse llmResponse = objectMapper.readValue(responseJson, LlmTrendInsightResponse.class);
 
             String headline = cleanText(llmResponse.headline());

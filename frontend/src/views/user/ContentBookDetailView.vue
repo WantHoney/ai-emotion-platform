@@ -178,10 +178,8 @@ onMounted(() => {
   gap: 18px;
   padding: 24px;
   border-radius: 28px;
-  border: 1px solid rgba(171, 193, 228, 0.2);
-  background:
-    radial-gradient(circle at top right, rgba(103, 177, 138, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(15, 24, 40, 0.94), rgba(10, 16, 30, 0.94));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-highlight);
 }
 
 .book-decision {
@@ -201,9 +199,9 @@ onMounted(() => {
   aspect-ratio: 0.72;
   overflow: hidden;
   border-radius: 22px;
-  border: 1px solid rgba(176, 194, 226, 0.22);
-  background: rgba(14, 22, 38, 0.76);
-  box-shadow: 0 20px 36px rgba(4, 11, 22, 0.34);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-cover-bg);
+  box-shadow: var(--content-shadow-2);
 }
 
 .book-decision__content {
@@ -224,7 +222,7 @@ onMounted(() => {
 .book-decision__eyebrow,
 .paired-reading__eyebrow {
   margin: 0;
-  color: #e2c08b;
+  color: var(--content-text-gold);
   font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -234,7 +232,7 @@ onMounted(() => {
 .paired-reading h2,
 .paired-reading h3 {
   margin: 0;
-  color: #f4fbff;
+  color: var(--content-text-primary);
 }
 
 .book-decision h1 {
@@ -256,7 +254,7 @@ onMounted(() => {
 
 .book-decision__author {
   margin: 0;
-  color: #dfe9f8;
+  color: var(--content-text-secondary);
   font-size: 16px;
   font-weight: 600;
 }
@@ -269,13 +267,13 @@ onMounted(() => {
 .paired-reading__summary,
 .paired-reading__hint {
   margin: 0;
-  color: #b6c8e5;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
 .book-decision__summary,
 .paired-reading__summary {
-  color: #dde8f8;
+  color: var(--content-text-secondary);
 }
 
 .book-decision__notes {
@@ -287,14 +285,14 @@ onMounted(() => {
 .decision-note {
   padding: 16px;
   border-radius: 18px;
-  background: rgba(14, 23, 39, 0.72);
-  border: 1px solid rgba(120, 144, 181, 0.16);
+  background: var(--content-card-bg-soft);
+  border: 1px solid var(--content-border-1);
 }
 
 .decision-note span {
   display: inline-block;
   margin-bottom: 8px;
-  color: #e4c28f;
+  color: var(--content-text-gold);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -305,7 +303,7 @@ onMounted(() => {
   padding-left: 20px;
   display: grid;
   gap: 8px;
-  color: #eff6ff;
+  color: var(--content-text-secondary);
 }
 
 .paired-reading__head {
@@ -322,10 +320,8 @@ onMounted(() => {
 .paired-reading__article {
   padding: 18px;
   border-radius: 22px;
-  border: 1px solid rgba(165, 189, 223, 0.18);
-  background:
-    radial-gradient(circle at top right, rgba(103, 177, 138, 0.1), transparent 32%),
-    linear-gradient(180deg, rgba(16, 27, 45, 0.96), rgba(10, 16, 30, 0.94));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-plain);
 }
 
 .paired-reading__article {
@@ -334,7 +330,7 @@ onMounted(() => {
 }
 
 .paired-reading__source {
-  color: #d6e2f3;
+  color: var(--content-text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -361,13 +357,13 @@ onMounted(() => {
 }
 
 .pill-muted {
-  background: rgba(120, 150, 202, 0.18);
-  color: #d7e4f7;
+  background: var(--content-chip-muted-surface);
+  color: var(--content-text-secondary);
 }
 
 .pill-soft {
-  background: rgba(221, 191, 127, 0.18);
-  color: #f2d9a5;
+  background: var(--content-chip-gold-surface);
+  color: var(--content-text-gold);
 }
 
 @media (max-width: 980px) {

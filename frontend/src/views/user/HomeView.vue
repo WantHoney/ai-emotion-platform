@@ -125,7 +125,7 @@ const goProtectedPath = async (path: RouteLocationRaw) => {
     return
   }
   ElMessage.info('请先登录用户账号再访问该功能')
-  await router.push({ path: '/app/login', query: { redirect: resolvedPath } })
+  await router.push({ path: '/app/home', query: { auth: '1', redirect: resolvedPath, tab: 'login' } })
 }
 
 const handlePrimaryAction = async () => {
@@ -487,7 +487,7 @@ onMounted(async () => {
   border-radius: var(--content-radius-pill);
   border: 1px solid var(--content-border-2);
   background: var(--content-surface-2);
-  color: #d7e7ff;
+  color: var(--content-text-secondary);
   font-size: 12px;
   padding: 6px 11px;
   box-shadow: var(--content-shadow-1);
@@ -506,7 +506,7 @@ onMounted(async () => {
 
 .home-hero-flow__eyebrow {
   margin: 0;
-  color: #8dc5c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -514,7 +514,7 @@ onMounted(async () => {
 
 .home-hero-flow__header h2 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--content-text-primary);
   font-size: clamp(28px, 4.4vw, 50px);
   line-height: 1.06;
   font-family: var(--font-display);
@@ -523,7 +523,7 @@ onMounted(async () => {
 .home-hero-flow__description {
   margin: 0;
   max-width: 58ch;
-  color: #b8c7df;
+  color: var(--content-text-tertiary);
   line-height: 1.72;
 }
 
@@ -586,14 +586,14 @@ onMounted(async () => {
 .content-entry-stage__eyebrow,
 .content-entry-hero__quote-label {
   margin: 0;
-  color: #8dc5c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .hero-chip--accent {
-  color: #f5fff8;
+  color: var(--content-text-accent);
   background: var(--content-chip-accent-surface);
 }
 
@@ -601,7 +601,7 @@ onMounted(async () => {
 .content-entry-article-spotlight__head h3,
 .content-entry-book-spotlight__head h3 {
   margin: 0;
-  color: #f6fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
 }
 
@@ -616,7 +616,7 @@ onMounted(async () => {
 .content-entry-hero__actions p,
 .content-entry-hero__quote-author {
   margin: 0;
-  color: #a9c0e3;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
@@ -626,7 +626,7 @@ onMounted(async () => {
 }
 
 .content-entry-hero__actions p {
-  color: #96afd0;
+  color: var(--content-text-muted);
 }
 
 .content-entry-hero__quote {
@@ -644,7 +644,7 @@ onMounted(async () => {
 
 .content-entry-hero__quote blockquote {
   margin: 0;
-  color: #f6fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
   font-size: clamp(22px, 2.8vw, 32px);
   line-height: 1.34;
@@ -707,7 +707,7 @@ onMounted(async () => {
 
 .content-entry-book-spotlight__head h3 {
   margin: 0;
-  color: #f6fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
   font-size: 24px;
   line-height: 1.12;
@@ -715,7 +715,7 @@ onMounted(async () => {
 
 .content-entry-book-spotlight__head p:last-child {
   margin: 0;
-  color: #a9c0e3;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
@@ -770,18 +770,18 @@ onMounted(async () => {
 }
 
 .content-entry-book-spotlight__meta h4 {
-  color: #f4fbff;
+  color: var(--content-text-primary);
   font-size: 18px;
   line-height: 1.35;
 }
 
 .content-entry-book-spotlight__author {
-  color: #c1d2eb;
+  color: var(--content-text-secondary);
 }
 
 .content-entry-book-spotlight__summary,
 .content-entry-book-spotlight__highlight {
-  color: #aac0e2;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
@@ -805,7 +805,7 @@ onMounted(async () => {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #8fc3c8;
+  background: var(--content-text-eyebrow);
 }
 
 .content-entry-article-spotlight__action,
@@ -822,7 +822,7 @@ onMounted(async () => {
 
 .resource-toolbar__hint {
   margin: 2px 0 0;
-  color: #9fc6cf;
+  color: var(--content-text-eyebrow);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -843,9 +843,7 @@ onMounted(async () => {
 
 .center-grid :deep(.cover-wrap) {
   min-height: 196px;
-  background:
-    radial-gradient(circle at top left, rgba(129, 190, 247, 0.14), transparent 38%),
-    linear-gradient(160deg, rgba(15, 25, 43, 0.96), rgba(9, 15, 26, 0.98));
+  background: var(--content-cover-bg);
 }
 
 .center-grid :deep(.smart-image) {
@@ -882,7 +880,7 @@ onMounted(async () => {
 
 .center-section-footer__text {
   margin: 0;
-  color: #9fb2cf;
+  color: var(--content-text-muted);
   line-height: 1.7;
 }
 
@@ -893,7 +891,7 @@ onMounted(async () => {
 
 .center-detail p {
   margin: 0;
-  color: #c6d8ef;
+  color: var(--content-text-secondary);
   line-height: 1.55;
   font-size: 14px;
 }
@@ -907,12 +905,12 @@ onMounted(async () => {
 }
 
 .pill-muted {
-  color: #d8e8f7;
+  color: var(--content-text-secondary);
   background: var(--content-chip-muted-surface);
 }
 
 .pill-accent {
-  color: #f5fff8;
+  color: var(--content-text-accent);
   background: var(--content-chip-accent-surface);
 }
 

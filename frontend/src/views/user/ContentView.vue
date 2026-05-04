@@ -346,7 +346,7 @@ onMounted(() => {
 .section-head__eyebrow,
 .archive-entry__eyebrow {
   margin: 0;
-  color: #8fc3c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -356,7 +356,7 @@ onMounted(() => {
 .section-head h2,
 .archive-entry__copy h2 {
   margin: 0;
-  color: #f4fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
 }
 
@@ -371,7 +371,7 @@ onMounted(() => {
 .archive-entry__copy p,
 .archive-drawer__lead {
   margin: 0;
-  color: #a9c0e3;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
@@ -405,7 +405,7 @@ onMounted(() => {
 }
 
 .section-head--quiet p {
-  color: #96afd0;
+  color: var(--content-text-muted);
 }
 
 .feature-stage {
@@ -445,7 +445,7 @@ onMounted(() => {
 
 .feature-stage__book-copy h3 {
   margin: 0;
-  color: #f4fbff;
+  color: var(--content-text-primary);
   font-family: var(--font-display);
   font-size: 22px;
   line-height: 1.18;
@@ -498,7 +498,7 @@ onMounted(() => {
   border: 1px solid var(--content-border-1);
   background: var(--content-surface-1);
   box-shadow: var(--content-shadow-1);
-  color: #eef5ff;
+  color: var(--content-text-primary);
   text-align: left;
   cursor: pointer;
   transition:
@@ -519,7 +519,7 @@ onMounted(() => {
   padding: 0 10px;
   align-items: center;
   border-radius: var(--content-radius-pill);
-  color: #fff4df;
+  color: var(--content-text-gold);
   background: var(--content-chip-gold-surface);
   font-size: 12px;
 }
@@ -531,12 +531,12 @@ onMounted(() => {
 }
 
 .history-card p {
-  color: #c9d8ef;
+  color: var(--content-text-secondary);
   line-height: 1.6;
 }
 
 .history-card small {
-  color: #8fa8cf;
+  color: var(--content-text-muted);
 }
 
 .archive-entry {

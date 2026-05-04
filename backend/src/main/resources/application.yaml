@@ -78,9 +78,10 @@ analysis:
     language: ${ANALYSIS_NARRATIVE_LANGUAGE:zh-CN}
     max-transcript-chars: ${ANALYSIS_NARRATIVE_MAX_TRANSCRIPT_CHARS:600}
     max-segments: ${ANALYSIS_NARRATIVE_MAX_SEGMENTS:3}
-    trend:
-      enabled: ${ANALYSIS_NARRATIVE_TREND_ENABLED:true}
-      max-points: ${ANALYSIS_NARRATIVE_TREND_MAX_POINTS:12}
+  trend:
+    enabled: ${ANALYSIS_NARRATIVE_TREND_ENABLED:true}
+    max-points: ${ANALYSIS_NARRATIVE_TREND_MAX_POINTS:12}
+    timeout-ms: ${ANALYSIS_NARRATIVE_TREND_TIMEOUT_MS:25000}
     safety-notice: ${ANALYSIS_NARRATIVE_SAFETY_NOTICE:以上内容仅作辅助参考，不构成医疗诊断。若持续感到痛苦或风险升高，请尽快联系值得信任的人或专业支持资源。}
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}

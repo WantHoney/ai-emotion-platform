@@ -164,10 +164,8 @@ onMounted(() => {
   gap: 22px;
   padding: 24px;
   border-radius: 28px;
-  border: 1px solid rgba(171, 193, 228, 0.22);
-  background:
-    radial-gradient(circle at top right, rgba(103, 177, 138, 0.14), transparent 30%),
-    linear-gradient(145deg, rgba(16, 27, 48, 0.96), rgba(9, 15, 28, 0.96));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-highlight);
 }
 
 .detail-hero__body,
@@ -206,7 +204,7 @@ onMounted(() => {
 
 .detail-hero__eyebrow {
   margin: 0;
-  color: #8fc5c7;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -215,7 +213,7 @@ onMounted(() => {
 .detail-hero__head h1,
 .section-head h2 {
   margin: 10px 0 0;
-  color: #f4fbff;
+  color: var(--content-text-primary);
 }
 
 .detail-hero__head h1 {
@@ -228,19 +226,19 @@ onMounted(() => {
 .section-head p,
 .detail-note p {
   margin: 12px 0 0;
-  color: #b3c6e4;
+  color: var(--content-text-tertiary);
   line-height: 1.7;
 }
 
 .detail-note {
   padding: 16px;
   border-radius: 18px;
-  background: rgba(14, 23, 39, 0.72);
-  border: 1px solid rgba(120, 144, 181, 0.16);
+  background: var(--content-card-bg-soft);
+  border: 1px solid var(--content-border-1);
 }
 
 .detail-note span {
-  color: #8fc4c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -251,8 +249,8 @@ onMounted(() => {
   gap: 14px;
   padding: 22px;
   border-radius: 24px;
-  border: 1px solid rgba(165, 189, 223, 0.18);
-  background: linear-gradient(180deg, rgba(15, 24, 40, 0.92), rgba(10, 16, 30, 0.92));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-plain);
 }
 
 .detail-list {
@@ -260,7 +258,7 @@ onMounted(() => {
   padding-left: 20px;
   display: grid;
   gap: 10px;
-  color: #eff6ff;
+  color: var(--content-text-secondary);
 }
 
 .detail-grid {
@@ -278,18 +276,18 @@ onMounted(() => {
 }
 
 .pill-muted {
-  color: #dceafb;
-  background: rgba(73, 103, 143, 0.28);
+  color: var(--content-text-secondary);
+  background: var(--content-chip-muted-surface);
 }
 
 .pill-accent {
-  color: #f4fff7;
-  background: rgba(111, 182, 141, 0.28);
+  color: var(--content-text-accent);
+  background: var(--content-chip-accent-surface);
 }
 
 .pill-soft {
-  color: #fff4df;
-  background: rgba(194, 164, 108, 0.22);
+  color: var(--content-text-gold);
+  background: var(--content-chip-gold-surface);
 }
 
 @media (max-width: 980px) {

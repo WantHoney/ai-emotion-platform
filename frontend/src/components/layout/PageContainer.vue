@@ -32,11 +32,12 @@ defineProps<{
 }
 
 .page-shell.user {
-  max-width: min(1320px, calc(100vw - 34px));
+  max-width: min(1320px, calc(100% - 34px));
   padding-top: 24px;
 }
 
 .page-shell.admin {
-  max-width: var(--content-max-width);
+  max-width: none;
+  width: 100%;
 }
 </style>

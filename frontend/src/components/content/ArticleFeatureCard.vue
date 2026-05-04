@@ -144,10 +144,7 @@ const showSource = computed(() => {
   position: relative;
   overflow: hidden;
   grid-template-columns: 1fr;
-  background:
-    radial-gradient(circle at 88% 18%, rgba(106, 182, 148, 0.1), transparent 22%),
-    radial-gradient(circle at 82% 78%, rgba(105, 136, 193, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(16, 26, 44, 0.96), rgba(10, 17, 31, 0.94));
+  background: var(--content-card-bg-highlight);
 }
 
 .article-card--text.dense {
@@ -157,10 +154,7 @@ const showSource = computed(() => {
 .article-card--text.quiet {
   min-height: 174px;
   padding: 18px;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0)),
-    radial-gradient(circle at 92% 18%, rgba(131, 193, 199, 0.14), transparent 20%),
-    linear-gradient(180deg, rgba(13, 21, 36, 0.94), rgba(10, 17, 31, 0.92));
+  background: var(--content-card-bg-soft);
   box-shadow: none;
 }
 
@@ -169,7 +163,7 @@ const showSource = computed(() => {
   border-radius: var(--content-radius-1);
   border: 1px solid var(--content-border-1);
   min-height: 196px;
-  background: rgba(9, 16, 28, 0.72);
+  background: var(--content-cover-bg);
   box-shadow: var(--content-shadow-1);
 }
 
@@ -208,7 +202,7 @@ const showSource = computed(() => {
 
 .article-card__head h3 {
   margin: 0;
-  color: #f5fbff;
+  color: var(--content-text-primary);
   font-size: 28px;
   line-height: 1.16;
 }
@@ -234,7 +228,7 @@ const showSource = computed(() => {
 .article-card__detail p,
 .article-card__source {
   margin: 0;
-  color: #b2c5e3;
+  color: var(--content-text-tertiary);
   line-height: 1.65;
 }
 
@@ -244,7 +238,7 @@ const showSource = computed(() => {
 }
 
 .article-card__summary {
-  color: #dbe7f8;
+  color: var(--content-text-secondary);
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -265,7 +259,7 @@ const showSource = computed(() => {
   margin: 0;
   padding-top: 10px;
   border-top: 1px solid var(--content-border-1);
-  color: #9eb8d9;
+  color: var(--content-text-muted);
   line-height: 1.65;
 }
 
@@ -284,7 +278,7 @@ const showSource = computed(() => {
 .article-card__detail span {
   display: inline-block;
   margin-bottom: 6px;
-  color: #8fc3c8;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -293,7 +287,7 @@ const showSource = computed(() => {
 .article-card__highlights {
   margin: 0;
   padding-left: 18px;
-  color: #eff6ff;
+  color: var(--content-text-secondary);
   display: grid;
   gap: 6px;
 }
@@ -327,17 +321,17 @@ const showSource = computed(() => {
 }
 
 .pill-muted {
-  color: #dceafb;
+  color: var(--content-text-secondary);
   background: var(--content-chip-muted-surface);
 }
 
 .pill-accent {
-  color: #f4fff7;
+  color: var(--content-text-accent);
   background: var(--content-chip-accent-surface);
 }
 
 .pill-soft {
-  color: #fff4df;
+  color: var(--content-text-gold);
   background: var(--content-chip-gold-surface);
 }
 

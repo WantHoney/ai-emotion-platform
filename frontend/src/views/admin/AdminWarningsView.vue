@@ -368,6 +368,15 @@ const openRouteInNewTab = async (routeName: 'adminTaskInspect' | 'adminReportIns
   window.open(resolved.href, '_blank', 'noopener,noreferrer')
 }
 
+const openUserInNewTab = async (userId?: number) => {
+  if (!userId) return
+  const resolved = router.resolve({
+    name: 'adminUsers',
+    query: { userId: String(userId) },
+  })
+  window.open(resolved.href, '_blank', 'noopener,noreferrer')
+}
+
 const promptActionNote = async (title: string, placeholder: string) => {
   try {
     const result = await ElMessageBox.prompt('请输入处置备注（可选）', title, {
@@ -656,7 +665,19 @@ onBeforeUnmount(() => {
       <el-table :data="rows" border row-key="id" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="50" />
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="user_mask" label="用户标识" width="130" />
+        <el-table-column label="用户标识" min-width="150">
+          <template #default="scope">
+            <el-button
+              v-if="scope.row.user_id"
+              type="primary"
+              link
+              @click="openUserInNewTab(scope.row.user_id)"
+            >
+              {{ scope.row.user_mask || `用户 #${scope.row.user_id}` }}
+            </el-button>
+            <span v-else>{{ scope.row.user_mask || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="关联对象" min-width="180">
           <template #default="scope">
             <div class="related-links">
@@ -731,6 +752,14 @@ onBeforeUnmount(() => {
               查看报告
             </el-button>
             <el-button
+              v-if="scope.row.user_id"
+              type="primary"
+              link
+              @click="openUserInNewTab(scope.row.user_id)"
+            >
+              查看用户
+            </el-button>
+            <el-button
               type="primary"
               link
               :loading="rowActionId === scope.row.id && rowActionType === 'MARK_FOLLOWED'"
@@ -789,6 +818,15 @@ onBeforeUnmount(() => {
           <div class="detail-related">
             <p class="detail-main">{{ currentRelatedSummary }}</p>
             <div class="detail-actions">
+              <el-button
+                v-if="currentWarning.user_id"
+                type="primary"
+                plain
+                size="small"
+                @click="openUserInNewTab(currentWarning.user_id)"
+              >
+                打开用户
+              </el-button>
               <el-button
                 v-if="currentWarning.task_id"
                 type="primary"

@@ -147,6 +147,7 @@ public class AnalysisNarrativeProperties {
     public static class Trend {
         private boolean enabled = true;
         private int maxPoints = 12;
+        private long timeoutMs = 25000;
 
         public boolean isEnabled() {
             return enabled;
@@ -162,6 +163,14 @@ public class AnalysisNarrativeProperties {
 
         public void setMaxPoints(int maxPoints) {
             this.maxPoints = maxPoints;
+        }
+
+        public long getTimeoutMs() {
+            return timeoutMs;
+        }
+
+        public void setTimeoutMs(long timeoutMs) {
+            this.timeoutMs = timeoutMs;
         }
     }
 }

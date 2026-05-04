@@ -11,10 +11,12 @@ import MediaFeatureCard from '@/components/ui/MediaFeatureCard.vue'
 import SmartImage from '@/components/ui/SmartImage.vue'
 import SectionBlock from '@/components/ui/SectionBlock.vue'
 import { PSY_CENTER_CITY_OPTIONS, PSY_CENTER_CITY_REFERENCES, SOURCE_LEVEL_LABELS } from '@/constants/contentMeta'
+import { useUserThemeStore } from '@/stores/userTheme'
 import { resolvePsyCenterPosterUrl } from '@/utils/contentMedia'
 import { parseError, type ErrorStatePayload } from '@/utils/error'
 
 const route = useRoute()
+const userThemeStore = useUserThemeStore()
 const cityCode = ref('310100')
 const loading = ref(false)
 const errorState = ref<ErrorStatePayload | null>(null)
@@ -291,7 +293,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="centers-page user-layout">
+  <div class="centers-page user-layout" :class="{ 'centers-page--light': userThemeStore.isLight }">
     <SectionBlock
       headerless
       eyebrow="支持资源"
@@ -417,10 +419,10 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
   border-radius: 28px;
-  border: 1px solid rgba(171, 192, 228, 0.2);
+  border: 1px solid var(--content-border-1);
   min-height: 520px;
-  background: #0a1320;
-  box-shadow: 0 28px 60px rgba(4, 10, 21, 0.32);
+  background: var(--content-surface-3);
+  box-shadow: var(--content-shadow-3);
 }
 
 .hero-stage :deep(.hero-stage__image) {
@@ -434,8 +436,8 @@ onMounted(() => {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(8, 14, 24, 0.94) 0%, rgba(8, 14, 24, 0.82) 34%, rgba(8, 14, 24, 0.4) 68%, rgba(8, 14, 24, 0.62) 100%),
-    linear-gradient(180deg, rgba(4, 10, 18, 0.06) 0%, rgba(4, 10, 18, 0.26) 100%);
+    linear-gradient(90deg, color-mix(in srgb, var(--content-surface-3) 96%, transparent) 0%, color-mix(in srgb, var(--content-surface-3) 86%, transparent) 34%, color-mix(in srgb, var(--content-surface-3) 42%, transparent) 68%, color-mix(in srgb, var(--content-surface-3) 74%, transparent) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--content-surface-3) 8%, transparent) 0%, color-mix(in srgb, var(--content-surface-3) 28%, transparent) 100%);
 }
 
 .hero-stage__content {
@@ -466,21 +468,21 @@ onMounted(() => {
   align-items: center;
   padding: 7px 12px;
   border-radius: 999px;
-  color: #eff6ff;
+  color: var(--content-text-primary);
   font-size: 12px;
   letter-spacing: 0.04em;
-  background: rgba(15, 27, 44, 0.52);
-  border: 1px solid rgba(192, 212, 236, 0.16);
+  background: color-mix(in srgb, var(--content-surface-1) 86%, transparent);
+  border: 1px solid var(--content-border-1);
   backdrop-filter: blur(14px);
 }
 
 .hero-badge--city {
-  background: rgba(77, 116, 167, 0.38);
+  background: color-mix(in srgb, var(--content-chip-muted-surface) 84%, transparent);
 }
 
 .hero-copy h3 {
   margin: 0;
-  color: #f7fbff;
+  color: var(--content-text-primary);
   font-size: clamp(32px, 4.8vw, 54px);
   line-height: 1.14;
   font-family: var(--font-display);
@@ -490,7 +492,7 @@ onMounted(() => {
 .hero-lead {
   margin: 0;
   max-width: 56ch;
-  color: #dbe9f8;
+  color: var(--content-text-secondary);
   font-size: 16px;
   line-height: 1.8;
 }
@@ -498,7 +500,7 @@ onMounted(() => {
 .hero-note {
   margin: 0;
   max-width: 58ch;
-  color: #9fd0bf;
+  color: var(--content-text-eyebrow);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -515,26 +517,26 @@ onMounted(() => {
   gap: 6px;
   padding: 16px;
   border-radius: 18px;
-  background: rgba(8, 15, 26, 0.54);
-  border: 1px solid rgba(179, 202, 227, 0.14);
+  background: color-mix(in srgb, var(--content-surface-1) 82%, transparent);
+  border: 1px solid var(--content-border-1);
   backdrop-filter: blur(14px);
 }
 
 .hero-fact__value {
-  color: #f7fbff;
+  color: var(--content-text-primary);
   font-size: 30px;
   line-height: 1;
   font-weight: 700;
 }
 
 .hero-fact__label {
-  color: #dbe8f8;
+  color: var(--content-text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
 
 .hero-fact__hint {
-  color: #93abc8;
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -546,15 +548,15 @@ onMounted(() => {
   padding: 22px;
   border-radius: 22px;
   background:
-    linear-gradient(180deg, rgba(9, 18, 32, 0.72), rgba(9, 18, 32, 0.82)),
-    radial-gradient(circle at top right, rgba(134, 208, 176, 0.18), transparent 38%);
-  border: 1px solid rgba(171, 192, 228, 0.16);
+    linear-gradient(180deg, color-mix(in srgb, var(--content-surface-1) 84%, transparent), color-mix(in srgb, var(--content-surface-1) 92%, transparent)),
+    radial-gradient(circle at top right, color-mix(in srgb, #86d0b0 18%, transparent), transparent 38%);
+  border: 1px solid var(--content-border-1);
   backdrop-filter: blur(16px);
 }
 
 .hero-proof__eyebrow {
   margin: 0;
-  color: #8ac8c4;
+  color: var(--content-text-eyebrow);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -562,7 +564,7 @@ onMounted(() => {
 
 .hero-proof h4 {
   margin: 0;
-  color: #f5fbff;
+  color: var(--content-text-primary);
   font-size: 24px;
   line-height: 1.3;
   font-family: var(--font-display);
@@ -573,7 +575,7 @@ onMounted(() => {
   gap: 10px;
   margin: 0;
   padding-left: 18px;
-  color: #d7e6f5;
+  color: var(--content-text-secondary);
   line-height: 1.7;
 }
 
@@ -588,9 +590,85 @@ onMounted(() => {
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  color: #f0f7ff;
+  color: var(--content-text-primary);
   font-size: 12px;
-  background: rgba(67, 102, 150, 0.3);
+  background: var(--content-chip-muted-surface);
+  border: 1px solid var(--content-border-1);
+}
+
+.centers-page--light .hero-stage__scrim {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 251, 245, 0.985) 0%,
+      rgba(255, 249, 241, 0.955) 24%,
+      rgba(252, 245, 236, 0.76) 42%,
+      rgba(248, 240, 231, 0.28) 62%,
+      rgba(248, 241, 232, 0.44) 100%
+    ),
+    linear-gradient(180deg, rgba(255, 252, 248, 0.05) 0%, rgba(247, 239, 229, 0.22) 100%);
+}
+
+.centers-page--light .hero-stage {
+  background:
+    radial-gradient(circle at top left, rgba(255, 245, 233, 0.72), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 242, 234, 0.94));
+  border-color: rgba(198, 169, 130, 0.2);
+  box-shadow: 0 24px 48px rgba(186, 157, 121, 0.12);
+}
+
+.centers-page--light .hero-stage :deep(.smart-image) {
+  filter: saturate(0.94) brightness(1.02) contrast(0.92) sepia(0.06);
+}
+
+.centers-page--light .hero-copy {
+  position: relative;
+  padding: 18px 18px 20px;
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, rgba(255, 251, 246, 0.92), rgba(255, 248, 239, 0.8) 72%, rgba(249, 241, 231, 0.5) 100%),
+    radial-gradient(circle at top left, rgba(210, 164, 105, 0.12), transparent 44%);
+  border: 1px solid rgba(186, 157, 121, 0.22);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 22px 40px rgba(160, 131, 98, 0.12);
+}
+
+.centers-page--light .hero-copy h3 {
+  color: #244563;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.centers-page--light .hero-lead,
+.centers-page--light .hero-note {
+  color: #526982;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+.centers-page--light .hero-badge,
+.centers-page--light .hero-fact {
+  background: linear-gradient(180deg, rgba(255, 251, 246, 0.9), rgba(250, 242, 232, 0.74));
+  border-color: rgba(186, 157, 121, 0.18);
+}
+
+.centers-page--light .hero-proof {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.92), rgba(249, 241, 231, 0.8)),
+    radial-gradient(circle at top right, rgba(214, 172, 112, 0.12), transparent 40%);
+  box-shadow: 0 18px 34px rgba(160, 131, 98, 0.1);
+}
+
+.centers-page--light .hero-proof__cities span {
+  background: linear-gradient(180deg, rgba(255, 249, 241, 0.94), rgba(248, 239, 228, 0.82));
+  border-color: rgba(186, 157, 121, 0.28);
+  box-shadow: 0 8px 18px rgba(160, 131, 98, 0.08);
+}
+
+.centers-page--light .hero-toolbar {
+  background: linear-gradient(180deg, rgba(255, 252, 248, 0.14), rgba(250, 243, 234, 0.76));
+}
+
+.centers-page--light .hero-toolbar__hint {
+  color: #6f879e;
 }
 
 .hero-toolbar {
@@ -602,14 +680,14 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   padding: 18px 28px 24px;
-  border-top: 1px solid rgba(171, 192, 228, 0.12);
-  background: linear-gradient(180deg, rgba(8, 14, 24, 0.1), rgba(8, 14, 24, 0.38));
+  border-top: 1px solid var(--content-border-1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--content-surface-3) 10%, transparent), color-mix(in srgb, var(--content-surface-3) 38%, transparent));
 }
 
 .hero-toolbar__hint {
   margin: 0;
   padding: 0 28px 24px;
-  color: #9fc6cf;
+  color: var(--content-text-eyebrow);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -620,13 +698,13 @@ onMounted(() => {
 }
 
 .hero-toolbar__title {
-  color: #f5fbff;
+  color: var(--content-text-primary);
   font-size: 15px;
   font-weight: 600;
 }
 
 .hero-toolbar__subtitle {
-  color: #93abc8;
+  color: var(--content-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -651,9 +729,7 @@ onMounted(() => {
 
 .card-grid :deep(.cover-wrap) {
   min-height: 224px;
-  background:
-    radial-gradient(circle at top left, rgba(129, 190, 247, 0.14), transparent 38%),
-    linear-gradient(160deg, rgba(15, 25, 43, 0.96), rgba(9, 15, 26, 0.98));
+  background: var(--content-cover-bg);
 }
 
 .card-grid :deep(.smart-image) {
@@ -669,18 +745,18 @@ onMounted(() => {
 }
 
 .pill-city {
-  color: #f2f8ff;
-  background: rgba(72, 102, 145, 0.32);
+  color: var(--content-text-primary);
+  background: var(--content-chip-muted-surface);
 }
 
 .pill-recommend {
-  color: #fff8e8;
-  background: rgba(198, 155, 73, 0.26);
+  color: var(--content-text-gold);
+  background: var(--content-chip-gold-surface);
 }
 
 .pill-source {
-  color: #f5fff9;
-  background: rgba(109, 182, 139, 0.28);
+  color: var(--content-text-accent);
+  background: var(--content-chip-accent-surface);
 }
 
 .detail-list {
@@ -690,16 +766,16 @@ onMounted(() => {
 
 .detail-list p {
   margin: 0;
-  color: #dce7f8;
+  color: var(--content-text-secondary);
   line-height: 1.65;
 }
 
 .detail-list strong {
-  color: #f4f9ff;
+  color: var(--content-text-primary);
 }
 
 .card-grid :deep(a) {
-  color: #9fd7c4;
+  color: var(--content-text-eyebrow);
   text-decoration: none;
 }
 
@@ -754,6 +830,10 @@ onMounted(() => {
 
   .card-grid :deep(.cover-wrap) {
     min-height: 220px;
+  }
+
+  .centers-page--light .hero-copy {
+    padding: 16px 16px 18px;
   }
 }
 </style>

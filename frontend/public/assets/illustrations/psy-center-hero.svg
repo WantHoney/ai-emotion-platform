@@ -1,0 +1,21 @@
+<svg width="1440" height="920" viewBox="0 0 1440 920" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="920" rx="56" fill="#09131F"/>
+  <rect x="48" y="48" width="1344" height="824" rx="44" fill="url(#bg)"/>
+  <circle cx="1132" cy="242" r="190" fill="#235A4A" fill-opacity="0.7"/>
+  <circle cx="284" cy="720" r="228" fill="#1B3B52" fill-opacity="0.76"/>
+  <path d="M254 690C376 534 498 458 642 458C796 458 930 546 1062 710" stroke="#B4F0CA" stroke-width="24" stroke-linecap="round"/>
+  <rect x="728" y="254" width="316" height="268" rx="44" fill="#17344B"/>
+  <rect x="852" y="186" width="68" height="104" rx="18" fill="#E7F7FF"/>
+  <rect x="786" y="338" width="200" height="34" rx="17" fill="#82C8E1"/>
+  <rect x="786" y="402" width="140" height="34" rx="17" fill="#9ADFBE"/>
+  <rect x="150" y="176" width="136" height="18" rx="9" fill="#8BC6D8"/>
+  <text x="150" y="312" fill="#F5FBFF" font-size="92" font-family="'Microsoft YaHei', sans-serif" font-weight="700">心理中心</text>
+  <text x="150" y="412" fill="#D7E8F8" font-size="40" font-family="'Microsoft YaHei', sans-serif">按城市查找、定位附近、保留来源备注，方便后续核验与维护。</text>
+  <text x="150" y="484" fill="#B3CAE3" font-size="30" font-family="'Microsoft YaHei', sans-serif">默认覆盖北京、上海、杭州、福州、广州、深圳六城。</text>
+  <defs>
+    <linearGradient id="bg" x1="104" y1="68" x2="1290" y2="846" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14243A"/>
+      <stop offset="1" stop-color="#0D1728"/>
+    </linearGradient>
+  </defs>
+</svg>

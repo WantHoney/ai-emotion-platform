@@ -982,7 +982,7 @@ onUnmounted(() => {
 
 .task-detail-page :deep(.el-card__header) {
   color: var(--user-text-primary);
-  border-bottom: 1px solid rgba(130, 154, 196, 0.18);
+  border-bottom: 1px solid var(--user-border);
 }
 
 .task-detail-page :deep(.el-card__body) {
@@ -991,25 +991,25 @@ onUnmounted(() => {
 
 .task-detail-page :deep(.el-descriptions__table),
 .task-detail-page :deep(.el-descriptions__cell) {
-  border-color: rgba(130, 154, 196, 0.24);
+  border-color: var(--user-border);
 }
 
 .task-detail-page :deep(.el-descriptions__label.el-descriptions__cell.is-bordered-label) {
-  background: rgba(20, 31, 51, 0.92);
-  color: rgba(190, 203, 227, 0.8);
+  background: var(--user-table-header-bg);
+  color: var(--user-table-header-text);
 }
 
 .task-detail-page :deep(.el-descriptions__content.el-descriptions__cell.is-bordered-content) {
-  background: rgba(10, 16, 29, 0.88);
+  background: var(--user-table-bg);
   color: var(--user-text-primary);
   word-break: break-word;
 }
 
 .hero-card {
-  border: 1px solid rgba(161, 182, 216, 0.26);
+  border: 1px solid var(--content-border-1);
   background:
-    radial-gradient(circle at top left, rgba(76, 133, 188, 0.16), transparent 34%),
-    linear-gradient(180deg, rgba(14, 23, 39, 0.96), rgba(9, 15, 28, 0.96));
+    radial-gradient(circle at top left, color-mix(in srgb, var(--user-accent-cyan) 18%, transparent), transparent 34%),
+    var(--content-card-bg-plain);
 }
 
 .hero-header {
@@ -1041,7 +1041,7 @@ onUnmounted(() => {
 
 .task-id-tip {
   margin: 6px 0 0;
-  color: rgba(190, 203, 227, 0.76);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -1058,7 +1058,7 @@ onUnmounted(() => {
 
 .metric-item p {
   margin: 0;
-  color: rgba(192, 206, 230, 0.78);
+  color: var(--content-text-tertiary);
   font-size: 13px;
 }
 
@@ -1069,10 +1069,10 @@ onUnmounted(() => {
 }
 
 .processing-card {
-  border: 1px solid rgba(141, 163, 205, 0.24);
+  border: 1px solid var(--content-border-1);
   background:
-    radial-gradient(circle at top right, rgba(92, 164, 255, 0.08), transparent 32%),
-    linear-gradient(180deg, rgba(14, 21, 36, 0.96), rgba(9, 15, 27, 0.96));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--user-accent-cyan) 12%, transparent), transparent 32%),
+    var(--content-card-bg-plain);
 }
 
 .processing-card-header {
@@ -1092,7 +1092,7 @@ onUnmounted(() => {
 
 .processing-card-subtitle {
   margin: 6px 0 0;
-  color: rgba(185, 202, 228, 0.74);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -1118,7 +1118,7 @@ onUnmounted(() => {
 
 .processing-eyebrow {
   margin: 0;
-  color: rgba(152, 178, 217, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
   letter-spacing: 0.04em;
 }
@@ -1132,7 +1132,7 @@ onUnmounted(() => {
 
 .processing-message {
   margin: 0;
-  color: rgba(219, 229, 245, 0.88);
+  color: var(--content-text-secondary);
   line-height: 1.7;
 }
 
@@ -1146,8 +1146,8 @@ onUnmounted(() => {
   overflow: hidden;
   height: 12px;
   border-radius: 999px;
-  background: rgba(73, 96, 132, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(151, 176, 216, 0.08);
+  background: color-mix(in srgb, var(--content-chart-axis) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--content-chart-border) 36%, transparent);
 }
 
 .stage-progress__fill {
@@ -1186,7 +1186,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: rgba(191, 207, 231, 0.78);
+  color: var(--content-text-tertiary);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1201,13 +1201,13 @@ onUnmounted(() => {
   display: grid;
   gap: 8px;
   padding: 14px;
-  border: 1px solid rgba(134, 157, 197, 0.22);
+  border: 1px solid var(--content-border-1);
   border-radius: 12px;
-  background: rgba(14, 22, 38, 0.72);
+  background: var(--content-card-bg-soft);
 }
 
 .processing-meta-item span {
-  color: rgba(176, 194, 222, 0.72);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -1219,7 +1219,7 @@ onUnmounted(() => {
 
 .processing-note {
   margin: 0;
-  color: rgba(188, 205, 232, 0.82);
+  color: var(--content-text-secondary);
   line-height: 1.7;
 }
 
@@ -1233,7 +1233,7 @@ onUnmounted(() => {
 
 .loading-tip {
   margin: 12px 0 0;
-  color: rgba(184, 204, 236, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -1243,10 +1243,10 @@ onUnmounted(() => {
 }
 
 .psi-item {
-  border: 1px solid rgba(141, 163, 205, 0.28);
+  border: 1px solid var(--content-border-1);
   border-radius: 10px;
   padding: 12px;
-  background: linear-gradient(180deg, rgba(18, 28, 46, 0.9), rgba(11, 18, 31, 0.9));
+  background: var(--content-card-bg-soft);
 }
 
 .psi-header {
@@ -1259,7 +1259,7 @@ onUnmounted(() => {
 
 .psi-formula {
   margin: 8px 0 0;
-  color: rgba(168, 187, 217, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -1274,20 +1274,20 @@ onUnmounted(() => {
 
 .narrative-text {
   margin: 0;
-  color: rgba(228, 237, 251, 0.92);
+  color: var(--content-text-secondary);
   line-height: 1.7;
 }
 
 .narrative-source-note {
   margin: 0;
-  color: rgba(184, 204, 236, 0.76);
+  color: var(--content-text-tertiary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .narrative-tech-note {
   margin: -4px 0 0;
-  color: rgba(159, 181, 216, 0.72);
+  color: var(--content-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1295,13 +1295,13 @@ onUnmounted(() => {
 .narrative-list {
   margin: 0;
   padding-left: 18px;
-  color: rgba(228, 237, 251, 0.92);
+  color: var(--content-text-secondary);
   line-height: 1.7;
 }
 
 .narrative-note {
   margin: 0;
-  color: rgba(174, 193, 222, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
   line-height: 1.6;
 }

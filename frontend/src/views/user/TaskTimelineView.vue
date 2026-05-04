@@ -582,7 +582,7 @@ h2 {
 
 .tip {
   margin: 8px 0 0;
-  color: rgba(190, 203, 227, 0.78);
+  color: var(--content-text-muted);
   font-size: 12px;
 }
 
@@ -600,9 +600,9 @@ h2 {
 .step-row {
   margin: 14px 0;
   padding: 8px 10px;
-  border: 1px solid rgba(131, 153, 194, 0.24);
+  border: 1px solid var(--content-border-1);
   border-radius: 16px;
-  background: rgba(10, 16, 29, 0.72);
+  background: var(--content-card-bg-soft);
 }
 
 .step-row :deep(.el-step.is-simple) {
@@ -610,7 +610,7 @@ h2 {
 }
 
 .step-row :deep(.el-step__title) {
-  color: rgba(201, 215, 239, 0.74);
+  color: var(--content-text-tertiary);
   font-size: 13px;
 }
 
@@ -646,7 +646,7 @@ h2 {
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, rgba(103, 211, 220, 0.86), rgba(239, 177, 124, 0.78));
+  background: linear-gradient(90deg, var(--user-accent-cyan), color-mix(in srgb, var(--user-accent-gold) 82%, white));
   opacity: 0.72;
 }
 
@@ -667,7 +667,7 @@ h2 {
 
 .metric-card p {
   margin: 0;
-  color: rgba(192, 206, 230, 0.78);
+  color: var(--content-text-tertiary);
   font-size: 13px;
 }
 
@@ -675,9 +675,9 @@ h2 {
   flex-shrink: 0;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(131, 153, 194, 0.24);
-  background: rgba(20, 31, 51, 0.66);
-  color: rgba(215, 225, 241, 0.72);
+  border: 1px solid var(--content-border-1);
+  background: var(--content-chip-muted-surface);
+  color: var(--content-text-secondary);
   font-size: 11px;
   line-height: 1;
 }
@@ -692,7 +692,7 @@ h2 {
 .metric-note {
   margin-top: auto;
   padding-top: 10px;
-  color: rgba(168, 187, 217, 0.76);
+  color: var(--content-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -717,7 +717,7 @@ h2 {
 .curve-subtitle {
   margin: 6px 0 0;
   max-width: 720px;
-  color: rgba(194, 207, 231, 0.78);
+  color: var(--content-text-tertiary);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -725,22 +725,22 @@ h2 {
 .curve-badge {
   flex-shrink: 0;
   padding: 6px 10px;
-  border: 1px solid rgba(195, 162, 110, 0.32);
+  border: 1px solid var(--content-border-3);
   border-radius: 999px;
-  background: rgba(195, 162, 110, 0.12);
-  color: #e6c89c;
+  background: var(--content-chip-gold-surface);
+  color: var(--content-text-gold);
   font-size: 12px;
   line-height: 1;
 }
 
 .chart-wrap {
   width: 100%;
-  border: 1px solid rgba(145, 166, 206, 0.28);
+  border: 1px solid var(--content-chart-border);
   border-radius: 16px;
   padding: 14px;
   background:
-    radial-gradient(circle at top left, rgba(76, 133, 188, 0.12), transparent 42%),
-    rgba(8, 17, 32, 0.92);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--user-accent-cyan) 16%, transparent), transparent 42%),
+    var(--content-chart-bg);
 }
 
 .chart {
@@ -750,18 +750,18 @@ h2 {
 }
 
 .plot-frame {
-  fill: rgba(8, 15, 29, 0.88);
-  stroke: rgba(151, 174, 214, 0.14);
+  fill: color-mix(in srgb, var(--content-chart-bg) 96%, transparent);
+  stroke: var(--content-border-1);
   stroke-width: 1;
 }
 
 .grid-line {
-  stroke: rgba(164, 183, 219, 0.16);
+  stroke: var(--content-chart-grid);
   stroke-dasharray: 4 5;
 }
 
 .axis {
-  stroke: rgba(148, 170, 208, 0.82);
+  stroke: var(--content-chart-axis);
   stroke-width: 1.1;
 }
 
@@ -778,24 +778,24 @@ h2 {
 }
 
 .curve-dot {
-  fill: #f0d09a;
-  stroke: rgba(8, 16, 29, 0.96);
+  fill: var(--content-chart-point);
+  stroke: var(--content-chart-point-stroke);
   stroke-width: 1.4;
 }
 
 .curve-dot.is-latest {
-  fill: #ffd996;
+  fill: color-mix(in srgb, var(--content-chart-point) 80%, white);
 }
 
 .curve-dot-halo {
-  fill: rgba(255, 217, 150, 0.18);
-  stroke: rgba(255, 217, 150, 0.48);
+  fill: color-mix(in srgb, var(--content-chart-point) 18%, transparent);
+  stroke: color-mix(in srgb, var(--content-chart-point) 48%, transparent);
   stroke-width: 1.2;
 }
 
 .axis-title,
 .axis-label {
-  fill: rgba(224, 232, 244, 0.9);
+  fill: var(--content-chart-label);
 }
 
 .axis-title {
@@ -821,7 +821,7 @@ h2 {
 
 .curve-note {
   margin: 12px 0 0;
-  color: rgba(194, 207, 231, 0.76);
+  color: var(--content-chart-note);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -832,16 +832,16 @@ h2 {
 
 .meta-card :deep(.el-descriptions__table),
 .meta-card :deep(.el-descriptions__cell) {
-  border-color: rgba(130, 154, 196, 0.24);
+  border-color: var(--user-border);
 }
 
 .meta-card :deep(.el-descriptions__label.el-descriptions__cell.is-bordered-label) {
-  background: rgba(20, 31, 51, 0.92);
-  color: rgba(190, 203, 227, 0.8);
+  background: var(--user-table-header-bg);
+  color: var(--user-table-header-text);
 }
 
 .meta-card :deep(.el-descriptions__content.el-descriptions__cell.is-bordered-content) {
-  background: rgba(10, 16, 29, 0.88);
+  background: var(--user-table-bg);
   color: var(--user-text-primary);
   word-break: break-word;
 }
@@ -851,12 +851,12 @@ h2 {
 }
 
 .event-timeline :deep(.el-timeline-item__timestamp) {
-  color: rgba(175, 190, 216, 0.7);
+  color: var(--content-text-muted);
 }
 
 .event-timeline :deep(.el-timeline-item__content > .el-card) {
-  border: 1px solid rgba(130, 154, 196, 0.2);
-  background: linear-gradient(180deg, rgba(12, 20, 34, 0.9), rgba(9, 15, 28, 0.9));
+  border: 1px solid var(--content-border-1);
+  background: var(--content-card-bg-plain);
 }
 
 .node-title {
@@ -867,7 +867,7 @@ h2 {
 
 .node-detail {
   margin: 8px 0 0;
-  color: rgba(194, 207, 231, 0.8);
+  color: var(--content-text-tertiary);
   line-height: 1.6;
 }
 

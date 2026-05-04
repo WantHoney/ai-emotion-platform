@@ -433,13 +433,13 @@ onBeforeUnmount(() => {
 
 .recording-file {
   margin: 12px 0 0;
-  color: #cddbf2;
+  color: var(--content-text-secondary);
   font-size: 13px;
 }
 
 .hint {
   margin: 10px 0 0;
-  color: #b8ccec;
+  color: var(--content-text-tertiary);
 }
 
 .actions {

@@ -1,80 +1,68 @@
-# Spring AI Integration (Phase: Mainline)
+# 大模型增强链路说明
 
-## Goal
-This phase introduces a pluggable `AiClient` abstraction and a Spring AI placeholder implementation without changing existing DB schema or persistence semantics. The mock flow remains the default and keeps the runbook mock-only E2E path working.
+本文档说明后端如何接入本地大模型与外部可配置增强能力。系统主链路仍以本地模型服务为核心，外部大模型只作为解释增强和兜底能力。
 
-## Architecture
-```
-AudioAnalysisService
-  -> AiClient (interface)
-     -> MockAiClient (default, returns mock segments/emotions)
-     -> SpringAiClient (LLM/stub report_json generator)
-  -> ReportMockRepository (idempotent inserts for segments/emotions)
-  -> CoreReportRepository (upsert report_json)
-```
+## 1. 设计目标
 
-### AiClient I/O
-**Input** (`AiAnalysisRequest`)
-- `audioId` or `AudioFile` metadata (`storage_path` included)
-- Optional: `language`, `sampleRate`, `modelName`
+- 保持音频分析主流程稳定：上传、任务、模型推理、报告入库、前端展示形成闭环。
+- 本地模型优先：语音情绪识别、文本情感分析和融合判断优先走本机模型服务。
+- 本地大模型增强：通过 Ollama Gemma 4 生成更自然的解释文本和建议表达。
+- 外部模型可选：OpenRouter 作为可配置增强或保底能力，不影响核心功能运行。
 
-**Output** (`AiAnalysisResult`)
-- `segments`: list of `{startMs, endMs, text, emotions}`
-- `overallEmotions`: aggregated summary list
-- `summaryJson`: JSON object for `audio_analysis.summary_json`
-- `reportJson`: JSON object/string for `core_report.report_json` (may be `null` in mock mode, falling back to server-side aggregation)
+## 2. 后端结构
 
-## Spring AI placeholder behavior
-- `SpringAiClient` reuses mock segments/emotions as the input structure for report generation.
-- It tries the following in order:
-  1. **Spring AI ChatClient** (if configured)
-  2. **HTTP stub** via `ai.baseUrl` (optional)
-  3. **Deterministic fallback** (local report_json builder)
-- ASR is **not** implemented yet. The integration point is inside `SpringAiClient` where the request already carries `AudioFile` metadata.
-
-### report_json schema (fixed)
-The LLM/stub should output JSON matching this schema:
-```json
-{
-  "summary": {
-    "overallEmotion": "HAPPY",
-    "confidence": 0.82,
-    "language": "zh"
-  },
-  "segments": [
-    {
-      "startMs": 0,
-      "endMs": 8000,
-      "text": "...",
-      "emotions": [
-        {"code": "HAPPY", "nameZh": "开心", "score": 0.82}
-      ]
-    }
-  ],
-  "insights": ["..."],
-  "generatedAt": "2024-01-01T00:00:00Z",
-  "model": "gpt-4o-mini"
-}
+```text
+AnalysisTaskWorkerService
+  -> SerClient：调用 FastAPI 模型服务
+  -> NarrativeGenerationService：生成报告解释和建议
+  -> OllamaNarrativeClient：调用本地 Ollama Gemma 4
+  -> SpringAiClient：外部模型增强的兼容入口
+  -> CoreReportRepository：保存报告快照
 ```
 
-## Configuration
-Add the following to `application.yaml` (defaults are already set):
-```yaml
-ai:
-  mode: mock        # mock | spring
-  provider: spring  # optional provider label
-  model: gpt-4o-mini
-  apiKey:           # required when using ChatClient
-  baseUrl:          # optional HTTP stub endpoint
-  language: zh
-  sampleRate: 16000
-```
+## 3. 输入与输出
 
-## How to switch
-- **Mock (default):** `ai.mode=mock`
-- **Spring AI:** `ai.mode=spring` and provide `ai.apiKey` (ChatClient) or `ai.baseUrl` (HTTP stub)
+输入来源：
 
-## Validation (mock mode)
-1. Start the app with `ai.mode=mock`.
-2. Create analysis and call `/api/analysis/{analysisId}/mock-run`.
-3. Ensure segments/emotions are inserted and `core_report` is populated (via server-side aggregation).
+- 音频文件元数据
+- ASR 转写文本
+- 语音情绪概率
+- 文本情感分数
+- 风险评估结果
+
+输出结果：
+
+- 任务状态
+- 分段情绪结果
+- 综合风险等级
+- 报告正文
+- 建议与资源推荐
+
+## 4. 兜底机制
+
+系统按以下顺序处理报告解释：
+
+1. 优先使用本地模型服务返回的结构化结果。
+2. 若启用本地大模型，则调用 Ollama Gemma 4 做解释增强。
+3. 若本地大模型不可用，则使用后端结构化模板生成稳定报告。
+4. 若配置了 OpenRouter，可按环境变量启用外部增强。
+
+这样即使某个模型服务短时不可用，系统也能返回可解释、可展示的报告结果。
+
+## 5. 关键配置
+
+- `AI_MODE`
+- `SPRING_AI_OPENAI_ENABLED`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_MODEL`
+- `ANALYSIS_NARRATIVE_OLLAMA_ENABLED`
+- `ANALYSIS_NARRATIVE_OLLAMA_BASE_URL`
+- `ANALYSIS_NARRATIVE_OLLAMA_MODEL`
+
+## 6. 验证方式
+
+- 查看 `/api/health` 中后端、数据库、模型服务状态。
+- 上传一段音频后观察任务状态是否从 `PENDING` 进入 `RUNNING` 和 `SUCCESS`。
+- 打开报告详情页，检查风险等级、分段结果、建议内容是否完整。
+- 在日志中查看 Ollama 或外部增强失败时是否进入本地结构化兜底。

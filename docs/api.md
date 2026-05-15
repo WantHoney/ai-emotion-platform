@@ -98,6 +98,9 @@
 - `GET /api/admin/governance/summary`
 - `POST /api/admin/governance/drift/scan`
 - `GET /api/admin/metrics`
+- `GET /api/admin/inbox`
+- `POST /api/admin/inbox/state`
+- `PUT /api/admin/inbox/preferences`
 
 `POST /api/admin/governance/drift/scan` 支持可选 query 参数：
 - `windowDays`
@@ -106,7 +109,12 @@
 - `highThreshold`
 - `minSamples`
 
-### 5.2 CMS 内容管理
+### 5.2 用户管理
+- `GET /api/admin/users`
+- `GET /api/admin/users/{userId}`
+- `PUT /api/admin/users/{userId}/status`
+
+### 5.3 CMS 内容管理
 - `GET /api/home`
 - `GET /api/psy-centers`
 - `GET /api/content-hub`

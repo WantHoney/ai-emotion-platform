@@ -1,17 +1,35 @@
-# Alignment Notes - PR01 (Spring AI Mainline Integration)
+# 大模型接入对齐记录
 
-## Summary
-- Introduced a pluggable `AiClient` abstraction with mock and Spring AI placeholder implementations.
-- Kept all persistence logic and schema usage intact (no changes to `schema_v1.sql`).
-- Added configuration toggles for `ai.mode` to switch between mock and Spring AI flows.
+本文档记录早期大模型接入时对数据库和后端结构的影响范围。当前系统已经演进到本地模型服务、多模态融合和本地大模型增强的完整链路。
 
-## Schema Impact
-- **No schema changes.**
-- Writes continue to use the same tables:
-  - `audio_analysis` for status + `summary_json` + `error_message`
-  - `audio_segment`, `segment_emotion`, `emotion_label` for segment/emotion data
-  - `core_report` for report snapshots (upsert by analysis_id)
+## 1. 设计结论
 
-## Notes
-- Mock flow remains default (`ai.mode=mock`).
-- Spring AI flow only generates `report_json`; ASR remains TODO.
+- 数据库表结构不需要因为大模型增强单独拆分。
+- 报告结果统一保存为结构化 JSON，便于前端展示和后续扩展。
+- 大模型只负责解释增强和建议生成，不直接替代表结构中的任务、结果和预警数据。
+
+## 2. 涉及表
+
+- `audio_analysis`
+- `analysis_task`
+- `analysis_result`
+- `core_report`
+- `audio_segment`
+- `segment_emotion`
+- `emotion_label`
+
+## 3. 当前链路
+
+```text
+音频上传
+  -> 任务创建
+  -> 模型服务分析
+  -> 多模态融合
+  -> 报告生成
+  -> 预警规则匹配
+  -> 前端展示
+```
+
+## 4. 说明
+
+该记录用于说明大模型增强没有破坏原有数据库设计，而是在报告生成层增加可配置能力。系统主流程仍由后端任务表、结果表和报告表保证可追踪、可恢复和可展示。

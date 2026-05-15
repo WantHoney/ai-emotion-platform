@@ -1,113 +1,103 @@
-# Runbook (v1 mock-only)
+# 后端运行手册
 
-This runbook documents the minimal end-to-end flow for the v1 mock-only demo (no real AI integration, no auth system).
+本文档用于本地联调和答辩现场快速验证后端服务。
 
-## 1) Import schema into local MySQL
+## 1. 导入数据库
 
-```bash
-mysql -u root -p < docs/db/schema_v1.sql
-```
-
-If your MySQL instance uses a different user/password or host, adjust the command accordingly:
+先导入基线脚本：
 
 ```bash
 mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 ```
 
-## 2) Configure `application.yaml`
+再按顺序执行迁移脚本：
 
-Required fields:
+- `docs/db/migrations/V2__task_queue_schema.sql`
+- `docs/db/migrations/V3__resource_observability_upgrade.sql`
+- `docs/db/migrations/V4__home_cms_content.sql`
+- `docs/db/migrations/V5__model_warning_ops.sql`
+- `docs/db/migrations/V6__warning_sla_and_quality.sql`
+- `docs/db/migrations/V7__task_report_user_sequence_indexes.sql`
+- `docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql`
+- `docs/db/migrations/V9__cms_seed_source_metadata.sql`
+- `docs/db/migrations/V10__repair_psy_center_seed_data.sql`
+- `docs/db/migrations/V11__content_hub_daily_schedule.sql`
 
-- `spring.datasource.url`
-- `spring.datasource.username`
-- `spring.datasource.password`
-- `app.upload.dir`
+当前终辩口径为 V11，业务表共 `31` 张。
 
-Example (edit `src/main/resources/application.yaml`):
+## 2. 配置后端
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/ai_emotion?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
-    username: root
-    password: your_password
-app:
-  upload:
-    dir: /absolute/path/to/uploads
+建议通过环境变量配置数据库和模型服务：
+
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SER_ENABLED`
+- `SER_BASE_URL`
+- `AUTH_SEED_ADMIN_USERNAME`
+- `AUTH_SEED_ADMIN_PASSWORD`
+
+示例：
+
+```powershell
+$env:SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
+$env:SPRING_DATASOURCE_USERNAME="root"
+$env:SPRING_DATASOURCE_PASSWORD="your_password"
+$env:SER_BASE_URL="http://127.0.0.1:8001"
 ```
 
-> Ensure the upload directory exists and is writable.
-
-## 3) Start the service
+## 3. 启动服务
 
 ```bash
 mvn spring-boot:run
 ```
 
-## 4) Minimal API flow (mock-only)
+启动后检查：
 
-> The following uses `localhost:8080` and a sample file `./sample.mp3`. Adjust as needed.
+```bash
+curl http://127.0.0.1:8080/api/health
+```
 
-### Step 1: Upload audio
+## 4. 主流程接口
+
+上传音频：
 
 ```bash
 curl -X POST \
-  -F "file=@./sample.mp3" \
-  http://localhost:8080/api/audio/upload
+  -H "Authorization: Bearer <accessToken>" \
+  -F "file=@./sample.wav" \
+  http://127.0.0.1:8080/api/audio/upload
 ```
 
-**Expected fields**:
-- `audioId`
-- `originalName`
-- `fileName`
-- `downloadUrl`
-
-### Step 2: Start analysis
+查询任务：
 
 ```bash
-curl -X POST \
-  "http://localhost:8080/api/audio/<audioId>/analysis/start"
+curl -H "Authorization: Bearer <accessToken>" \
+  "http://127.0.0.1:8080/api/tasks?page=1&pageSize=10"
 ```
 
-**Expected fields**:
-- `analysisId`
-- `audioId`
-- `status` (should be `PENDING`)
-
-### Step 3: Run mock analysis (sync or async)
-
-**Sync:**
-```bash
-curl -X POST \
-  "http://localhost:8080/api/analysis/<analysisId>/mock-run"
-```
-
-**Async:**
-```bash
-curl -X POST \
-  "http://localhost:8080/api/analysis/<analysisId>/mock-run-async"
-```
-
-**Expected fields**:
-- Sync returns the report payload (see Step 4 fields).
-- Async returns:
-  - `analysisId`
-  - `status` (should be `RUNNING`)
-
-### Step 4: Fetch report
+查询报告：
 
 ```bash
-curl -X GET \
-  "http://localhost:8080/api/analysis/<analysisId>/report"
+curl -H "Authorization: Bearer <accessToken>" \
+  "http://127.0.0.1:8080/api/reports?page=1&pageSize=10"
 ```
 
-**Expected fields**:
-- `analysisId`
-- `audioId`
-- `status`
-- `overall` (may be `null` if no segments)
-- `segments` (array)
+## 5. 兼容调试接口
 
----
+以下接口主要用于开发联调和异常场景验证，正式演示以任务中心和报告中心为主：
 
-If any step fails with `400`/`500`, check the application logs. Common issues include a missing DB connection or missing upload directory.
+- `POST /api/analysis/{analysisId}/mock-run`
+- `POST /api/analysis/{analysisId}/mock-run-async`
+- `POST /api/analysis/{analysisId}/mock-success`
+- `POST /api/analysis/{analysisId}/mock-fail`
+- `POST /api/analysis/{analysisId}/mock-segments`
+
+这些接口可以帮助验证任务状态、报告生成和异常处理逻辑。
+
+## 6. 排查建议
+
+- 数据库连接失败：检查 MySQL 服务、库名、账号密码和字符集。
+- 模型服务不可用：先访问 `http://127.0.0.1:8001/health`。
+- 前端接口不通：确认 Vite 代理目标为 `http://127.0.0.1:8080`。
+- 登录失败：确认种子管理员账号和密码是否被环境变量覆盖。

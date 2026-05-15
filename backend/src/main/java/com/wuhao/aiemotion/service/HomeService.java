@@ -33,16 +33,16 @@ public class HomeService {
             payload.put("selfHelpEntries", defaultSelfHelpEntries());
             return payload;
         } catch (Exception e) {
-            log.warn("home content query failed, fallback to placeholder payload", e);
+            log.warn("home content query failed, fallback to default payload", e);
             Map<String, Object> fallback = new LinkedHashMap<>();
             fallback.put("banners", List.of());
             fallback.put("todayDate", LocalDate.now(APP_ZONE));
             fallback.put("todayTheme", Map.of(
                     "themeKey", "stress",
-                    "themeTitle", "Today, start by steadying yourself.",
-                    "themeSubtitle", "Begin with one quote, one article, and one book."
+                    "themeTitle", "今天先稳住自己的节奏",
+                    "themeSubtitle", "从一句话、一篇文章和一本书开始。"
             ));
-            fallback.put("todayQuote", Map.of("id", 0, "content", "Keep moving forward.", "author", "AI Emotion"));
+            fallback.put("todayQuote", Map.of("id", 0, "content", "慢一点也没关系，重要的是继续向前。", "author", "系统推荐"));
             fallback.put("todayFeaturedArticle", null);
             fallback.put("todayFeaturedBook", null);
             fallback.put("todayArticles", List.of());
@@ -56,9 +56,9 @@ public class HomeService {
 
     private List<Map<String, Object>> defaultSelfHelpEntries() {
         return List.of(
-                Map.of("key", "audio_upload", "title", "Audio Upload", "path", "/upload"),
-                Map.of("key", "report_center", "title", "Report Center", "path", "/reports"),
-                Map.of("key", "psy_centers", "title", "Psy Centers", "path", "/psy-centers")
+                Map.of("key", "audio_upload", "title", "音频上传", "path", "/upload"),
+                Map.of("key", "report_center", "title", "报告中心", "path", "/reports"),
+                Map.of("key", "psy_centers", "title", "心理中心", "path", "/psy-centers")
         );
     }
 }

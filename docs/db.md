@@ -1,5 +1,5 @@
 # 数据库说明（与代码同步）
-最后同步日期：`2026-04-03`
+最后同步日期：`2026-05-15`
 
 ## 1. 基线、迁移与清理
 
@@ -17,8 +17,9 @@
 - `V8__cleanup_legacy_sequence_indexes.sql`
 - `V9__cms_seed_source_metadata.sql`
 - `V10__repair_psy_center_seed_data.sql`
+- `V11__content_hub_daily_schedule.sql`
 
-当前最新迁移：`V10`
+当前最新迁移：`V11`
 
 说明：
 - `migrations/` 记录的是历史增量变更。
@@ -31,17 +32,17 @@
 ## 2. 初始化顺序
 
 1. 导入 `schema_v1.sql`。
-2. 按版本顺序执行 `migrations/` 下脚本（V2 -> V10）。
+2. 按版本顺序执行 `migrations/` 下脚本（V2 -> V11）。
 3. 启动 backend。
 4. 访问 `GET /api/health/db` 验证连通。
 
 补充：
 - 如果需要与当前本地运行库完全一致，还要参考 `audit/` 中的清理记录。
-- 根据 `V6_cleanup_execution_20260216.md`，当前本地运行库已在 `2026-02-16` 从 `45` 张表清理到 `28` 张活跃表。
+- 根据 `V6_cleanup_execution_20260216.md`，当前本地运行库曾在 `2026-02-16` 从 `45` 张表清理到 `28` 张活跃表；V11 又新增 `3` 张内容排期相关表，终辩口径按 `31` 张表说明。
 
-## 3. 当前运行库表（2026-03-23 实库核对）
+## 3. 当前运行库表（V11 终辩口径）
 
-当前 `ai_emotion` 库中实际存在的表共 `28` 张：
+当前 `ai_emotion` 库按 V11 迁移后的终辩口径共 `31` 张表：`4 + 3 + 4 + 5 + 6 + 9 = 31`。
 
 - 认证与会话：
   - `auth_user`
@@ -77,6 +78,9 @@
   - `books`
   - `psy_centers`
   - `content_events`
+  - `content_daily_schedule`
+  - `content_daily_item`
+  - `user_content_history`
 
 ## 4. 关键领域表（按实际使用归类）
 
@@ -91,7 +95,7 @@
 - 治理与告警：
   - `model_registry`、`model_switch_log`、`warning_rule`、`warning_event`、`warning_action_log`、`analytics_daily_summary`
 - CMS：
-  - `banners`、`quotes`、`articles`、`books`、`psy_centers`、`content_events`
+  - `banners`、`quotes`、`articles`、`books`、`psy_centers`、`content_events`、`content_daily_schedule`、`content_daily_item`、`user_content_history`
 
 ## 5. 当前设计说明
 
@@ -105,7 +109,7 @@
   - `warning_event.risk_level`
   - `analysis_task.status`
 
-## 5.1 V9 / V10 CMS 与心理中心修正说明
+## 5.1 V9 / V10 / V11 CMS 与心理中心修正说明
 
 - `quotes`、`articles`、`books`、`psy_centers` 在 `V9` 中统一新增了 `seed_key`、`data_source`、`is_active`。
 - `seed_key` 只给 `data_source='seed'` 的默认数据使用，`manual` 数据保持 `NULL`，并对 `seed_key` 建唯一索引。
@@ -116,6 +120,7 @@
 - `V9` 的 `source_url` 回填 SQL 已带主键条件，兼容 MySQL Workbench safe update mode 的手工执行。
 - `V10` 会按 `seed_key` 修复心理中心 seed 数据中的乱码与错位记录，并把名单收敛为精神卫生中心、精神专科医院和明确的心理专科支持机构。
 - `V10` 不新增表，只对 `psy_centers` 的 seeded 记录做幂等 upsert 修正，便于已有环境直接修复。
+- `V11` 新增 `content_daily_schedule`、`content_daily_item`、`user_content_history`，用于每日内容排期、每日条目关联和用户内容浏览历史。
 
 ## 6. 文档一致性检查
 
@@ -125,4 +130,4 @@
 python scripts/check_doc_sync.py
 ```
 
-通过条件：最新迁移文件（当前 `V9`）必须在 `README.md` 与 `backend/README.md` 中出现。
+通过条件：最新迁移文件（当前 `V11`）必须在 `README.md` 与 `backend/README.md` 中出现。

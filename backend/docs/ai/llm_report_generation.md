@@ -1,58 +1,49 @@
-# LLM report_json generation (ai.mode=spring)
+# 报告文本增强与兜底机制
 
-When `ai.mode=spring` and an API key is configured, `SpringAiClient` asks the LLM to generate
-`report_json` using the mock segments/emotions from `AiMockDataFactory` as input. The LLM must
-return **RFC8259-compliant JSON only** (no extra text).
+系统报告由结构化分析结果生成，大模型只负责增强表达，不直接决定最终风险等级。
 
-## Output schema
+## 1. 数据来源
 
-The LLM returns an `EmotionAnalysisReport` object:
+报告生成会读取以下信息：
+
+- 音频任务状态
+- ASR 转写文本
+- 语音情绪识别结果
+- 文本情感分析结果
+- 多模态融合结果
+- 预警规则匹配结果
+
+## 2. 生成流程
+
+```text
+结构化分析结果
+  -> 风险等级与关键片段
+  -> 本地模板生成基础建议
+  -> Ollama Gemma 4 增强表达
+  -> 保存到 core_report / analysis_result
+```
+
+## 3. 输出结构
+
+报告结果保持结构化，便于前端展示和数据库保存：
 
 ```json
 {
   "overallEmotion": "string",
   "confidence": 0.0,
-  "keyMoments": [
-    {
-      "startMs": 0,
-      "endMs": 0,
-      "text": "string",
-      "emotion": "string",
-      "score": 0.0
-    }
-  ],
-  "summary": "string"
+  "riskLevel": "LOW|MEDIUM|HIGH",
+  "keyMoments": [],
+  "summary": "string",
+  "suggestions": []
 }
 ```
 
-## Persistence
+## 4. 失败处理
 
-The generated report is stored as `core_report.report_json` during analysis runs, so
-`GET /api/analysis/{id}/report` reads the LLM output directly when present.
+- 本地大模型调用失败：使用后端结构化模板生成报告。
+- 外部模型不可用：不影响主流程，报告仍可生成。
+- 返回内容无法解析：记录错误原因，并回退到稳定 JSON 结构。
 
-## Local verification (ai.mode=spring)
+## 5. 答辩说明口径
 
-1. Start the service with `ai.mode=spring` and a valid API key.
-2. Create an analysis as usual (for example, `POST /api/analysis/start`).
-3. Trigger the real execution endpoint:
-
-   ```bash
-   curl -X POST "http://localhost:8080/api/analysis/<analysisId>/run"
-   ```
-
-4. Fetch the report (should return the stored `EmotionAnalysisReport` JSON):
-
-   ```bash
-   curl "http://localhost:8080/api/analysis/<analysisId>/report"
-   ```
-
-5. (Optional) Verify persistence:
-
-   ```sql
-   SELECT report_json FROM core_report WHERE analysis_id = <analysisId>;
-   ```
-
-## Error handling
-
-If the LLM returns invalid JSON, the analysis is marked **FAILED** and `error_message`
-captures the failure reason.
+本系统不是把判断完全交给大模型，而是先由模型服务输出结构化分析结果，再用大模型改善报告文字表达。这样既保留了可解释的数据结构，也提高了页面展示的可读性。

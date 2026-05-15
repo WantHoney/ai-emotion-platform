@@ -1,5 +1,8 @@
-# Backend (Spring Boot)
-最后同步日期：`2026-04-03`
+# 后端服务（Spring Boot）
+
+最后同步日期：`2026-05-15`
+
+本目录是系统后端服务，负责认证、任务、报告、内容、心理中心、预警治理、模型调用和数据库访问。
 
 ## 1. 环境要求
 
@@ -10,10 +13,10 @@
 ## 2. 本地启动
 
 ```bash
-# 1) 导入基线结构
+# 1) 导入数据库基线
 mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 
-# 2) 按顺序执行迁移（V2 -> V11）
+# 2) 按顺序执行迁移脚本 V2 -> V11
 # backend/docs/db/migrations/V2__task_queue_schema.sql
 # backend/docs/db/migrations/V3__resource_observability_upgrade.sql
 # backend/docs/db/migrations/V4__home_cms_content.sql
@@ -25,50 +28,64 @@ mysql -h 127.0.0.1 -P 3306 -u <user> -p < docs/db/schema_v1.sql
 # backend/docs/db/migrations/V10__repair_psy_center_seed_data.sql
 # backend/docs/db/migrations/V11__content_hub_daily_schedule.sql
 
-# 3) 启动服务
+# 3) 启动后端
 mvn spring-boot:run
 ```
 
-默认地址：`http://127.0.0.1:8080`  
-健康检查：`curl http://127.0.0.1:8080/api/health`
+默认地址：`http://127.0.0.1:8080`
 
-## 3. 关键配置（建议环境变量）
+健康检查：
 
-- `AI_MODE`：默认 `mock`（本地模式），可切到 `spring`
-- `SPRING_AI_OPENAI_ENABLED`：默认 `false`
-- `OPENROUTER_API_KEY`：仅当 `AI_MODE=spring` 时需要
-- `OPENROUTER_BASE_URL`、`OPENROUTER_MODEL`
-- `APP_CORS_ALLOWED_ORIGINS`
-- `AUTH_SEED_ADMIN_USERNAME`：默认 `operator`
-- `AUTH_SEED_ADMIN_PASSWORD`：默认 `operator123`（仅本地开发演示，生产必须覆盖）
-- `SER_ENABLED`、`SER_BASE_URL`
-- `GOVERNANCE_DRIFT_MONITOR_ENABLED`、`GOVERNANCE_DRIFT_SCAN_INTERVAL_MS`
-- `GOVERNANCE_DRIFT_WINDOW_DAYS`、`GOVERNANCE_DRIFT_BASELINE_DAYS`
-- `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD`、`GOVERNANCE_DRIFT_HIGH_THRESHOLD`
-- `GOVERNANCE_DRIFT_MIN_SAMPLES`
+```bash
+curl http://127.0.0.1:8080/api/health
+```
 
-补充：
-- 本地单元测试固定走 `test` profile（`ai.mode=mock` + `spring.ai.openai.enabled=false`），不需要 OpenAI key。
-- 若要启用远端 LLM，请显式设置 `AI_MODE=spring` 并提供 `OPENROUTER_API_KEY`。
+## 3. 关键配置
+
+- `SPRING_DATASOURCE_URL`：数据库连接地址。
+- `SPRING_DATASOURCE_USERNAME`：数据库用户名。
+- `SPRING_DATASOURCE_PASSWORD`：数据库密码。
+- `AUTH_SEED_ADMIN_USERNAME`：默认管理员账号，默认 `operator`。
+- `AUTH_SEED_ADMIN_PASSWORD`：默认管理员密码，默认 `operator123`，仅用于本地演示。
+- `SER_ENABLED`：是否启用模型服务调用。
+- `SER_BASE_URL`：模型服务地址，默认 `http://127.0.0.1:8001`。
+- `AI_MODE`：大模型增强模式，默认本地演示模式，可按需切换。
+- `OPENROUTER_API_KEY`：启用外部大模型增强时使用。
+- `OPENROUTER_MODEL`：外部模型名称。
+
+本地单元测试默认不需要外部大模型密钥。
 
 ## 4. 数据库脚本
 
-- 基线：`docs/db/schema_v1.sql`
-- 迁移：`docs/db/migrations/`
+- 基线脚本：`docs/db/schema_v1.sql`
+- 迁移目录：`docs/db/migrations/`
 - 当前最新迁移：`V11__content_hub_daily_schedule.sql`
-- 当前本地运行库（`2026-03-23` 实库核对）共有 `28` 张活跃表。
-- `schema_v1.sql` 仍保留历史遗留表定义；当前运行库已在 `2026-02-16` 完成清理，表数由 `45` 降到 `28`。
-- 清理与审计记录见：
-  - `docs/db/audit/V6_table_usage_audit.md`
-  - `docs/db/audit/V6_cleanup_execution_20260216.md`
-- 当前实际表名和分域说明见：`../docs/db.md`
-- `V9` 为 CMS 内容与心理中心补充了 seed 元数据、显式活跃状态和来源字段。
-- `articles.source_url` 是新的正式外链字段，`content_url` 仅保留兼容期映射。
-- `V9` 的 `source_url` 回填语句已兼容 MySQL Workbench safe update mode。
+- 当前终辩口径：V11 后共 `31` 张业务表。
 
-## 5. 说明
+V11 新增内容排期相关表：
 
-- 本文件是 backend 子项目说明。
-- 项目整体说明请查看仓库根目录 `README.md`。
-- 文档一致性检查请在仓库根目录执行：`python scripts/check_doc_sync.py`。
-- 可手动触发漂移扫描：`POST /api/admin/governance/drift/scan`。
+- `content_daily_schedule`
+- `content_daily_item`
+- `user_content_history`
+
+数据库分域说明见：
+
+- `../docs/db.md`
+
+## 5. 主要模块
+
+- `controller/`：接口层。
+- `service/`：业务逻辑层。
+- `repository/`：数据访问层。
+- `domain/`：实体和领域对象。
+- `config/`：安全、跨域、WebSocket、任务等配置。
+- `ai/`：大模型增强和报告生成相关逻辑。
+- `ser/`：模型服务调用与音频分析链路。
+
+## 6. 相关文档
+
+- 根目录说明：`../README.md`
+- 接口文档：`../docs/api.md`
+- 架构说明：`../docs/architecture.md`
+- 数据库说明：`../docs/db.md`
+- 答辩速查：`../DEFENSE_QUICK_GUIDE.md`

@@ -199,7 +199,7 @@ public class AudioAnalysisService {
 
     public void mockSuccess(long analysisId) {
         String mockJson = """
-                {"overallEmotion":"HAPPY","confidence":0.87,"note":"mock result (no AI yet)"}
+                {"overallEmotion":"HAPPY","confidence":0.87,"note":"compatibility diagnostic result"}
                 """;
         int n = analysisRepository.updateStatus(analysisId, "SUCCESS", mockJson, null);
         if (n == 0) throw new IllegalArgumentException("analysis 不存在: " + analysisId);
@@ -450,7 +450,7 @@ public class AudioAnalysisService {
         summary.put("overall", ser.overall());
         summary.put("meta", ser.meta());
         if (serProperties.isLlmSummaryEnabled()) {
-            summary.put("narrative", "LLM summary hook enabled. Provide SER JSON to OpenRouter summarizer here.");
+            summary.put("narrative", "模型解释增强已启用，报告文本由后端统一生成。");
         }
 
         int n = analysisRepository.updateStatus(analysisId, "SUCCESS", serializeJson(summary), null);

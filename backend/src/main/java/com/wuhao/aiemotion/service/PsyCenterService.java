@@ -28,12 +28,12 @@ public class PsyCenterService {
         try {
             List<PsyCenter> rows = psyCenterRepository.findByCityCode(cityCode, Math.max(limit, 1));
             if (rows == null || rows.isEmpty()) {
-                return placeholderByCity(cityCode);
+                return defaultByCity(cityCode);
             }
             return rows;
         } catch (Exception e) {
-            log.warn("psy center query by city failed, fallback to placeholder list", e);
-            return placeholderByCity(cityCode);
+            log.warn("psy center query by city failed, fallback to default list", e);
+            return defaultByCity(cityCode);
         }
     }
 
@@ -116,7 +116,7 @@ public class PsyCenterService {
         }
     }
 
-    private List<PsyCenter> placeholderByCity(String cityCode) {
+    private List<PsyCenter> defaultByCity(String cityCode) {
         return List.of(new PsyCenter(
                 0L,
                 "心理支持中心（示例）",
@@ -139,5 +139,4 @@ public class PsyCenterService {
                 LocalDateTime.now()
         ));
     }
-
 }

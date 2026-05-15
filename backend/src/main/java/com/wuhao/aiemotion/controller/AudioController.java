@@ -14,7 +14,15 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.format.DateTimeFormatter;
@@ -44,8 +52,7 @@ public class AudioController {
     }
 
     /**
-     * POST /api/audio/upload
-     * form-data: file=<mp3>
+     * 普通上传入口：POST /api/audio/upload
      */
     @PostMapping("/upload")
     public AudioUploadResponse upload(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
@@ -61,15 +68,14 @@ public class AudioController {
     }
 
     /**
-     * GET /api/audio/list?page=1&size=10
-     * 寤鸿榛樿鍙湅 UPLOADED锛堣蒋鍒犻櫎鍚庡垪琛ㄦ墠浼氣€滄秷澶扁€濓級
+     * 音频列表。默认只返回 UPLOADED 状态的音频，软删除后不再出现在列表中。
      */
     @GetMapping("/list")
     public AudioListResponse list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Long userId,
-            @RequestParam(defaultValue = "true") boolean onlyUploaded   // 鉁?鏀逛负 true
+            @RequestParam(defaultValue = "true") boolean onlyUploaded
     ) {
         if (page < 1) page = 1;
         if (size < 1) size = 10;
@@ -103,7 +109,7 @@ public class AudioController {
     }
 
     /**
-     * 鉁?杞垹闄わ細DELETE /api/audio/{id}
+     * 软删除音频：DELETE /api/audio/{id}
      */
     @DeleteMapping("/{id}")
     public AudioDeleteResponse delete(@PathVariable long id) {

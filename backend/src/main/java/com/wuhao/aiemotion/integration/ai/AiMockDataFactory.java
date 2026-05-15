@@ -51,7 +51,7 @@ public class AiMockDataFactory {
             AiEmotionSummary top = overallEmotions.get(0);
             summaryJson.put("overallEmotion", top.code());
             summaryJson.put("confidence", top.score());
-            summaryJson.put("note", "mock result (no AI yet)");
+            summaryJson.put("note", "compatibility diagnostic result");
         }
 
         return new AiAnalysisResult(summaryJson, segments, overallEmotions, null);

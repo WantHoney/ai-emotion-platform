@@ -3,7 +3,7 @@
 
 - `docs/api.md`：后端 HTTP + WebSocket 接口清单。
 - `docs/architecture.md`：系统架构、链路与边界。
-- `docs/db.md`：数据库基线与迁移（当前到 V8）。
+- `docs/db.md`：数据库基线与迁移（当前到 V11，终辩口径 31 张表）。
 - `docs/experiments.md`：实验结果、校准收益、实时与治理证据。
 - `docs/figures/`：论文图表源数据与压测记录。
 - `docs/thesis_notes.md`：论文写作技术素材提纲。

@@ -1,360 +1,198 @@
-# AI Emotion Monorepo
+# AI 语音情绪分析与心理状态预警 Web 系统
 
-This repository is a monorepo with:
-- `backend/`: Spring Boot + MySQL (API server)
-- `frontend/`: Vue 3 + Vite + Element Plus (web client)
+最后同步日期：`2026-05-15`
 
-## 1. Prerequisites
+本仓库是毕业设计项目的完整工程，包含用户端、管理端、后端接口、语音情绪识别服务、数据库脚本、训练资料和答辩文档。
+
+## 1. 项目结构
+
+- `frontend/`：Vue 3 + Vite + Element Plus，包含用户端和管理端页面。
+- `backend/`：Spring Boot + MySQL，负责登录认证、任务调度、报告管理、内容专栏、心理中心、预警治理等接口。
+- `backend/ser-service/`：FastAPI 模型服务，负责语音转写、语音情绪识别、文本情感分析和多模态融合。
+- `backend/docs/db/`：数据库基线脚本、迁移脚本和审计记录。
+- `backend/data/datasets/`：本机保留的原始数据集目录，供答辩现场查看来源。
+- `docs/`：论文、接口、架构、数据库和答辩相关文档。
+- `docs/midterm_ppt/`：当前终辩 PPT。
+- `scripts/`：本地启动、检查和演示辅助脚本。
+- `DEFENSE_QUICK_GUIDE.md`：答辩现场快速定位手册。
+
+## 2. 环境要求
 
 - JDK 17+
 - Maven 3.9+
 - Node.js `^20.19.0 || >=22.12.0`
 - MySQL 8+
+- Python 3.10+（用于模型服务）
 
-## 1.1 UTF-8 shell (Windows, recommended)
-
-To avoid Chinese mojibake in logs/scripts, initialize PowerShell as UTF-8 before running dev commands:
+Windows PowerShell 建议先切换为 UTF-8，避免中文日志乱码：
 
 ```powershell
 ./scripts/enable-utf8.ps1
 ```
 
-This is already called by `dev-all.ps1`, `start-ser.ps1`, `smoke-api.ps1`, `stop-ser.ps1`, and `stress-realtime.ps1`.
+## 3. 一键启动
 
-## 2. Environment Variables
-
-Backend now runs in local-only mode by default (`AI_MODE=mock` + Spring AI disabled).  
-OpenRouter variables are optional and only used when you explicitly switch to remote LLM mode.
-
-- `OPENROUTER_API_KEY` (optional, only for `AI_MODE=spring`)
-- `OPENROUTER_BASE_URL` (optional, default `https://openrouter.ai/api`)
-- `OPENROUTER_MODEL` (optional)
-- `AI_MODE` (optional, default `mock`)
-- `SPRING_AI_OPENAI_ENABLED` (optional, default `false`)
-- `SPRING_DATASOURCE_URL` (optional override)
-- `SPRING_DATASOURCE_USERNAME` (optional override)
-- `SPRING_DATASOURCE_PASSWORD` (optional override)
-- `AUTH_SEED_ADMIN_USERNAME` (optional, default `operator`)
-- `AUTH_SEED_ADMIN_PASSWORD` (optional, default `operator123`, dev/demo only)
-- `SER_ENABLED` (optional, default `true`)
-- `SER_BASE_URL` (optional, default `http://127.0.0.1:8001`)
-- `ANALYSIS_REALTIME_PUSH_INTERVAL_MS` (optional, default `1000`)
-- `GOVERNANCE_DRIFT_MONITOR_ENABLED` (optional, default `true`)
-- `GOVERNANCE_DRIFT_SCAN_INTERVAL_MS` (optional, default `900000`)
-- `GOVERNANCE_DRIFT_WINDOW_DAYS` (optional, default `7`)
-- `GOVERNANCE_DRIFT_BASELINE_DAYS` (optional, default `7`)
-- `GOVERNANCE_DRIFT_MEDIUM_THRESHOLD` (optional, default `0.15`)
-- `GOVERNANCE_DRIFT_HIGH_THRESHOLD` (optional, default `0.25`)
-- `GOVERNANCE_DRIFT_MIN_SAMPLES` (optional, default `20`)
-
-Windows PowerShell example:
-
-```powershell
-$env:SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/ai_emotion?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
-$env:SPRING_DATASOURCE_USERNAME="root"
-$env:SPRING_DATASOURCE_PASSWORD="your_password"
-$env:AUTH_SEED_ADMIN_USERNAME="operator"
-$env:AUTH_SEED_ADMIN_PASSWORD="change_me_for_real_env"
-```
-
-Security note:
-- `operator123` is only a seeded local demo password.
-- Before any public deployment/demo account sharing, override `AUTH_SEED_ADMIN_PASSWORD`.
-
-## 3. Ports
-
-- Backend: `http://127.0.0.1:8080`
-- Frontend dev: `http://127.0.0.1:5173`
-- SER service: `http://127.0.0.1:8001`
-- Vite proxy: `http://127.0.0.1:5173/api/*` -> `http://127.0.0.1:8080/api/*`
-
-Frontend entry routes:
-
-- User Portal: `http://127.0.0.1:5173/app/home`
-- User login/register: `http://127.0.0.1:5173/app/login`
-- Admin Console login: `http://127.0.0.1:5173/admin/login`
-- Admin Console: `http://127.0.0.1:5173/admin/dashboard`
-
-## 4. Start
-
-### 4.1 Start separately
-
-SER service (required for `/api/health` ser status = `UP`):
-
-```powershell
-./scripts/start-ser.ps1
-```
-
-The startup script now performs `/warmup` after health check, so first start may take longer.
-
-or on macOS/Linux:
-
-```bash
-bash ./scripts/start-ser.sh
-```
-
-Backend:
-
-```bash
-cd backend
-mvn spring-boot:run
-```
-
-Frontend:
-
-```bash
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
-```
-
-### 4.2 One command start
-
-Windows PowerShell:
+Windows PowerShell：
 
 ```powershell
 ./scripts/dev-all.ps1
 ```
 
-macOS/Linux:
+macOS / Linux：
 
 ```bash
 bash ./scripts/dev-all.sh
 ```
 
-Both commands now start `SER -> backend -> frontend` in order.
+脚本会按顺序启动：
 
-Default one-command runtime is the Chinese-main pipeline:
-- `SER_ENGINE=hf_wav2vec2`
-- `SER_HF_ROUTING=language`
-- `SER_HF_DEFAULT_LANGUAGE=zh`
-- `SER_HF_MODEL_DIR_EN=backend/ser-service/training/checkpoints/ser_multilingual_4class_exp02/best_model`
-- `SER_HF_MODEL_DIR_ZH=backend/ser-service/training/checkpoints/ser_multilingual_xlsr_stageB_exp04_fast/best_model`
-- `TEXT_ENGINE=hf`
-- `TEXT_HF_ROUTING=language`
-- `TEXT_HF_DEFAULT_LANGUAGE=zh`
-- `TEXT_HF_MODEL_ZH=backend/ser-service/training/text_models/zh_sentiment_exp03/best_model`
-- `FUSION_ENABLED=true`
-- `FUSION_MODEL_DIR=backend/ser-service/training/fusion/models/fusion_exp04_gated`
+1. 模型服务：`http://127.0.0.1:8001`
+2. 后端服务：`http://127.0.0.1:8080`
+3. 前端页面：`http://127.0.0.1:5173`
 
-Engineering default now uses the strongest currently validated chain:
+## 4. 常用访问地址
 
-- zh audio runtime: `ser_multilingual_xlsr_stageB_exp04_fast`
-- zh text runtime: `zh_sentiment_exp03`
-- fusion runtime: `fusion_exp04_gated`
+- 用户端首页：`http://127.0.0.1:5173/app/home`
+- 用户登录：`http://127.0.0.1:5173/app/login`
+- 管理端登录：`http://127.0.0.1:5173/admin/login`
+- 管理端首页：`http://127.0.0.1:5173/admin/dashboard`
+- 后端健康检查：`http://127.0.0.1:8080/api/health`
+- 模型服务健康检查：`http://127.0.0.1:8001/health`
 
-Experiment caveat:
+## 5. 核心功能
 
-- this is the final engineering choice for the current repo
-- the strict paper/archive note remains that `exp04_gated` was built from `stageB_exp04_fast`, not the formal same-name `stageB_exp04` directory
+用户端：
 
-All defaults can be overridden by external environment variables.
+- 登录注册与会话保持
+- 音频上传、分片上传和任务创建
+- 任务详情、实时进度和分析结果展示
+- 报告详情、风险提示和建议展示
+- 趋势分析、内容专栏、心理中心和每日推荐
 
-## 5. Runtime Check
+管理端：
 
-Backend direct checks:
+- 用户与角色管理
+- 模型配置与切换记录
+- 预警规则配置
+- 预警事件处置与跟踪
+- 内容管理、内容排期和内容中心维护
+- 系统数据统计与治理概览
+
+## 6. AI 与模型链路
+
+当前工程采用“本地模型为主、外部增强可配置”的设计：
+
+- 语音上传后先进入任务队列，由后端创建异步分析任务。
+- 模型服务完成 ASR 转写、语音情绪识别、文本情感分析和多模态融合。
+- 本地推理链路优先使用 wav2vec2 / faster-whisper / Transformers 相关模型。
+- Ollama Gemma 4 用于本地大模型解释增强，让报告表达更自然。
+- OpenRouter 外部模型能力保留为可配置增强和兜底方案，不作为系统主链路。
+
+默认本地模型配置可通过环境变量覆盖：
+
+- `SER_ENGINE`
+- `SER_HF_MODEL_DIR_ZH`
+- `SER_HF_MODEL_DIR_EN`
+- `TEXT_HF_MODEL_ZH`
+- `FUSION_MODEL_DIR`
+- `AI_MODE`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+
+## 7. 数据库口径
+
+数据库基线脚本：
+
+- `backend/docs/db/schema_v1.sql`
+
+增量迁移脚本按版本顺序执行，当前最新迁移为：
+
+- `backend/docs/db/migrations/V11__content_hub_daily_schedule.sql`
+
+终辩口径：
+
+- 当前系统按 V11 版本统计为 `31` 张业务表。
+- V11 新增 `content_daily_schedule`、`content_daily_item`、`user_content_history`。
+- 表结构分域说明见 `docs/db.md`。
+
+## 8. 数据集口径
+
+本机保留的原始数据集目录在：
+
+- `backend/data/datasets/CASIA_raw/`
+- `backend/data/datasets/ESD_raw/`
+- `backend/data/datasets/IEMOCAP_raw/`
+- `backend/data/datasets/RAVDESS_raw/`
+
+终辩 PPT 使用的数据来源口径：
+
+- CASIA：`800`
+- ESD：`28,000`
+- IEMOCAP：`5,531`
+- RAVDESS：`864`
+
+最终训练 / 验证 / 测试划分：
+
+- 训练集：`26707`
+- 验证集：`4139`
+- 测试集：`4349`
+
+## 9. 常用检查命令
+
+后端编译：
 
 ```bash
-curl http://127.0.0.1:8001/health
-curl http://127.0.0.1:8080/api/health
-curl http://127.0.0.1:8080/api/home
-curl "http://127.0.0.1:8080/api/psy-centers?cityCode=310100"
+cd backend
+mvn -q -DskipTests compile
 ```
 
-Frontend proxy checks:
+前端类型检查：
 
 ```bash
-curl http://127.0.0.1:5173/api/health
-curl http://127.0.0.1:5173/api/home
-curl "http://127.0.0.1:5173/api/psy-centers?cityCode=310100"
+cd frontend
+npm run type-check
 ```
 
-One-command smoke test (Windows PowerShell):
-
-```powershell
-./scripts/smoke-api.ps1
-```
-
-Realtime channel stress test (Windows PowerShell):
-
-```powershell
-./scripts/stress-realtime.ps1 -TaskId 1201 -AccessToken "<accessToken>" -Connections 30 -DurationSec 40
-```
-
-Doc sync guard:
+接口与文档同步检查：
 
 ```bash
 python scripts/check_doc_sync.py
 ```
 
-The script enforces:
-- latest DB migration references in `README.md` and `backend/README.md`
-- backend controller endpoints vs `docs/api.md` bidirectional consistency
-- WebSocket path documentation consistency
-- required docs existence and `最后同步日期` marker
+快速接口检查：
 
-CI also runs this guard on every `push` / `pull_request` via:
-- `.github/workflows/doc-sync-guard.yml`
-
-Manual page-by-page acceptance checklist:
-
-- `docs/frontend_page_interaction_checklist.md`
-
-Project docs for thesis/defense:
-
-- `docs/experiments.md`
-- `docs/figures/README.md`
-- `docs/thesis_notes.md`
-- `docs/defense_script.md`
-
-Authenticated checks (register first, then pass Bearer token):
-
-```bash
-curl -X POST http://127.0.0.1:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"qa_user","password":"QaPass_123456"}'
-
-curl "http://127.0.0.1:8080/api/tasks?page=1&pageSize=10" \
-  -H "Authorization: Bearer <accessToken>"
-
-curl "http://127.0.0.1:8080/api/reports?page=1&pageSize=10" \
-  -H "Authorization: Bearer <accessToken>"
+```powershell
+./scripts/smoke-api.ps1
 ```
 
-Metric convention (defense/report consistency):
-- Always compare calibrated metrics to calibrated metrics within the same version.
-- Exp03 `0.2140` is uncalibrated ECE; Exp03 calibrated ECE is `0.0562`.
-- Exp01 calibrated ECE is `0.0250` and should not be directly compared to Exp03 uncalibrated ECE.
+## 10. 现场演示建议
 
-## 6. Main API Contracts
+现场查找功能时，优先打开 `DEFENSE_QUICK_GUIDE.md`。其中整理了页面、接口、代码目录和数据库表之间的对应关系，适合答辩时快速定位。
 
-- Health: `GET /api/health`
-- System status (admin): `GET /api/system/status`
-- Home: `GET /api/home`
-- Psy centers: `GET /api/psy-centers?cityCode=310100`
-  - Also supports `city_code`
-- Tasks list: `GET /api/tasks?page=1&pageSize=10&status=&keyword=&sortBy=createdAt&sortOrder=desc`
-- Reports list: `GET /api/reports?page=1&pageSize=10&riskLevel=&emotion=&keyword=&sortBy=createdAt&sortOrder=desc`
-- Report detail: `GET /api/reports/{id}`
-- Task realtime stream (WebSocket):
-  - `GET ws://127.0.0.1:8080/ws/tasks/stream?taskId=<taskId>&accessToken=<token>`
-  - Returns snapshot events including:
-    - task status (`status`, `attemptCount`, `nextRunAt`, `errorMessage`)
-    - risk summary (`riskScore`, `riskLevel`, `pSad`, `pAngry`, `varConf`, `textNeg`)
-    - progress stage (`phase`, `message`, `sequence`)
-    - timeline curve points (`curve[]`)
+常见定位：
 
-List response shape:
+- 上传与任务：`frontend/src/views/app/UploadView.vue`、`backend/src/main/java/com/wuhao/aiemotion/controller/AudioUploadController.java`
+- 报告详情：`frontend/src/views/app/ReportDetailView.vue`、`backend/src/main/java/com/wuhao/aiemotion/controller/ReportController.java`
+- 内容专栏：`frontend/src/views/app/ContentHubView.vue`、`backend/src/main/java/com/wuhao/aiemotion/controller/ContentController.java`
+- 心理中心：`frontend/src/views/app/PsyCentersView.vue`、`backend/src/main/java/com/wuhao/aiemotion/controller/PsyCenterController.java`
+- 预警治理：`frontend/src/views/admin/AdminWarningsView.vue`、`backend/src/main/java/com/wuhao/aiemotion/controller/AdminWarningController.java`
 
-```json
-{
-  "items": [],
-  "total": 0,
-  "page": 1,
-  "pageSize": 10,
-  "size": 10
-}
-```
+## 11. 常见问题
 
-Error response shape:
+如果前端访问 `/api/*` 报 `ECONNREFUSED`：
 
-```json
-{
-  "code": "HTTP_401",
-  "message": "Unauthorized",
-  "traceId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-}
-```
+1. 确认后端运行在 `127.0.0.1:8080`。
+2. 确认前端运行在 `127.0.0.1:5173`。
+3. 检查 `frontend/vite.config.ts` 中的代理地址。
 
-## 7. Admin Governance API
+如果 `/api/health` 显示模型服务不可用：
 
-- Models:
-  - `GET /api/admin/models`
-  - `POST /api/admin/models`
-  - `POST /api/admin/models/{id}/switch`
-  - `GET /api/admin/models/switch-logs`
-- Warning rules:
-  - `GET /api/admin/warning-rules`
-  - `POST /api/admin/warning-rules`
-  - `PUT /api/admin/warning-rules/{id}`
-  - `POST /api/admin/warning-rules/{id}/toggle?enabled=true|false`
-- Warning events:
-  - `GET /api/admin/warnings?page=1&pageSize=10`
-  - `POST /api/admin/warnings/{id}/actions`
-  - `GET /api/admin/warnings/{id}/actions`
-- Analytics:
-  - `GET /api/admin/analytics/daily?days=14`
-  - `GET /api/admin/analytics/quality?windowDays=7&baselineDays=7`
-  - `GET /api/admin/governance/summary`
+1. 先启动 `backend/ser-service`。
+2. 访问 `http://127.0.0.1:8001/health`。
+3. 查看 `backend/ser-service/logs/` 下的日志。
 
-## 8. Chunk Upload API
+如果需要启用外部大模型增强：
 
-- Init upload session:
-  - `POST /api/audio/upload-sessions/init`
-  - body: `{fileName, contentType, fileSize, totalChunks}`
-- Upload chunk:
-  - `PUT /api/audio/upload-sessions/{uploadId}/chunks/{chunkIndex}`
-  - form-data: `file=<chunk>`
-- Session status:
-  - `GET /api/audio/upload-sessions/{uploadId}`
-- Complete merge:
-  - `POST /api/audio/upload-sessions/{uploadId}/complete`
-  - body: `{autoStartTask:true}`
-- Cancel session:
-  - `DELETE /api/audio/upload-sessions/{uploadId}`
-
-Frontend upload page (`/app/upload`) already uses chunk mode with realtime progress.
-
-## 9. DB migration notes
-
-- Baseline schema: `backend/docs/db/schema_v1.sql`
-- Incremental migrations (apply in order):
-  - `backend/docs/db/migrations/V2__task_queue_schema.sql`
-  - `backend/docs/db/migrations/V3__resource_observability_upgrade.sql`
-  - `backend/docs/db/migrations/V4__home_cms_content.sql`
-  - `backend/docs/db/migrations/V5__model_warning_ops.sql`
-  - `backend/docs/db/migrations/V6__warning_sla_and_quality.sql`
-  - `backend/docs/db/migrations/V7__task_report_user_sequence_indexes.sql`
-  - `backend/docs/db/migrations/V8__cleanup_legacy_sequence_indexes.sql`
-  - `backend/docs/db/migrations/V9__cms_seed_source_metadata.sql`
-  - `backend/docs/db/migrations/V10__repair_psy_center_seed_data.sql`
-  - `backend/docs/db/migrations/V11__content_hub_daily_schedule.sql`
-
-Current latest migration is `V11`.
-
-## 10. Troubleshooting
-
-### `ECONNREFUSED` on frontend `/api/*`
-
-1. Confirm backend is running on `127.0.0.1:8080`.
-2. Confirm frontend dev is running on `127.0.0.1:5173`.
-3. Confirm `frontend/vite.config.ts` proxy target is `http://127.0.0.1:8080`.
-
-### Backend startup fails with OpenAI API key error
-
-This is only relevant when you intentionally enable remote LLM mode:
-- set `AI_MODE=spring`
-- set `SPRING_AI_OPENAI_ENABLED=true`
-- then provide `OPENROUTER_API_KEY`
-
-For local-only default mode (`AI_MODE=mock`), no OpenRouter key is required.
-
-### `mvn test -DskipITs` fails due OpenAI key
-
-Tests now bind `test` profile with:
-- `ai.mode=mock`
-- `spring.ai.openai.enabled=false`
-
-So local tests do not require OpenAI key by default. If this still appears, make sure you did not force `AI_MODE=spring` in your shell environment.
-
-### Backend startup fails with `Port 8080 was already in use`
-
-Stop the process using port `8080`, or change `server.port` in backend config.
-
-### `/api/health` shows `"ser":"DOWN"`
-
-1. Run `./scripts/start-ser.ps1` (Windows) or `bash ./scripts/start-ser.sh` (macOS/Linux).
-2. Verify `http://127.0.0.1:8001/health` returns JSON with `"status":"ok"`.
-3. If still failing, check logs:
-   - `backend/ser-service/logs/ser-stdout.log`
-   - `backend/ser-service/logs/ser-stderr.log`
+1. 设置 `AI_MODE=spring`。
+2. 设置 `SPRING_AI_OPENAI_ENABLED=true`。
+3. 配置 `OPENROUTER_API_KEY` 和 `OPENROUTER_MODEL`。

@@ -1,62 +1,85 @@
-# Schema Review (schema_v1.sql)
+# 数据库映射核对
 
-This document summarizes how the current code maps to `docs/db/schema_v1.sql`, flags optional constraints to tighten data integrity, and records a minimal mock-only flow for v1.
+本文档记录主要业务表与后端代码的对应关系，便于答辩时快速说明“表从哪里来、被谁使用、支撑什么功能”。
 
-## 1) Code ↔ DDL Alignment
+## 1. 音频与任务链路
 
-### `audio_file`
-- **Code usage**: upload inserts `user_id`, `original_name`, `stored_name`, `storage_path`, `content_type`, `size_bytes`, `sha256`, `duration_ms`, `status`.
-- **DDL**: all fields exist; `stored_name` has a unique key; `user_id` FK references `auth_user`.
-- **Status**: `UPLOADED/DELETED` used by code and schema default.
+- `audio_file`：保存上传音频的文件名、路径、大小、状态和所属用户。
+- `audio_upload_session`：记录分片上传会话。
+- `audio_upload_chunk`：记录每个分片的上传情况。
+- `analysis_task`：记录分析任务状态、进度、重试和队列信息。
+- `analysis_result`：保存任务完成后的结构化分析结果。
 
-### `audio_analysis`
-- **Code usage**: creates analysis with `audio_id`, `model_name`, `model_version`, `status` (`PENDING/RUNNING/SUCCESS/FAILED`), and updates `summary_json`/`error_message`.
-- **DDL**: all fields present; FK to `audio_file` with cascade on delete.
+支撑代码：
 
-### `core_report`
-- **Code usage**: stores JSON report snapshots, upsert by `analysis_id`.
-- **DDL**: `report_json` is JSON; unique key on `analysis_id` supports upsert behavior.
+- `AudioController`
+- `AudioUploadController`
+- `AnalysisTaskController`
+- `AnalysisTaskWorkerService`
 
-### `audio_segment` + `segment_emotion` + `emotion_label`
-- **Code usage**: mock flow inserts segments, labels, and segment emotions; query joins are consistent with schema keys.
-- **DDL**: composite unique key on `(segment_id, emotion_id)` supports upsert; FKs enforce cascading deletes from `audio_analysis` → `audio_segment` → `segment_emotion`.
+## 2. 报告与结果展示
 
-## 2) Suggested Constraints (Optional Enhancements)
+- `core_report`：保存报告快照。
+- `report_resource`：保存报告关联资源。
+- `audio_analysis`、`audio_segment`、`segment_emotion`、`emotion_label`：保留兼容分析结果和分段情绪信息。
 
-> These are safe additions that improve data quality but are not required for the current mock flow.
+支撑代码：
 
-1. **Status checks**
-   - `audio_file.status` CHECK in (`UPLOADED`, `DELETED`).
-   - `audio_analysis.status` CHECK in (`PENDING`, `RUNNING`, `SUCCESS`, `FAILED`).
+- `ReportController`
+- `AudioAnalysisService`
+- `ResourceManagementService`
 
-2. **Segment uniqueness**
-   - Consider `UNIQUE (analysis_id, start_ms, end_ms)` on `audio_segment` to prevent duplicate segments if a run is re-triggered.
+## 3. 认证与用户
 
-3. **Path/filename consistency**
-   - `stored_name` is unique; if needed, enforce `storage_path` prefix rules in application logic (or via generated columns).
+- `auth_user`：用户账号。
+- `auth_role`：角色。
+- `auth_user_role`：用户与角色关系。
+- `auth_session`：登录会话。
 
-## 3) Minimal Mock-Only Flow (v1)
+支撑代码：
 
-1. **Import schema**
-   - Load `docs/db/schema_v1.sql` into the local MySQL instance.
+- `AuthController`
+- `AuthService`
+- `AuthInterceptor`
 
-2. **Configure app**
-   - Ensure `application.yaml` points to the same DB and sets `app.upload.dir`.
+## 4. 内容中心与心理中心
 
-3. **Run service**
-   ```bash
-   mvn spring-boot:run
-   ```
+- `banners`：首页轮播。
+- `articles`：文章内容。
+- `books`：书籍内容。
+- `psy_centers`：心理中心资源。
+- `content_daily_schedule`：每日内容排期。
+- `content_daily_item`：每日排期条目。
+- `user_content_history`：用户内容访问记录。
 
-4. **API flow**
-   - `POST /api/audio/upload` (multipart: `file`)
-   - `POST /api/audio/{audioId}/analysis/start`
-   - `POST /api/analysis/{analysisId}/mock-run` or `/mock-run-async`
-   - `GET /api/analysis/{analysisId}/report`
-   - For a step-by-step, runnable curl sequence, see `docs/runbook_v1.md`.
+支撑代码：
 
-## 4) Deferred Items (Post v1)
+- `ContentController`
+- `ContentHubService`
+- `HomeService`
+- `PsyCenterController`
+- `PsyCenterService`
 
-- Real AI service integration (URL/auth/request/response/error codes).
-- Upload validation (format, duration, checksum).
-- Auth system (JWT/Session, user/roles, middleware).
+## 5. 预警与治理
+
+- `warning_rule`：预警规则。
+- `warning_event`：预警事件。
+- `warning_action_log`：处置记录。
+- `analytics_daily_summary`：每日统计摘要。
+- `model_config`：模型配置。
+- `model_switch_log`：模型切换记录。
+
+支撑代码：
+
+- `AdminWarningController`
+- `WarningEventTriggerService`
+- `AdminModelController`
+- `AdminAnalyticsController`
+
+## 6. 当前版本口径
+
+- 最新迁移：`V11__content_hub_daily_schedule.sql`
+- 当前终辩口径：`31` 张业务表。
+- V11 新增：`content_daily_schedule`、`content_daily_item`、`user_content_history`。
+
+完整分域说明见仓库根目录 `docs/db.md`。
